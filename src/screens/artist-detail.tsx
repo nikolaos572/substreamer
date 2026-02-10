@@ -28,6 +28,10 @@ import {
   type ArtistWithAlbumsID3,
   type Child,
 } from '../services/subsonicService';
+import {
+  getArtistBiography,
+  searchArtistMBID,
+} from '../services/musicbrainzService';
 
 const HERO_PADDING = 24;
 const HERO_IMAGE_SIZE = 180;
@@ -158,6 +162,7 @@ export function ArtistDetailScreen() {
   const [artist, setArtist] = useState<ArtistWithAlbumsID3 | null>(null);
   const [artistInfo, setArtistInfo] = useState<ArtistInfo2 | null>(null);
   const [topSongs, setTopSongs] = useState<Child[]>([]);
+  const [biography, setBiography] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bioExpanded, setBioExpanded] = useState(false);
@@ -175,6 +180,7 @@ export function ArtistDetailScreen() {
     (async () => {
       setLoading(true);
       setError(null);
+      setBiography(null);
       try {
         await ensureCoverArtAuth();
         if (cancelled) return;
@@ -189,11 +195,26 @@ export function ArtistDetailScreen() {
         setArtistInfo(infoData);
         if (!artistData) {
           setError('Artist not found');
+          return;
+        }
+
+        // Fetch top songs after we have the artist name
+        getTopSongs(artistData.name, 20).then((songs) => {
+          if (!cancelled) setTopSongs(songs);
+        });
+
+        // Resolve biography: prefer Subsonic, fall back to MusicBrainz
+        const subsonicBio = infoData?.biography ? stripHtml(infoData.biography) : null;
+        if (subsonicBio && subsonicBio.length > 0) {
+          if (!cancelled) setBiography(subsonicBio);
         } else {
-          // Fetch top songs after we have the artist name
-          getTopSongs(artistData.name, 20).then((songs) => {
-            if (!cancelled) setTopSongs(songs);
-          });
+          // Try MusicBrainz: use existing MBID from artistInfo, or search by name
+          const mbid = infoData?.musicBrainzId || (await searchArtistMBID(artistData.name));
+          if (cancelled) return;
+          if (mbid) {
+            const mbBio = await getArtistBiography(mbid);
+            if (!cancelled && mbBio) setBiography(stripHtml(mbBio));
+          }
         }
       } catch (e) {
         if (!cancelled) {
@@ -293,8 +314,6 @@ export function ArtistDetailScreen() {
     undefined;
 
   const albums = artist.album ?? [];
-  const rawBio = artistInfo?.biography ?? null;
-  const biography = rawBio ? stripHtml(rawBio) : null;
   const similarArtists = artistInfo?.similarArtist ?? [];
 
   const gradientFillStyle = [
