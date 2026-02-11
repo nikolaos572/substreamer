@@ -347,3 +347,23 @@ export async function fetchServerInfo(): Promise<ServerInfo | null> {
     return null;
   }
 }
+
+/**
+ * Fetch all starred (favorited) items via getStarred2.
+ * Returns albums, artists, and songs in ID3 format.
+ */
+export async function getStarred2(): Promise<{
+  albums: AlbumID3[];
+  artists: ArtistID3[];
+  songs: Child[];
+}> {
+  const api = getApi();
+  if (!api) return { albums: [], artists: [], songs: [] };
+  const response = await api.getStarred2();
+  const starred = response.starred2;
+  return {
+    albums: starred?.album ?? [],
+    artists: starred?.artist ?? [],
+    songs: starred?.song ?? [],
+  };
+}

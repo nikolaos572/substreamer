@@ -10,25 +10,25 @@ import {
 } from 'react-native';
 
 import { useTheme } from '../hooks/useTheme';
-import type { AlbumID3 } from '../services/subsonicService';
-import { AlbumCard } from './AlbumCard';
-import { AlbumRow, ROW_HEIGHT } from './AlbumRow';
+import type { Child } from '../services/subsonicService';
+import { SongCard } from './SongCard';
+import { SongRow, ROW_HEIGHT } from './SongRow';
 
-export type AlbumLayout = 'list' | 'grid';
+export type SongLayout = 'list' | 'grid';
 
 const GRID_COLUMNS = 2;
 const GRID_GAP = 10;
 const LIST_PADDING = 16;
 
 /* ------------------------------------------------------------------ */
-/*  AlbumListView                                                     */
+/*  SongListView                                                      */
 /* ------------------------------------------------------------------ */
 
-export interface AlbumListViewProps {
-  /** The list of albums to display */
-  albums: AlbumID3[];
+export interface SongListViewProps {
+  /** The list of songs to display */
+  songs: Child[];
   /** Display layout: row list or grid of cards */
-  layout?: AlbumLayout;
+  layout?: SongLayout;
   /** Whether data is currently loading */
   loading?: boolean;
   /** Error message to display, if any */
@@ -43,16 +43,16 @@ export interface AlbumListViewProps {
   emptyIcon?: string;
 }
 
-export function AlbumListView({
-  albums,
+export function SongListView({
+  songs,
   layout = 'list',
   loading = false,
   error = null,
   onRefresh,
   refreshing = false,
-  emptyMessage = 'No albums',
+  emptyMessage = 'No songs',
   emptyIcon,
-}: AlbumListViewProps) {
+}: SongListViewProps) {
   const { colors } = useTheme();
 
   const screenWidth = Dimensions.get('window').width;
@@ -64,21 +64,21 @@ export function AlbumListView({
   );
 
   const renderListItem = useCallback(
-    ({ item }: { item: AlbumID3 }) => <AlbumRow album={item} />,
+    ({ item }: { item: Child }) => <SongRow song={item} />,
     []
   );
 
   const renderGridItem = useCallback(
-    ({ item }: { item: AlbumID3 }) => (
-      <AlbumCard album={item} width={cardWidth} />
+    ({ item }: { item: Child }) => (
+      <SongCard song={item} width={cardWidth} />
     ),
     [cardWidth]
   );
 
-  const keyExtractor = useCallback((item: AlbumID3) => item.id, []);
+  const keyExtractor = useCallback((item: Child) => item.id, []);
 
   const getItemLayout = useCallback(
-    (_data: ArrayLike<AlbumID3> | null | undefined, index: number) => ({
+    (_data: ArrayLike<Child> | null | undefined, index: number) => ({
       length: ROW_HEIGHT,
       offset: ROW_HEIGHT * index,
       index,
@@ -86,10 +86,7 @@ export function AlbumListView({
     []
   );
 
-  const columnWrapperStyle = useMemo(
-    () => ({ gap: GRID_GAP }),
-    []
-  );
+  const columnWrapperStyle = useMemo(() => ({ gap: GRID_GAP }), []);
 
   const EmptyComponent = useMemo(
     () => (
@@ -110,7 +107,7 @@ export function AlbumListView({
     [emptyIcon, emptyMessage, colors.textSecondary]
   );
 
-  if (loading && albums.length === 0) {
+  if (loading && songs.length === 0) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -118,7 +115,7 @@ export function AlbumListView({
     );
   }
 
-  if (error && albums.length === 0) {
+  if (error && songs.length === 0) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <Text style={[styles.errorText, { color: colors.textSecondary }]}>
@@ -133,7 +130,7 @@ export function AlbumListView({
   return (
     <FlatList
       key={layout}
-      data={albums}
+      data={songs}
       renderItem={isGrid ? renderGridItem : renderListItem}
       keyExtractor={keyExtractor}
       {...(isGrid
@@ -141,7 +138,7 @@ export function AlbumListView({
         : { getItemLayout })}
       contentContainerStyle={[
         styles.listContent,
-        albums.length === 0 && styles.emptyListContent,
+        songs.length === 0 && styles.emptyListContent,
       ]}
       windowSize={11}
       maxToRenderPerBatch={isGrid ? 12 : 20}

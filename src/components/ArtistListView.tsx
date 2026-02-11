@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
@@ -36,6 +37,10 @@ export interface ArtistListViewProps {
   onRefresh?: () => void;
   /** Whether a refresh is in progress (pull-to-refresh spinner) */
   refreshing?: boolean;
+  /** Custom empty-state message */
+  emptyMessage?: string;
+  /** Optional Ionicons icon name for empty state */
+  emptyIcon?: string;
 }
 
 export function ArtistListView({
@@ -45,6 +50,8 @@ export function ArtistListView({
   error = null,
   onRefresh,
   refreshing = false,
+  emptyMessage = 'No artists',
+  emptyIcon,
 }: ArtistListViewProps) {
   const { colors } = useTheme();
 
@@ -81,6 +88,25 @@ export function ArtistListView({
 
   const columnWrapperStyle = useMemo(() => ({ gap: GRID_GAP }), []);
 
+  const EmptyComponent = useMemo(
+    () => (
+      <View style={styles.emptyContainer}>
+        {emptyIcon && (
+          <Ionicons
+            name={emptyIcon as any}
+            size={48}
+            color={colors.textSecondary}
+            style={styles.emptyIcon}
+          />
+        )}
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          {emptyMessage}
+        </Text>
+      </View>
+    ),
+    [emptyIcon, emptyMessage, colors.textSecondary]
+  );
+
   if (loading && artists.length === 0) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
@@ -110,18 +136,17 @@ export function ArtistListView({
       {...(isGrid
         ? { numColumns: GRID_COLUMNS, columnWrapperStyle }
         : { getItemLayout })}
-      contentContainerStyle={styles.listContent}
+      contentContainerStyle={[
+        styles.listContent,
+        artists.length === 0 && styles.emptyListContent,
+      ]}
       windowSize={11}
       maxToRenderPerBatch={isGrid ? 12 : 20}
       initialNumToRender={isGrid ? 10 : 15}
       removeClippedSubviews
       onRefresh={onRefresh}
       refreshing={refreshing}
-      ListEmptyComponent={
-        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-          No artists
-        </Text>
-      }
+      ListEmptyComponent={EmptyComponent}
     />
   );
 }
@@ -140,8 +165,21 @@ const styles = StyleSheet.create({
     padding: LIST_PADDING,
     paddingBottom: 32,
   },
+  emptyListContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   errorText: {
     fontSize: 16,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  emptyIcon: {
+    marginBottom: 12,
   },
   emptyText: {
     fontSize: 16,

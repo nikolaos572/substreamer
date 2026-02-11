@@ -53,6 +53,12 @@ const LAYOUT_ROWS: { key: 'albumLayout' | 'artistLayout' | 'playlistLayout'; lab
   { key: 'playlistLayout', label: 'Playlists' },
 ];
 
+const FAV_LAYOUT_ROWS: { key: 'favSongLayout' | 'favAlbumLayout' | 'favArtistLayout'; label: string }[] = [
+  { key: 'favSongLayout', label: 'Songs' },
+  { key: 'favAlbumLayout', label: 'Albums' },
+  { key: 'favArtistLayout', label: 'Artists' },
+];
+
 const ACCENT_COLORS: { label: string; hex: string }[] = [
   { label: 'Default', hex: '#1D9BF0' },
   { label: 'Red', hex: '#E91429' },
@@ -96,6 +102,13 @@ export function SettingsScreen() {
   const setArtistLayout = layoutPreferencesStore((s) => s.setArtistLayout);
   const setPlaylistLayout = layoutPreferencesStore((s) => s.setPlaylistLayout);
 
+  const favSongLayout = layoutPreferencesStore((s) => s.favSongLayout);
+  const favAlbumLayout = layoutPreferencesStore((s) => s.favAlbumLayout);
+  const favArtistLayout = layoutPreferencesStore((s) => s.favArtistLayout);
+  const setFavSongLayout = layoutPreferencesStore((s) => s.setFavSongLayout);
+  const setFavAlbumLayout = layoutPreferencesStore((s) => s.setFavAlbumLayout);
+  const setFavArtistLayout = layoutPreferencesStore((s) => s.setFavArtistLayout);
+
   const layoutValues: Record<string, ItemLayout> = {
     albumLayout,
     artistLayout,
@@ -106,6 +119,18 @@ export function SettingsScreen() {
     albumLayout: setAlbumLayout,
     artistLayout: setArtistLayout,
     playlistLayout: setPlaylistLayout,
+  };
+
+  const favLayoutValues: Record<string, ItemLayout> = {
+    favSongLayout,
+    favAlbumLayout,
+    favArtistLayout,
+  };
+
+  const favLayoutSetters: Record<string, (l: ItemLayout) => void> = {
+    favSongLayout: setFavSongLayout,
+    favAlbumLayout: setFavAlbumLayout,
+    favArtistLayout: setFavArtistLayout,
   };
 
   const hasAnyInfo =
@@ -307,7 +332,7 @@ export function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Default layouts</Text>
+        <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Library layout</Text>
         <View style={styles.themeCard}>
           {LAYOUT_ROWS.map((row) => {
             const currentValue = layoutValues[row.key];
@@ -333,6 +358,49 @@ export function SettingsScreen() {
                   </Pressable>
                   <Pressable
                     onPress={() => layoutSetters[row.key]('grid')}
+                    hitSlop={6}
+                    style={({ pressed }) => pressed && styles.themeRowPressed}
+                  >
+                    <Ionicons
+                      name="grid-outline"
+                      size={22}
+                      color={currentValue === 'grid' ? colors.primary : colors.textSecondary}
+                    />
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Favorites layout</Text>
+        <View style={styles.themeCard}>
+          {FAV_LAYOUT_ROWS.map((row) => {
+            const currentValue = favLayoutValues[row.key];
+            return (
+              <View
+                key={row.key}
+                style={[styles.layoutRow, dynamicStyles.layoutRow]}
+              >
+                <Text style={[styles.layoutRowLabel, dynamicStyles.layoutRowLabel]}>
+                  {row.label}
+                </Text>
+                <View style={styles.layoutIcons}>
+                  <Pressable
+                    onPress={() => favLayoutSetters[row.key]('list')}
+                    hitSlop={6}
+                    style={({ pressed }) => pressed && styles.themeRowPressed}
+                  >
+                    <Ionicons
+                      name="list-outline"
+                      size={22}
+                      color={currentValue === 'list' ? colors.primary : colors.textSecondary}
+                    />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => favLayoutSetters[row.key]('grid')}
                     hitSlop={6}
                     style={({ pressed }) => pressed && styles.themeRowPressed}
                   >
