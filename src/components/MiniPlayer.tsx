@@ -26,6 +26,19 @@ export function MiniPlayer() {
   const { colors } = useTheme();
   const currentTrack = playerStore((s) => s.currentTrack);
   const playbackState = playerStore((s) => s.playbackState);
+  const position = playerStore((s) => s.position);
+  const duration = playerStore((s) => s.duration);
+
+  const progress = duration > 0 ? position / duration : 0;
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: progress,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [progress, progressAnim]);
 
   const isPlaying = playbackState === 'playing' || playbackState === 'buffering';
 
@@ -97,7 +110,25 @@ export function MiniPlayer() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: withAlpha(colors.card, 0.65), borderTopColor: colors.border }]}>
+    <View style={[styles.container, { backgroundColor: withAlpha(colors.card, 0.65) }]}>
+      {/* Progress bar */}
+      <View style={styles.progressTrack}>
+        <Animated.View
+          style={[
+            styles.progressFill,
+            {
+              width: progressAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0%', '100%'],
+                extrapolate: 'clamp',
+              }),
+              backgroundColor: colors.primary,
+              opacity: 0.65,
+            },
+          ]}
+        />
+      </View>
+
       {/* Gradient overlay */}
       <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: gradientOpacity }]} pointerEvents="none">
         <LinearGradient
@@ -148,8 +179,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+  },
+  progressTrack: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 5,
+    zIndex: 1,
+  },
+  progressFill: {
+    height: '100%',
   },
   cover: {
     width: 40,

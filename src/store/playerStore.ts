@@ -25,19 +25,27 @@ export interface PlayerState {
   playbackState: PlaybackStatus;
   /** The full queue of Child objects currently loaded. */
   queue: Child[];
+  /** Current playback position in seconds. */
+  position: number;
+  /** Duration of the current track in seconds. */
+  duration: number;
 
   /* ---- Setters (called by playerService) ---- */
   setCurrentTrack: (track: Child | null) => void;
   setPlaybackState: (state: PlaybackStatus) => void;
   setQueue: (queue: Child[]) => void;
+  setProgress: (position: number, duration: number) => void;
 }
 
 export const playerStore = create<PlayerState>()((set) => ({
   currentTrack: null,
   playbackState: 'idle',
   queue: [],
+  position: 0,
+  duration: 0,
 
   setCurrentTrack: (track) => set({ currentTrack: track }),
   setPlaybackState: (playbackState) => set({ playbackState }),
   setQueue: (queue) => set({ queue }),
+  setProgress: (position, duration) => set({ position, duration }),
 }));

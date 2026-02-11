@@ -62,6 +62,33 @@ function childToTrack(child: Child): Track {
 let isPlayerReady = false;
 /** The Child[] backing the current RNTP queue, indexed by position. */
 let currentChildQueue: Child[] = [];
+/** Interval handle for progress polling (null when not polling). */
+let progressInterval: ReturnType<typeof setInterval> | null = null;
+
+/* ------------------------------------------------------------------ */
+/*  Progress polling                                                   */
+/* ------------------------------------------------------------------ */
+
+/** Start polling RNTP for playback position every 250ms. */
+function startProgressPolling() {
+  if (progressInterval) return;
+  progressInterval = setInterval(async () => {
+    try {
+      const { position, duration } = await TrackPlayer.getProgress();
+      playerStore.getState().setProgress(position, duration);
+    } catch {
+      /* player not ready */
+    }
+  }, 250);
+}
+
+/** Stop the progress polling interval. */
+function stopProgressPolling() {
+  if (progressInterval) {
+    clearInterval(progressInterval);
+    progressInterval = null;
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /*  Init                                                               */
@@ -102,6 +129,11 @@ export async function initPlayer(): Promise<void> {
 
   TrackPlayer.addEventListener(Event.PlaybackState, ({ state }) => {
     playerStore.getState().setPlaybackState(mapState(state));
+    if (state === State.Playing) {
+      startProgressPolling();
+    } else {
+      stopProgressPolling();
+    }
   });
 
   TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, ({ track }) => {
@@ -129,7 +161,7 @@ export async function initPlayer(): Promise<void> {
 /*  Sync helper                                                        */
 /* ------------------------------------------------------------------ */
 
-/** Query RNTP for current state/track and push into the store. */
+/** Query RNTP for current state/track/progress and push into the store. */
 async function syncStoreFromNative(): Promise<void> {
   try {
     const state = await TrackPlayer.getPlaybackState();
@@ -139,6 +171,15 @@ async function syncStoreFromNative(): Promise<void> {
     if (activeTrack?.id) {
       const child = currentChildQueue.find((c) => c.id === activeTrack.id) ?? null;
       playerStore.getState().setCurrentTrack(child);
+    }
+
+    const { position, duration } = await TrackPlayer.getProgress();
+    playerStore.getState().setProgress(position, duration);
+
+    if (state.state === State.Playing) {
+      startProgressPolling();
+    } else {
+      stopProgressPolling();
     }
   } catch {
     // Player may not be ready yet; ignore.
