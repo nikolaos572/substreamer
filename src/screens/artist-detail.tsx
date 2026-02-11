@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Animated,
   ActivityIndicator,
-  Image,
   Platform,
   Pressable,
   RefreshControl,
@@ -18,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AlbumRow } from '../components/AlbumRow';
 import { ArtistOptionsSheet } from '../components/ArtistOptionsSheet';
+import { CachedImage } from '../components/CachedImage';
 import { MoreOptionsButton } from '../components/MoreOptionsButton';
 import { SectionTitle } from '../components/SectionTitle';
 import { useColorExtraction } from '../hooks/useColorExtraction';
@@ -26,7 +26,6 @@ import {
   ensureCoverArtAuth,
   getArtist,
   getArtistInfo2,
-  getCoverArtUrl,
   getTopSongs,
   type ArtistID3,
   type ArtistInfo2,
@@ -58,7 +57,6 @@ function SimilarArtistItem({
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
   const router = useRouter();
-  const uri = getCoverArtUrl(artist.coverArt ?? '', 300) ?? undefined;
 
   const onPress = useCallback(() => {
     router.push(`/artist/${artist.id}`);
@@ -69,8 +67,9 @@ function SimilarArtistItem({
       onPress={onPress}
       style={({ pressed }) => [styles.similarItem, pressed && styles.pressed]}
     >
-      <Image
-        source={{ uri }}
+      <CachedImage
+        coverArtId={artist.coverArt}
+        size={300}
         style={styles.similarImage}
         resizeMode="cover"
       />
@@ -95,12 +94,11 @@ function TopSongItem({
   song: Child;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
-  const uri = getCoverArtUrl(song.coverArt ?? '', 300) ?? undefined;
-
   return (
     <View style={styles.songItem}>
-      <Image
-        source={{ uri }}
+      <CachedImage
+        coverArtId={song.coverArt}
+        size={300}
         style={styles.songImage}
         resizeMode="cover"
       />
@@ -253,12 +251,6 @@ export function ArtistDetailScreen() {
     );
   }
 
-  /* ---- Resolved image URI ---- */
-  const heroUri =
-    getCoverArtUrl(artist.coverArt ?? '', HERO_COVER_SIZE) ??
-    artistInfo?.largeImageUrl ??
-    undefined;
-
   const albums = artist.album ?? [];
   const similarArtists = artistInfo?.similarArtist ?? [];
 
@@ -302,8 +294,10 @@ export function ArtistDetailScreen() {
       >
         {/* ---- Hero ---- */}
         <View style={styles.hero}>
-          <Image
-            source={{ uri: heroUri }}
+          <CachedImage
+            coverArtId={artist.coverArt}
+            size={HERO_COVER_SIZE}
+            fallbackUri={artistInfo?.largeImageUrl ?? undefined}
             style={styles.heroImage}
             resizeMode="cover"
           />

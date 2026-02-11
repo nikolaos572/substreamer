@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { memo } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
-import { getCoverArtUrl, type Child } from '../services/subsonicService';
+import { type Child } from '../services/subsonicService';
 import { formatTrackDuration } from '../utils/formatters';
 
 const COVER_SIZE = 300;
@@ -13,7 +14,6 @@ export const ROW_HEIGHT = 80;
 
 export const SongRow = memo(function SongRow({ song }: { song: Child }) {
   const { colors } = useTheme();
-  const uri = getCoverArtUrl(song.coverArt ?? '', COVER_SIZE) ?? undefined;
   const duration =
     song.duration != null ? formatTrackDuration(song.duration) : '—';
 
@@ -25,7 +25,7 @@ export const SongRow = memo(function SongRow({ song }: { song: Child }) {
         pressed && styles.pressed,
       ]}
     >
-      <Image source={{ uri }} style={styles.cover} resizeMode="cover" />
+      <CachedImage coverArtId={song.coverArt} size={COVER_SIZE} style={styles.cover} resizeMode="cover" />
       <View style={styles.text}>
         <Text
           style={[styles.songName, { color: colors.textPrimary }]}

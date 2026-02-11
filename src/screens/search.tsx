@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
-  Image,
   Pressable,
   SectionList,
   StyleSheet,
@@ -10,9 +9,9 @@ import {
   View,
 } from 'react-native';
 
+import { CachedImage } from '../components/CachedImage';
 import { useTheme } from '../hooks/useTheme';
 import {
-  getCoverArtUrl,
   type AlbumID3,
   type ArtistID3,
   type Child,
@@ -48,7 +47,6 @@ function ArtistResultRow({
   colors: ReturnType<typeof useTheme>['colors'];
   onPress: () => void;
 }) {
-  const uri = getCoverArtUrl(artist.coverArt ?? '', COVER_SIZE) ?? undefined;
   return (
     <Pressable
       onPress={onPress}
@@ -58,7 +56,7 @@ function ArtistResultRow({
         pressed && styles.pressed,
       ]}
     >
-      <Image source={{ uri }} style={styles.coverCircle} resizeMode="cover" />
+      <CachedImage coverArtId={artist.coverArt} size={COVER_SIZE} style={styles.coverCircle} resizeMode="cover" />
       <View style={styles.rowText}>
         <Text style={[styles.primaryText, { color: colors.textPrimary }]} numberOfLines={1}>
           {artist.name}
@@ -83,7 +81,6 @@ function AlbumResultRow({
   colors: ReturnType<typeof useTheme>['colors'];
   onPress: () => void;
 }) {
-  const uri = getCoverArtUrl(album.coverArt ?? '', COVER_SIZE) ?? undefined;
   return (
     <Pressable
       onPress={onPress}
@@ -93,7 +90,7 @@ function AlbumResultRow({
         pressed && styles.pressed,
       ]}
     >
-      <Image source={{ uri }} style={styles.cover} resizeMode="cover" />
+      <CachedImage coverArtId={album.coverArt} size={COVER_SIZE} style={styles.cover} resizeMode="cover" />
       <View style={styles.rowText}>
         <Text style={[styles.primaryText, { color: colors.textPrimary }]} numberOfLines={1}>
           {album.name}
@@ -113,7 +110,6 @@ function SongResultRow({
   song: Child;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
-  const uri = getCoverArtUrl(song.coverArt ?? '', COVER_SIZE) ?? undefined;
   return (
     <Pressable
       style={({ pressed }) => [
@@ -122,7 +118,7 @@ function SongResultRow({
         pressed && styles.pressed,
       ]}
     >
-      <Image source={{ uri }} style={styles.cover} resizeMode="cover" />
+      <CachedImage coverArtId={song.coverArt} size={COVER_SIZE} style={styles.cover} resizeMode="cover" />
       <View style={styles.rowText}>
         <Text style={[styles.primaryText, { color: colors.textPrimary }]} numberOfLines={1}>
           {song.title}

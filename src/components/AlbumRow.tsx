@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { memo, useCallback } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
-import { getCoverArtUrl, type AlbumID3 } from '../services/subsonicService';
+import { type AlbumID3 } from '../services/subsonicService';
 import { formatCompactDuration } from '../utils/formatters';
 
 const COVER_SIZE = 300;
@@ -15,8 +16,6 @@ export const ROW_HEIGHT = 80;
 export const AlbumRow = memo(function AlbumRow({ album }: { album: AlbumID3 }) {
   const { colors } = useTheme();
   const router = useRouter();
-  const uri = getCoverArtUrl(album.coverArt ?? '', COVER_SIZE) ?? undefined;
-
   const onPress = useCallback(() => {
     router.push(`/album/${album.id}`);
   }, [album.id, router]);
@@ -30,7 +29,7 @@ export const AlbumRow = memo(function AlbumRow({ album }: { album: AlbumID3 }) {
         pressed && styles.pressed,
       ]}
     >
-      <Image source={{ uri }} style={styles.cover} resizeMode="cover" />
+      <CachedImage coverArtId={album.coverArt} size={COVER_SIZE} style={styles.cover} resizeMode="cover" />
       <View style={styles.text}>
         <View style={styles.titleRow}>
           <Text

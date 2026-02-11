@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { memo, useCallback } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
-import { getCoverArtUrl, type Playlist } from '../services/subsonicService';
+import { type Playlist } from '../services/subsonicService';
 import { formatCompactDuration } from '../utils/formatters';
 
 const COVER_SIZE = 300;
@@ -15,8 +16,6 @@ export const ROW_HEIGHT = 80;
 export const PlaylistRow = memo(function PlaylistRow({ playlist }: { playlist: Playlist }) {
   const { colors } = useTheme();
   const router = useRouter();
-  const uri = getCoverArtUrl(playlist.coverArt ?? '', COVER_SIZE) ?? undefined;
-
   const onPress = useCallback(() => {
     router.push(`/playlist/${playlist.id}`);
   }, [playlist.id, router]);
@@ -30,7 +29,7 @@ export const PlaylistRow = memo(function PlaylistRow({ playlist }: { playlist: P
         pressed && styles.pressed,
       ]}
     >
-      <Image source={{ uri }} style={styles.cover} resizeMode="cover" />
+      <CachedImage coverArtId={playlist.coverArt} size={COVER_SIZE} style={styles.cover} resizeMode="cover" />
       <View style={styles.text}>
         <Text
           style={[styles.playlistName, { color: colors.textPrimary }]}

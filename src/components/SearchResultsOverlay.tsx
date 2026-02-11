@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Keyboard,
   Pressable,
   ScrollView,
@@ -12,9 +11,9 @@ import {
   View,
 } from 'react-native';
 
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
 import {
-  getCoverArtUrl,
   type AlbumID3,
   type ArtistID3,
   type Child,
@@ -69,13 +68,12 @@ function CompactArtistRow({
   colors: ReturnType<typeof useTheme>['colors'];
   onPress: () => void;
 }) {
-  const uri = getCoverArtUrl(artist.coverArt ?? '', COVER_SIZE) ?? undefined;
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.compactRow, pressed && styles.pressed]}
     >
-      <Image source={{ uri }} style={styles.compactCoverCircle} resizeMode="cover" />
+      <CachedImage coverArtId={artist.coverArt} size={COVER_SIZE} style={styles.compactCoverCircle} resizeMode="cover" />
       <View style={styles.compactText}>
         <Text style={[styles.compactPrimary, { color: colors.textPrimary }]} numberOfLines={1}>
           {artist.name}
@@ -97,13 +95,12 @@ function CompactAlbumRow({
   colors: ReturnType<typeof useTheme>['colors'];
   onPress: () => void;
 }) {
-  const uri = getCoverArtUrl(album.coverArt ?? '', COVER_SIZE) ?? undefined;
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.compactRow, pressed && styles.pressed]}
     >
-      <Image source={{ uri }} style={styles.compactCover} resizeMode="cover" />
+      <CachedImage coverArtId={album.coverArt} size={COVER_SIZE} style={styles.compactCover} resizeMode="cover" />
       <View style={styles.compactText}>
         <Text style={[styles.compactPrimary, { color: colors.textPrimary }]} numberOfLines={1}>
           {album.name}
@@ -125,13 +122,12 @@ function CompactSongRow({
   colors: ReturnType<typeof useTheme>['colors'];
   onPress: () => void;
 }) {
-  const uri = getCoverArtUrl(song.coverArt ?? '', COVER_SIZE) ?? undefined;
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.compactRow, pressed && styles.pressed]}
     >
-      <Image source={{ uri }} style={styles.compactCover} resizeMode="cover" />
+      <CachedImage coverArtId={song.coverArt} size={COVER_SIZE} style={styles.compactCover} resizeMode="cover" />
       <View style={styles.compactText}>
         <Text style={[styles.compactPrimary, { color: colors.textPrimary }]} numberOfLines={1}>
           {song.title}

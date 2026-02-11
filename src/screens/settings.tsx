@@ -1,11 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useTheme } from '../hooks/useTheme';
+import {
+  clearImageCache,
+  getImageCacheStats,
+  type ImageCacheStats,
+} from '../services/imageCacheService';
 import { clearApiCache } from '../services/subsonicService';
 import type { ThemePreference } from '../store/themeStore';
 import { DEFAULT_PRIMARY_COLOR } from '../store/themeStore';
@@ -18,6 +23,14 @@ import { serverInfoStore } from '../store/serverInfoStore';
 
 const AUTH_PERSIST_KEY = 'substreamer-auth';
 const SERVER_INFO_PERSIST_KEY = 'substreamer-server-info';
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / Math.pow(1024, i);
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[i]}`;
+}
 
 function InfoRow({
   label,
@@ -75,7 +88,13 @@ export function SettingsScreen() {
   const { colors, preference, primaryColor, setThemePreference, setPrimaryColor } = useTheme();
   const activePrimary = primaryColor ?? DEFAULT_PRIMARY_COLOR;
   const [accentOpen, setAccentOpen] = useState(false);
+  const [cacheStats, setCacheStats] = useState<ImageCacheStats>({ totalBytes: 0, imageCount: 0 });
   const activeAccentLabel = ACCENT_COLORS.find((c) => c.hex === activePrimary)?.label ?? 'Custom';
+
+  // Refresh cache stats on mount.
+  useEffect(() => {
+    setCacheStats(getImageCacheStats());
+  }, []);
 
   const handleAccentSelect = useCallback(
     (hex: string) => {
@@ -146,6 +165,24 @@ export function SettingsScreen() {
     await AsyncStorage.multiRemove([AUTH_PERSIST_KEY, SERVER_INFO_PERSIST_KEY]);
     router.replace('/login');
   };
+
+  const handleClearCache = useCallback(() => {
+    Alert.alert(
+      'Clear Image Cache',
+      `This will remove ${formatBytes(cacheStats.totalBytes)} of cached images. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: () => {
+            clearImageCache();
+            setCacheStats(getImageCacheStats());
+          },
+        },
+      ],
+    );
+  }, [cacheStats.totalBytes]);
 
   const dynamicStyles = useMemo(
     () =>
@@ -418,6 +455,34 @@ export function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Storage use</Text>
+        <View style={[styles.card, dynamicStyles.card]}>
+          <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Cached images</Text>
+            <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+              {cacheStats.imageCount} {cacheStats.imageCount === 1 ? 'image' : 'images'}
+            </Text>
+          </View>
+          <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Disk usage</Text>
+            <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+              {formatBytes(cacheStats.totalBytes)}
+            </Text>
+          </View>
+          <Pressable
+            onPress={handleClearCache}
+            style={({ pressed }) => [
+              styles.clearCacheButton,
+              pressed && styles.themeRowPressed,
+            ]}
+          >
+            <Ionicons name="trash-outline" size={18} color={colors.red} />
+            <Text style={[styles.clearCacheText, { color: colors.red }]}>Clear Image Cache</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Account</Text>
         <Pressable
           style={({ pressed }) => [
@@ -585,6 +650,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+  },
+  clearCacheButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  clearCacheText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   logoutButton: {
     backgroundColor: 'transparent',

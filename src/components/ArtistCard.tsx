@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
 import { memo, useCallback } from 'react';
-import { Image, Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
-import { getCoverArtUrl, type ArtistID3 } from '../services/subsonicService';
+import { type ArtistID3 } from '../services/subsonicService';
 
 const COVER_SIZE = 300;
 
@@ -16,7 +17,6 @@ export const ArtistCard = memo(function ArtistCard({
 }) {
   const { colors } = useTheme();
   const router = useRouter();
-  const uri = getCoverArtUrl(artist.coverArt ?? '', COVER_SIZE) ?? undefined;
   const imageSize = width - 16; // 8px padding on each side
 
   const onPress = useCallback(() => {
@@ -32,8 +32,9 @@ export const ArtistCard = memo(function ArtistCard({
         pressed && styles.pressed,
       ]}
     >
-      <Image
-        source={{ uri }}
+      <CachedImage
+        coverArtId={artist.coverArt}
+        size={COVER_SIZE}
         style={[styles.cover, { width: imageSize, height: imageSize }]}
         resizeMode="cover"
       />

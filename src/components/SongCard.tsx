@@ -1,8 +1,9 @@
 import { memo } from 'react';
-import { Image, Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
-import { getCoverArtUrl, type Child } from '../services/subsonicService';
+import { type Child } from '../services/subsonicService';
 
 const COVER_SIZE = 300;
 
@@ -14,7 +15,6 @@ export const SongCard = memo(function SongCard({
   width: number;
 }) {
   const { colors } = useTheme();
-  const uri = getCoverArtUrl(song.coverArt ?? '', COVER_SIZE) ?? undefined;
   const imageSize = width - 16; // 8px padding on each side
 
   return (
@@ -25,8 +25,9 @@ export const SongCard = memo(function SongCard({
         pressed && styles.pressed,
       ]}
     >
-      <Image
-        source={{ uri }}
+      <CachedImage
+        coverArtId={song.coverArt}
+        size={COVER_SIZE}
         style={[styles.cover, { width: imageSize, height: imageSize }]}
         resizeMode="cover"
       />

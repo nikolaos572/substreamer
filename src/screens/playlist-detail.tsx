@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Animated,
   ActivityIndicator,
-  Image,
   Platform,
   RefreshControl,
   ScrollView,
@@ -15,13 +14,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CachedImage } from '../components/CachedImage';
 import { TrackRow } from '../components/TrackRow';
 import { useColorExtraction } from '../hooks/useColorExtraction';
 import { useTheme } from '../hooks/useTheme';
 import {
   ensureCoverArtAuth,
   getPlaylist,
-  getCoverArtUrl,
   type PlaylistWithSongs,
 } from '../services/subsonicService';
 import { formatCompactDuration } from '../utils/formatters';
@@ -95,7 +94,6 @@ export function PlaylistDetailScreen() {
     );
   }
 
-  const coverUri = getCoverArtUrl(playlist.coverArt ?? '', HERO_COVER_SIZE) ?? undefined;
   const gradientEnd = colors.background;
   const tracks = playlist.entry ?? [];
 
@@ -137,8 +135,9 @@ export function PlaylistDetailScreen() {
       >
         <View style={styles.hero}>
           <View style={styles.heroImageWrap}>
-            <Image
-              source={{ uri: coverUri }}
+            <CachedImage
+              coverArtId={playlist.coverArt}
+              size={HERO_COVER_SIZE}
               style={styles.heroImage}
               resizeMode="contain"
             />

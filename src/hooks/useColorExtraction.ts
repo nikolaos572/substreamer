@@ -10,7 +10,7 @@ import Constants from 'expo-constants';
 import { useEffect, useRef, useState } from 'react';
 import { Animated } from 'react-native';
 
-import { getCoverArtUrl } from '../services/subsonicService';
+import { useCachedCoverArt } from './useCachedCoverArt';
 import { type ExtractedColors, getProminentColor } from '../utils/colors';
 
 interface ColorExtractionResult {
@@ -30,6 +30,7 @@ export function useColorExtraction(
   coverArtId: string | undefined,
   fallbackColor: string,
 ): ColorExtractionResult {
+  const cachedUri = useCachedCoverArt(coverArtId, 50);
   const [coverBackgroundColor, setCoverBackgroundColor] = useState<string | null>(null);
   const gradientOpacity = useRef(new Animated.Value(0)).current;
 
@@ -43,7 +44,7 @@ export function useColorExtraction(
       setCoverBackgroundColor(null);
       return;
     }
-    const uri = getCoverArtUrl(coverArtId, 50);
+    const uri = cachedUri;
     if (!uri) {
       setCoverBackgroundColor(null);
       return;
@@ -66,7 +67,7 @@ export function useColorExtraction(
     return () => {
       cancelled = true;
     };
-  }, [coverArtId, fallbackColor]);
+  }, [coverArtId, cachedUri, fallbackColor]);
 
   // Animate gradient opacity when color changes.
   useEffect(() => {

@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { memo, useCallback } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
-import { getCoverArtUrl, type ArtistID3 } from '../services/subsonicService';
+import { type ArtistID3 } from '../services/subsonicService';
 
 const COVER_SIZE = 300;
 
@@ -14,8 +15,6 @@ export const ROW_HEIGHT = 80;
 export const ArtistRow = memo(function ArtistRow({ artist }: { artist: ArtistID3 }) {
   const { colors } = useTheme();
   const router = useRouter();
-  const uri = getCoverArtUrl(artist.coverArt ?? '', COVER_SIZE) ?? undefined;
-
   const onPress = useCallback(() => {
     router.push(`/artist/${artist.id}`);
   }, [artist.id, router]);
@@ -29,7 +28,7 @@ export const ArtistRow = memo(function ArtistRow({ artist }: { artist: ArtistID3
         pressed && styles.pressed,
       ]}
     >
-      <Image source={{ uri }} style={styles.cover} resizeMode="cover" />
+      <CachedImage coverArtId={artist.coverArt} size={COVER_SIZE} style={styles.cover} resizeMode="cover" />
       <View style={styles.text}>
         <Text
           style={[styles.artistName, { color: colors.textPrimary }]}

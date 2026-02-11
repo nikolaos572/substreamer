@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
 import { memo, useCallback } from 'react';
-import { Image, Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
-import { getCoverArtUrl, type AlbumID3 } from '../services/subsonicService';
+import { type AlbumID3 } from '../services/subsonicService';
 
 const COVER_SIZE = 300;
 
@@ -16,7 +17,6 @@ export const AlbumCard = memo(function AlbumCard({
 }) {
   const { colors } = useTheme();
   const router = useRouter();
-  const uri = getCoverArtUrl(album.coverArt ?? '', COVER_SIZE) ?? undefined;
   const imageSize = width - 16; // 8px padding on each side
 
   const onPress = useCallback(() => {
@@ -32,8 +32,9 @@ export const AlbumCard = memo(function AlbumCard({
         pressed && styles.pressed,
       ]}
     >
-      <Image
-        source={{ uri }}
+      <CachedImage
+        coverArtId={album.coverArt}
+        size={COVER_SIZE}
         style={[styles.cover, { width: imageSize, height: imageSize }]}
         resizeMode="cover"
       />

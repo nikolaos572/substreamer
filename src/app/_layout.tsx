@@ -6,6 +6,7 @@ import { StyleSheet } from 'react-native';
 
 import AnimatedSplashScreen from '../components/AnimatedSplashScreen';
 import { useTheme } from '../hooks/useTheme';
+import { initImageCache } from '../services/imageCacheService';
 import { albumListsStore } from '../store/albumListsStore';
 import { authStore, clearPersistedData } from '../store/authStore';
 import { fetchServerInfo } from '../services/subsonicService';
@@ -15,6 +16,9 @@ import { serverInfoStore } from '../store/serverInfoStore';
 // AnimatedSplashScreen calls hideAsync() itself once mounted so the
 // transition is seamless (both share the same blue + logo appearance).
 SplashScreen.preventAutoHideAsync();
+
+// Initialise the on-disk image cache directory at module load.
+initImageCache();
 
 export default function RootLayout() {
   const [splashVisible, setSplashVisible] = useState(true);

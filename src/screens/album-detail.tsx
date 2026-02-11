@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Animated,
   ActivityIndicator,
-  Image,
   Platform,
   RefreshControl,
   ScrollView,
@@ -15,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AlbumOptionsSheet } from '../components/AlbumOptionsSheet';
+import { CachedImage } from '../components/CachedImage';
 import { MoreOptionsButton } from '../components/MoreOptionsButton';
 import { TrackRow } from '../components/TrackRow';
 import { useColorExtraction } from '../hooks/useColorExtraction';
@@ -22,7 +22,6 @@ import { useTheme } from '../hooks/useTheme';
 import {
   ensureCoverArtAuth,
   getAlbum,
-  getCoverArtUrl,
   type AlbumWithSongsID3,
   type Child,
 } from '../services/subsonicService';
@@ -144,7 +143,6 @@ export function AlbumDetailScreen() {
     );
   }
 
-  const coverUri = getCoverArtUrl(album.coverArt ?? '', HERO_COVER_SIZE) ?? undefined;
   const gradientEnd = colors.background;
 
   const gradientFillStyle = [
@@ -185,8 +183,9 @@ export function AlbumDetailScreen() {
         >
       <View style={styles.hero}>
         <View style={styles.heroImageWrap}>
-          <Image
-            source={{ uri: coverUri }}
+          <CachedImage
+            coverArtId={album.coverArt}
+            size={HERO_COVER_SIZE}
             style={styles.heroImage}
             resizeMode="contain"
           />
