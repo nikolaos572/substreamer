@@ -13,6 +13,7 @@ import {
 
 import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
+import { playTrack } from '../services/playerService';
 import {
   type AlbumID3,
   type ArtistID3,
@@ -270,7 +271,7 @@ export function SearchResultsOverlay() {
                     key={song.id}
                     song={song}
                     colors={colors}
-                    onPress={() => {}}
+                    onPress={() => playTrack(song, results.songs)}
                   />
                 ))}
               </View>

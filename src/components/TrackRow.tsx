@@ -5,7 +5,7 @@
  * subtitle, starred indicator, user rating, and duration.
  */
 
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { ThemeColors } from '../constants/theme';
@@ -19,15 +19,24 @@ export interface TrackRowProps {
   /** Whether to show the track.artist subtitle below the title. */
   showArtist?: boolean;
   colors: ThemeColors;
+  /** Called when the row is tapped to start playback. */
+  onPress?: () => void;
 }
 
-export function TrackRow({ track, trackNumber, showArtist, colors }: TrackRowProps) {
+export function TrackRow({ track, trackNumber, showArtist, colors, onPress }: TrackRowProps) {
   const duration = track.duration != null ? formatTrackDuration(track.duration) : '—';
   const starred = Boolean(track.starred);
   const rating = track.userRating;
 
   return (
-    <View style={[styles.trackRow, { borderBottomColor: colors.border }]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.trackRow,
+        { borderBottomColor: colors.border },
+        pressed && styles.pressed,
+      ]}
+    >
       <View style={styles.trackLeft}>
         {trackNumber != null && (
           <Text style={[styles.trackNum, { color: colors.textSecondary }]}>
@@ -58,7 +67,7 @@ export function TrackRow({ track, trackNumber, showArtist, colors }: TrackRowPro
           {duration}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -103,5 +112,8 @@ const styles = StyleSheet.create({
   },
   trackDuration: {
     fontSize: 15,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });

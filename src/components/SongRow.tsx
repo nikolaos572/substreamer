@@ -12,13 +12,14 @@ const COVER_SIZE = 300;
 /** Total row height (padding 12*2 + image 56 = 80). Exported for getItemLayout. */
 export const ROW_HEIGHT = 80;
 
-export const SongRow = memo(function SongRow({ song }: { song: Child }) {
+export const SongRow = memo(function SongRow({ song, onPress }: { song: Child; onPress?: () => void }) {
   const { colors } = useTheme();
   const duration =
     song.duration != null ? formatTrackDuration(song.duration) : '—';
 
   return (
     <Pressable
+      onPress={onPress}
       style={({ pressed }) => [
         styles.row,
         { backgroundColor: colors.card },

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { useTheme } from '../hooks/useTheme';
+import { playTrack } from '../services/playerService';
 import type { Child } from '../services/subsonicService';
 import { SongCard } from './SongCard';
 import { SongRow, ROW_HEIGHT } from './SongRow';
@@ -64,15 +65,17 @@ export function SongListView({
   );
 
   const renderListItem = useCallback(
-    ({ item }: { item: Child }) => <SongRow song={item} />,
-    []
+    ({ item }: { item: Child }) => (
+      <SongRow song={item} onPress={() => playTrack(item, songs)} />
+    ),
+    [songs]
   );
 
   const renderGridItem = useCallback(
     ({ item }: { item: Child }) => (
-      <SongCard song={item} width={cardWidth} />
+      <SongCard song={item} width={cardWidth} onPress={() => playTrack(item, songs)} />
     ),
-    [cardWidth]
+    [cardWidth, songs]
   );
 
   const keyExtractor = useCallback((item: Child) => item.id, []);

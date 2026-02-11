@@ -10,15 +10,18 @@ const COVER_SIZE = 300;
 export const SongCard = memo(function SongCard({
   song,
   width,
+  onPress,
 }: {
   song: Child;
   width: number;
+  onPress?: () => void;
 }) {
   const { colors } = useTheme();
   const imageSize = width - 16; // 8px padding on each side
 
   return (
     <Pressable
+      onPress={onPress}
       style={({ pressed }) => [
         styles.card,
         { backgroundColor: colors.card, width },

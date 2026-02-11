@@ -33,6 +33,7 @@ import {
   type Child,
 } from '../services/subsonicService';
 import { refreshCachedImage } from '../services/imageCacheService';
+import { playTrack } from '../services/playerService';
 import {
   getArtistBiography,
   searchArtistMBID,
@@ -91,12 +92,14 @@ function SimilarArtistItem({
 function TopSongItem({
   song,
   colors,
+  onPress,
 }: {
   song: Child;
   colors: ReturnType<typeof useTheme>['colors'];
+  onPress?: () => void;
 }) {
   return (
-    <View style={styles.songItem}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.songItem, pressed && styles.pressed]}>
       <CachedImage
         coverArtId={song.coverArt}
         size={300}
@@ -117,7 +120,7 @@ function TopSongItem({
           {song.artist}
         </Text>
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -347,7 +350,7 @@ export function ArtistDetailScreen() {
               contentContainerStyle={styles.songList}
             >
               {topSongs.map((song, index) => (
-                <TopSongItem key={`${song.id}-${index}`} song={song} colors={colors} />
+                <TopSongItem key={`${song.id}-${index}`} song={song} colors={colors} onPress={() => playTrack(song, topSongs)} />
               ))}
             </ScrollView>
           </View>

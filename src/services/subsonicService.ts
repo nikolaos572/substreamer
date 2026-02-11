@@ -139,6 +139,27 @@ export function getCoverArtUrl(coverArtId: string, size?: number): string | null
   return `${base}?${params.toString()}`;
 }
 
+/**
+ * Build an authenticated stream URL for a given track ID.
+ * Mirrors getCoverArtUrl but targets the /rest/stream.view endpoint.
+ * Must call ensureCoverArtAuth() before using this.
+ */
+export function getStreamUrl(trackId: string): string | null {
+  const { isLoggedIn, serverUrl, username } = authStore.getState();
+  if (!trackId || !isLoggedIn || !serverUrl || !username) return null;
+  if (cachedCoverArtKey === null || !cachedCoverArtSalt || !cachedCoverArtToken) return null;
+  const base = `${normalizeServerUrl(serverUrl)}/rest/stream.view`;
+  const params = new URLSearchParams({
+    id: trackId,
+    v: '1.16.1',
+    c: 'substreamer',
+    u: username,
+    t: cachedCoverArtToken,
+    s: cachedCoverArtSalt,
+  });
+  return `${base}?${params.toString()}`;
+}
+
 export async function getRecentlyAddedAlbums(size?: number): Promise<AlbumID3[]> {
   const api = getApi();
   if (!api) return [];

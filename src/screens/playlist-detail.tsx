@@ -19,6 +19,7 @@ import { TrackRow } from '../components/TrackRow';
 import { useColorExtraction } from '../hooks/useColorExtraction';
 import { useTheme } from '../hooks/useTheme';
 import { refreshCachedImage } from '../services/imageCacheService';
+import { playTrack } from '../services/playerService';
 import {
   ensureCoverArtAuth,
   getPlaylist,
@@ -187,6 +188,7 @@ export function PlaylistDetailScreen() {
                 trackNumber={`${index + 1}. `}
                 showArtist
                 colors={colors}
+                onPress={() => playTrack(track, tracks)}
               />
             ))}
           </View>

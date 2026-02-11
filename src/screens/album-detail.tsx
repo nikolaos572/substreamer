@@ -20,6 +20,7 @@ import { TrackRow } from '../components/TrackRow';
 import { useColorExtraction } from '../hooks/useColorExtraction';
 import { useTheme } from '../hooks/useTheme';
 import { refreshCachedImage } from '../services/imageCacheService';
+import { playTrack } from '../services/playerService';
 import {
   ensureCoverArtAuth,
   getAlbum,
@@ -228,6 +229,7 @@ export function AlbumDetailScreen() {
                   track={track}
                   trackNumber={track.track != null ? `${track.track}. ` : undefined}
                   colors={colors}
+                  onPress={() => playTrack(track, album.song ?? [])}
                 />
               ))}
             </View>
