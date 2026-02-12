@@ -36,7 +36,8 @@
           "image": "./src/assets/splash-icon.png",
           "imageWidth": 200
         }
-      ]
+      ],
+      "./plugins/silence-hermes-warning"
     ]
   }
 }
