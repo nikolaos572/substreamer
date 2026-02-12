@@ -9,12 +9,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CachedImage } from './CachedImage';
 import { useCachedCoverArt } from '../hooks/useCachedCoverArt';
 import { useTheme } from '../hooks/useTheme';
+import { PlayerView } from '../screens/player-view';
 import { togglePlayPause } from '../services/playerService';
 import { playerStore } from '../store/playerStore';
 import { getProminentColor, type ExtractedColors } from '../utils/colors';
@@ -98,6 +99,11 @@ export function MiniPlayer() {
     }
   }, [bgColor, gradientOpacity]);
 
+  // --- Full player modal ---
+  const [playerVisible, setPlayerVisible] = useState(false);
+  const openPlayer = useCallback(() => setPlayerVisible(true), []);
+  const closePlayer = useCallback(() => setPlayerVisible(false), []);
+
   if (!currentTrack) return null;
 
   const gradientStart = bgColor ?? colors.card;
@@ -139,23 +145,29 @@ export function MiniPlayer() {
         />
       </Animated.View>
 
-      {/* Cover art */}
-      <CachedImage
-        coverArtId={currentTrack.coverArt}
-        size={300}
-        style={styles.cover}
-        resizeMode="cover"
-      />
+      {/* Tappable area: cover art + track info */}
+      <Pressable
+        onPress={openPlayer}
+        style={({ pressed }) => [styles.touchable, pressed && styles.pressed]}
+      >
+        {/* Cover art */}
+        <CachedImage
+          coverArtId={currentTrack.coverArt}
+          size={300}
+          style={styles.cover}
+          resizeMode="cover"
+        />
 
-      {/* Track info */}
-      <View style={styles.info}>
-        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
-          {currentTrack.title}
-        </Text>
-        <Text style={[styles.artist, { color: colors.textSecondary }]} numberOfLines={1}>
-          {currentTrack.artist ?? 'Unknown Artist'}
-        </Text>
-      </View>
+        {/* Track info */}
+        <View style={styles.info}>
+          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
+            {currentTrack.title}
+          </Text>
+          <Text style={[styles.artist, { color: colors.textSecondary }]} numberOfLines={1}>
+            {currentTrack.artist ?? 'Unknown Artist'}
+          </Text>
+        </View>
+      </Pressable>
 
       {/* Play / Pause */}
       <Pressable
@@ -169,6 +181,16 @@ export function MiniPlayer() {
           color={colors.textPrimary}
         />
       </Pressable>
+
+      {/* Full player modal */}
+      <Modal
+        visible={playerVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={closePlayer}
+      >
+        <PlayerView onClose={closePlayer} />
+      </Modal>
     </View>
   );
 }
@@ -191,6 +213,12 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
+  },
+  touchable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
   },
   cover: {
     width: 40,

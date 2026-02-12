@@ -234,3 +234,14 @@ export async function skipToNext(): Promise<void> {
 export async function skipToPrevious(): Promise<void> {
   await TrackPlayer.skipToPrevious();
 }
+
+/** Seek to a position in seconds. */
+export async function seekTo(position: number): Promise<void> {
+  await TrackPlayer.seekTo(position);
+}
+
+/** Skip to a specific track in the queue by index. */
+export async function skipToTrack(index: number): Promise<void> {
+  await TrackPlayer.skip(index);
+  await TrackPlayer.play();
+}
