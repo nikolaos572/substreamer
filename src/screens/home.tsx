@@ -1,14 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import {
-  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 import { AlbumCard } from '../components/AlbumCard';
 import { useTheme } from '../hooks/useTheme';
@@ -113,7 +113,7 @@ function AlbumSection({
           {config.emptyMessage}
         </Text>
       ) : (
-        <FlatList
+        <FlashList
           data={albums}
           renderItem={renderItem}
           keyExtractor={keyExtractor}

@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
 import { useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
-  FlatList,
   StyleSheet,
   Text,
   View,
@@ -13,7 +13,7 @@ import { useTheme } from '../hooks/useTheme';
 import { playTrack } from '../services/playerService';
 import type { Child } from '../services/subsonicService';
 import { SongCard } from './SongCard';
-import { SongRow, ROW_HEIGHT } from './SongRow';
+import { SongRow } from './SongRow';
 
 export type SongLayout = 'list' | 'grid';
 
@@ -72,24 +72,24 @@ export function SongListView({
   );
 
   const renderGridItem = useCallback(
-    ({ item }: { item: Child }) => (
-      <SongCard song={item} width={cardWidth} onPress={() => playTrack(item, songs)} />
-    ),
+    ({ item, index }: { item: Child; index: number }) => {
+      const isLeftColumn = index % GRID_COLUMNS === 0;
+      return (
+        <View
+          style={{
+            flex: 1,
+            paddingLeft: isLeftColumn ? 0 : GRID_GAP / 2,
+            paddingRight: isLeftColumn ? GRID_GAP / 2 : 0,
+          }}
+        >
+          <SongCard song={item} width={cardWidth} onPress={() => playTrack(item, songs)} />
+        </View>
+      );
+    },
     [cardWidth, songs]
   );
 
   const keyExtractor = useCallback((item: Child) => item.id, []);
-
-  const getItemLayout = useCallback(
-    (_data: ArrayLike<Child> | null | undefined, index: number) => ({
-      length: ROW_HEIGHT,
-      offset: ROW_HEIGHT * index,
-      index,
-    }),
-    []
-  );
-
-  const columnWrapperStyle = useMemo(() => ({ gap: GRID_GAP }), []);
 
   const EmptyComponent = useMemo(
     () => (
@@ -131,22 +131,16 @@ export function SongListView({
   const isGrid = layout === 'grid';
 
   return (
-    <FlatList
+    <FlashList
       key={layout}
       data={songs}
       renderItem={isGrid ? renderGridItem : renderListItem}
       keyExtractor={keyExtractor}
-      {...(isGrid
-        ? { numColumns: GRID_COLUMNS, columnWrapperStyle }
-        : { getItemLayout })}
+      numColumns={isGrid ? GRID_COLUMNS : 1}
       contentContainerStyle={[
         styles.listContent,
         songs.length === 0 && styles.emptyListContent,
       ]}
-      windowSize={11}
-      maxToRenderPerBatch={isGrid ? 12 : 20}
-      initialNumToRender={isGrid ? 10 : 15}
-      removeClippedSubviews
       onRefresh={onRefresh}
       refreshing={refreshing}
       ListEmptyComponent={EmptyComponent}

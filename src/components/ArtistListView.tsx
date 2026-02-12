@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { useCallback, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
-  FlatList,
   StyleSheet,
   Text,
   View,
@@ -12,7 +12,7 @@ import {
 import { useTheme } from '../hooks/useTheme';
 import type { ArtistID3 } from '../services/subsonicService';
 import { ArtistCard } from './ArtistCard';
-import { ArtistRow, ROW_HEIGHT } from './ArtistRow';
+import { ArtistRow } from './ArtistRow';
 import { AlphabetScroller } from './AlphabetScroller';
 
 export type ArtistLayout = 'list' | 'grid';
@@ -67,7 +67,7 @@ export function ArtistListView({
   showAlphabetScroller = false,
 }: ArtistListViewProps) {
   const { colors } = useTheme();
-  const flatListRef = useRef<FlatList<ArtistID3>>(null);
+  const listRef = useRef<FlashListRef<ArtistID3>>(null);
 
   const screenWidth = Dimensions.get('window').width;
   const cardWidth = useMemo(
@@ -83,24 +83,24 @@ export function ArtistListView({
   );
 
   const renderGridItem = useCallback(
-    ({ item }: { item: ArtistID3 }) => (
-      <ArtistCard artist={item} width={cardWidth} />
-    ),
+    ({ item, index }: { item: ArtistID3; index: number }) => {
+      const isLeftColumn = index % GRID_COLUMNS === 0;
+      return (
+        <View
+          style={{
+            flex: 1,
+            paddingLeft: isLeftColumn ? 0 : GRID_GAP / 2,
+            paddingRight: isLeftColumn ? GRID_GAP / 2 : 0,
+          }}
+        >
+          <ArtistCard artist={item} width={cardWidth} />
+        </View>
+      );
+    },
     [cardWidth]
   );
 
   const keyExtractor = useCallback((item: ArtistID3) => item.id, []);
-
-  const getItemLayout = useCallback(
-    (_data: ArrayLike<ArtistID3> | null | undefined, index: number) => ({
-      length: ROW_HEIGHT,
-      offset: ROW_HEIGHT * index,
-      index,
-    }),
-    []
-  );
-
-  const columnWrapperStyle = useMemo(() => ({ gap: GRID_GAP }), []);
 
   const EmptyComponent = useMemo(
     () => (
@@ -138,7 +138,7 @@ export function ArtistListView({
         return first === letter;
       });
       if (idx >= 0) {
-        flatListRef.current?.scrollToIndex({ index: idx, animated: false });
+        listRef.current?.scrollToIndex({ index: idx, animated: false });
       }
     },
     [artists]
@@ -166,24 +166,19 @@ export function ArtistListView({
 
   return (
     <View style={styles.wrapper}>
-      <FlatList
-        ref={flatListRef}
+      <FlashList
+        ref={listRef}
         key={layout}
         data={artists}
         renderItem={isGrid ? renderGridItem : renderListItem}
         keyExtractor={keyExtractor}
-        {...(isGrid
-          ? { numColumns: GRID_COLUMNS, columnWrapperStyle }
-          : { getItemLayout })}
+        numColumns={isGrid ? GRID_COLUMNS : 1}
         contentContainerStyle={[
           styles.listContent,
           scrollerVisible && styles.listContentWithScroller,
           artists.length === 0 && styles.emptyListContent,
         ]}
-        windowSize={11}
-        maxToRenderPerBatch={isGrid ? 12 : 20}
-        initialNumToRender={isGrid ? 10 : 15}
-        removeClippedSubviews
+        drawDistance={300}
         onRefresh={onRefresh}
         refreshing={refreshing}
         ListEmptyComponent={EmptyComponent}

@@ -1,8 +1,8 @@
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { useCallback, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
-  FlatList,
   StyleSheet,
   Text,
   View,
@@ -11,7 +11,7 @@ import {
 import { useTheme } from '../hooks/useTheme';
 import type { Playlist } from '../services/subsonicService';
 import { PlaylistCard } from './PlaylistCard';
-import { PlaylistRow, ROW_HEIGHT } from './PlaylistRow';
+import { PlaylistRow } from './PlaylistRow';
 import { AlphabetScroller } from './AlphabetScroller';
 
 export type PlaylistLayout = 'list' | 'grid';
@@ -60,7 +60,7 @@ export function PlaylistListView({
   showAlphabetScroller = false,
 }: PlaylistListViewProps) {
   const { colors } = useTheme();
-  const flatListRef = useRef<FlatList<Playlist>>(null);
+  const listRef = useRef<FlashListRef<Playlist>>(null);
 
   const screenWidth = Dimensions.get('window').width;
   const cardWidth = useMemo(
@@ -76,24 +76,24 @@ export function PlaylistListView({
   );
 
   const renderGridItem = useCallback(
-    ({ item }: { item: Playlist }) => (
-      <PlaylistCard playlist={item} width={cardWidth} />
-    ),
+    ({ item, index }: { item: Playlist; index: number }) => {
+      const isLeftColumn = index % GRID_COLUMNS === 0;
+      return (
+        <View
+          style={{
+            flex: 1,
+            paddingLeft: isLeftColumn ? 0 : GRID_GAP / 2,
+            paddingRight: isLeftColumn ? GRID_GAP / 2 : 0,
+          }}
+        >
+          <PlaylistCard playlist={item} width={cardWidth} />
+        </View>
+      );
+    },
     [cardWidth]
   );
 
   const keyExtractor = useCallback((item: Playlist) => item.id, []);
-
-  const getItemLayout = useCallback(
-    (_data: ArrayLike<Playlist> | null | undefined, index: number) => ({
-      length: ROW_HEIGHT,
-      offset: ROW_HEIGHT * index,
-      index,
-    }),
-    []
-  );
-
-  const columnWrapperStyle = useMemo(() => ({ gap: GRID_GAP }), []);
 
   /* ---- Alphabet scroller support ---- */
   const isList = layout === 'list';
@@ -112,7 +112,7 @@ export function PlaylistListView({
         return first === letter;
       });
       if (idx >= 0) {
-        flatListRef.current?.scrollToIndex({ index: idx, animated: false });
+        listRef.current?.scrollToIndex({ index: idx, animated: false });
       }
     },
     [playlists]
@@ -140,23 +140,18 @@ export function PlaylistListView({
 
   return (
     <View style={styles.wrapper}>
-      <FlatList
-        ref={flatListRef}
+      <FlashList
+        ref={listRef}
         key={layout}
         data={playlists}
         renderItem={isGrid ? renderGridItem : renderListItem}
         keyExtractor={keyExtractor}
-        {...(isGrid
-          ? { numColumns: GRID_COLUMNS, columnWrapperStyle }
-          : { getItemLayout })}
+        numColumns={isGrid ? GRID_COLUMNS : 1}
         contentContainerStyle={[
           styles.listContent,
           scrollerVisible && styles.listContentWithScroller,
         ]}
-        windowSize={11}
-        maxToRenderPerBatch={isGrid ? 12 : 20}
-        initialNumToRender={isGrid ? 10 : 15}
-        removeClippedSubviews
+        drawDistance={300}
         onRefresh={onRefresh}
         refreshing={refreshing}
         ListEmptyComponent={

@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Image,
   Pressable,
   StyleSheet,
@@ -20,8 +20,6 @@ import {
 } from '../services/imageCacheService';
 
 const THUMB_SIZE = 50;
-/** Estimated row height for getItemLayout: padding (20) + 4 filename lines (~62). */
-const ROW_HEIGHT = 82;
 
 type RowStatus = 'idle' | 'refreshing' | 'success' | 'error';
 
@@ -191,15 +189,6 @@ export function CacheBrowserScreen() {
     [],
   );
 
-  const getItemLayout = useCallback(
-    (_data: unknown, index: number) => ({
-      length: ROW_HEIGHT,
-      offset: ROW_HEIGHT * index,
-      index,
-    }),
-    [],
-  );
-
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -210,17 +199,12 @@ export function CacheBrowserScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList
+      <FlashList
         data={entries}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        getItemLayout={getItemLayout}
         refreshing={refreshing}
         onRefresh={handlePullRefresh}
-        windowSize={7}
-        maxToRenderPerBatch={15}
-        initialNumToRender={15}
-        removeClippedSubviews
         contentContainerStyle={entries.length === 0 ? styles.emptyContainer : undefined}
         ListEmptyComponent={
           <View style={styles.center}>

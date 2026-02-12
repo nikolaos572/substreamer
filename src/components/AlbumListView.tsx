@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { useCallback, useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
-  FlatList,
   StyleSheet,
   Text,
   View,
@@ -13,7 +13,7 @@ import { useTheme } from '../hooks/useTheme';
 import type { AlbumID3 } from '../services/subsonicService';
 import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
 import { AlbumCard } from './AlbumCard';
-import { AlbumRow, ROW_HEIGHT } from './AlbumRow';
+import { AlbumRow } from './AlbumRow';
 import { AlphabetScroller } from './AlphabetScroller';
 
 export type AlbumLayout = 'list' | 'grid';
@@ -68,7 +68,7 @@ export function AlbumListView({
   showAlphabetScroller = false,
 }: AlbumListViewProps) {
   const { colors } = useTheme();
-  const flatListRef = useRef<FlatList<AlbumID3>>(null);
+  const listRef = useRef<FlashListRef<AlbumID3>>(null);
 
   const screenWidth = Dimensions.get('window').width;
   const cardWidth = useMemo(
@@ -84,27 +84,24 @@ export function AlbumListView({
   );
 
   const renderGridItem = useCallback(
-    ({ item }: { item: AlbumID3 }) => (
-      <AlbumCard album={item} width={cardWidth} />
-    ),
+    ({ item, index }: { item: AlbumID3; index: number }) => {
+      const isLeftColumn = index % GRID_COLUMNS === 0;
+      return (
+        <View
+          style={{
+            flex: 1,
+            paddingLeft: isLeftColumn ? 0 : GRID_GAP / 2,
+            paddingRight: isLeftColumn ? GRID_GAP / 2 : 0,
+          }}
+        >
+          <AlbumCard album={item} width={cardWidth} />
+        </View>
+      );
+    },
     [cardWidth]
   );
 
   const keyExtractor = useCallback((item: AlbumID3) => item.id, []);
-
-  const getItemLayout = useCallback(
-    (_data: ArrayLike<AlbumID3> | null | undefined, index: number) => ({
-      length: ROW_HEIGHT,
-      offset: ROW_HEIGHT * index,
-      index,
-    }),
-    []
-  );
-
-  const columnWrapperStyle = useMemo(
-    () => ({ gap: GRID_GAP }),
-    []
-  );
 
   const EmptyComponent = useMemo(
     () => (
@@ -148,7 +145,7 @@ export function AlbumListView({
         return letter === '#' ? first === '#' : first === letter;
       });
       if (idx >= 0) {
-        flatListRef.current?.scrollToIndex({ index: idx, animated: false });
+        listRef.current?.scrollToIndex({ index: idx, animated: false });
       }
     },
     [albums, getSortField]
@@ -176,24 +173,19 @@ export function AlbumListView({
 
   return (
     <View style={styles.wrapper}>
-      <FlatList
-        ref={flatListRef}
+      <FlashList
+        ref={listRef}
         key={layout}
         data={albums}
         renderItem={isGrid ? renderGridItem : renderListItem}
         keyExtractor={keyExtractor}
-        {...(isGrid
-          ? { numColumns: GRID_COLUMNS, columnWrapperStyle }
-          : { getItemLayout })}
+        numColumns={isGrid ? GRID_COLUMNS : 1}
         contentContainerStyle={[
           styles.listContent,
           scrollerVisible && styles.listContentWithScroller,
           albums.length === 0 && styles.emptyListContent,
         ]}
-        windowSize={11}
-        maxToRenderPerBatch={isGrid ? 12 : 20}
-        initialNumToRender={isGrid ? 10 : 15}
-        removeClippedSubviews
+        drawDistance={300}
         onRefresh={onRefresh}
         refreshing={refreshing}
         ListEmptyComponent={EmptyComponent}
