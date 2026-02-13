@@ -132,6 +132,18 @@ export function PlayerProgressBar({
     }
   }, [position, duration, pendingSeekFraction]);
 
+  // Fallback timeout: if the seek didn't take effect (e.g. the native player
+  // silently ignored it because the target was beyond the buffer), clear the
+  // pending state after 1 s so the progress bar resumes normal updates.
+  useEffect(() => {
+    if (pendingSeekFraction != null) {
+      const timer = setTimeout(() => {
+        setPendingSeekFraction(null);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingSeekFraction]);
+
   const fraction = isDragging
     ? dragFraction
     : pendingSeekFraction != null

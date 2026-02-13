@@ -11,6 +11,7 @@ import TrackPlayer, {
   type Track,
 } from 'react-native-track-player';
 
+import { playbackSettingsStore } from '../store/playbackSettingsStore';
 import { playerStore, type PlaybackStatus } from '../store/playerStore';
 import {
   ensureCoverArtAuth,
@@ -66,6 +67,13 @@ let currentChildQueue: Child[] = [];
 let progressInterval: ReturnType<typeof setInterval> | null = null;
 /** Guard flag to prevent duplicate skipToNext calls during end-of-track stall handling. */
 let isAutoAdvancing = false;
+/**
+ * Highest buffered position (in seconds) observed for the current track.
+ * The native player sometimes reports a stale or lower `buffered` value
+ * even though more data was previously available.  Tracking the high-water
+ * mark ensures the UI and seek logic never regress.
+ */
+let maxBufferedSeen = 0;
 
 /* ------------------------------------------------------------------ */
 /*  Progress polling                                                   */
@@ -77,7 +85,11 @@ function startProgressPolling() {
   progressInterval = setInterval(async () => {
     try {
       const { position, duration, buffered } = await TrackPlayer.getProgress();
-      playerStore.getState().setProgress(position, duration, buffered);
+      // The native player may report a stale buffered value — if playback
+      // has advanced past it the data is clearly available.  Track the
+      // high-water mark so the value never regresses.
+      maxBufferedSeen = Math.max(maxBufferedSeen, buffered, position);
+      playerStore.getState().setProgress(position, duration, maxBufferedSeen);
     } catch {
       /* player not ready */
     }
@@ -179,6 +191,7 @@ export async function initPlayer(): Promise<void> {
   });
 
   TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, ({ track }) => {
+    maxBufferedSeen = 0;
     if (track != null && track.id) {
       const child = currentChildQueue.find((c) => c.id === track.id) ?? null;
       playerStore.getState().setCurrentTrack(child);
@@ -216,7 +229,8 @@ async function syncStoreFromNative(): Promise<void> {
     }
 
     const { position, duration, buffered } = await TrackPlayer.getProgress();
-    playerStore.getState().setProgress(position, duration, buffered);
+    maxBufferedSeen = Math.max(maxBufferedSeen, buffered, position);
+    playerStore.getState().setProgress(position, duration, maxBufferedSeen);
 
     if (
       state.state === State.Playing ||
@@ -281,8 +295,36 @@ export async function skipToPrevious(): Promise<void> {
   await TrackPlayer.skipToPrevious();
 }
 
-/** Seek to a position in seconds. */
+/**
+ * Seek to a position in seconds.
+ *
+ * On transcoded streams (non-raw format or bitrate-limited) whose native
+ * duration is reported as 0, the native player cannot seek beyond the
+ * buffered range via HTTP Range requests.  In that case we clamp the
+ * seek to just inside the end of the buffered range so the user gets as
+ * close as possible without the seek silently failing.
+ */
 export async function seekTo(position: number): Promise<void> {
+  const { duration, buffered, position: currentPos } = await TrackPlayer.getProgress();
+  // Use the high-water mark so we never clamp tighter than what was
+  // previously known to be available.
+  const effectiveBuffered = Math.max(maxBufferedSeen, buffered, currentPos);
+
+  // Only apply the clamp when ALL of these are true:
+  //  1. The native player reports duration as 0 (transcoded stream without
+  //     reliable duration metadata).
+  //  2. The stream is transcoded (non-raw format or bitrate-limited).
+  //  3. The seek target is beyond the effective buffered range.
+  if (duration === 0 && position > effectiveBuffered && effectiveBuffered > 0) {
+    const { streamFormat, maxBitRate } = playbackSettingsStore.getState();
+    const isTranscoding = streamFormat !== 'raw' || maxBitRate != null;
+
+    if (isTranscoding) {
+      await TrackPlayer.seekTo(effectiveBuffered - 1);
+      return;
+    }
+  }
+
   await TrackPlayer.seekTo(position);
 }
 
