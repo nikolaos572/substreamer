@@ -32,6 +32,7 @@ import { serverInfoStore } from '../store/serverInfoStore';
 import { albumDetailStore } from '../store/albumDetailStore';
 import { artistDetailStore } from '../store/artistDetailStore';
 import { playlistDetailStore } from '../store/playlistDetailStore';
+import { scrobbleStore } from '../store/scrobbleStore';
 
 const AUTH_PERSIST_KEY = 'substreamer-auth';
 const SERVER_INFO_PERSIST_KEY = 'substreamer-server-info';
@@ -135,6 +136,7 @@ export function SettingsScreen() {
   const cachedArtistCount = artistDetailStore((s) => Object.keys(s.artists).length);
   const cachedPlaylistCount = playlistDetailStore((s) => Object.keys(s.playlists).length);
   const totalMetadataCount = cachedAlbumCount + cachedArtistCount + cachedPlaylistCount;
+  const pendingScrobbleCount = scrobbleStore((s) => s.pendingScrobbles.length);
   const activeAccentLabel = ACCENT_COLORS.find((c) => c.hex === activePrimary)?.label ?? 'Custom';
 
   const handleAccentSelect = useCallback(
@@ -535,6 +537,15 @@ export function SettingsScreen() {
             <Ionicons name="trash-outline" size={18} color={colors.red} />
             <Text style={[styles.clearCacheText, { color: colors.red }]}>Clear Metadata Cache</Text>
           </Pressable>
+        </View>
+
+        <View style={[styles.card, dynamicStyles.card, styles.metadataCard]}>
+          <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
+            <Text style={[styles.infoLabel, { color: colors.textPrimary }]}>Pending scrobbles</Text>
+            <Text style={[styles.infoValue, { color: colors.textSecondary }]}>
+              {pendingScrobbleCount}
+            </Text>
+          </View>
         </View>
       </View>
 

@@ -9,6 +9,7 @@ import { useTheme } from '../hooks/useTheme';
 import { getImageCacheStats, initImageCache } from '../services/imageCacheService';
 import { initPlayer } from '../services/playerService';
 import { fetchScanStatus } from '../services/scanService';
+import { initScrobbleService } from '../services/scrobbleService';
 import { albumListsStore } from '../store/albumListsStore';
 import { imageCacheStore } from '../store/imageCacheStore';
 import { authStore, clearPersistedData } from '../store/authStore';
@@ -55,6 +56,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (!rehydrated || !isLoggedIn) return;
     initPlayer();
+    initScrobbleService();
     fetchServerInfo().then((info) => {
       if (info) serverInfoStore.getState().setServerInfo(info);
     });

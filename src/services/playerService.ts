@@ -13,6 +13,7 @@ import TrackPlayer, {
 
 import { playbackSettingsStore } from '../store/playbackSettingsStore';
 import { playerStore, type PlaybackStatus } from '../store/playerStore';
+import { addCompletedScrobble, sendNowPlaying } from './scrobbleService';
 import {
   ensureCoverArtAuth,
   getCoverArtUrl,
@@ -87,6 +88,14 @@ let isFullyBuffered = false;
 let lastRawBuffered = 0;
 /** How many consecutive polls position has exceeded the stalled buffered value. */
 let positionPastBufferCount = 0;
+/** Track ID of the previously active track, used for scrobble-on-completion. */
+let previousActiveTrackId: string | null = null;
+/**
+ * Set to true before user-initiated track changes (skip, play new queue)
+ * so the PlaybackActiveTrackChanged handler can distinguish them from
+ * natural auto-advance and avoid scrobbling partially-played tracks.
+ */
+let isUserSkipping = false;
 
 /* ------------------------------------------------------------------ */
 /*  Progress polling                                                   */
@@ -229,6 +238,12 @@ export async function initPlayer(): Promise<void> {
   });
 
   TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, ({ track }) => {
+    // Scrobble: if the previous track finished naturally (not a user skip),
+    // record it as a completed scrobble.
+    if (previousActiveTrackId && !isUserSkipping) {
+      addCompletedScrobble(previousActiveTrackId);
+    }
+
     maxBufferedSeen = 0;
     isFullyBuffered = false;
     lastRawBuffered = 0;
@@ -236,9 +251,15 @@ export async function initPlayer(): Promise<void> {
     if (track != null && track.id) {
       const child = currentChildQueue.find((c) => c.id === track.id) ?? null;
       playerStore.getState().setCurrentTrack(child);
+
+      // Scrobble: send "now playing" for the new track.
+      sendNowPlaying(track.id);
     } else {
       playerStore.getState().setCurrentTrack(null);
     }
+
+    previousActiveTrackId = track?.id ?? null;
+    isUserSkipping = false;
   });
 
   // --- AppState listener for background → foreground sync ---
@@ -306,6 +327,7 @@ async function syncStoreFromNative(): Promise<void> {
  * and begins playback.
  */
 export async function playTrack(track: Child, queue: Child[]): Promise<void> {
+  isUserSkipping = true;
   await ensureCoverArtAuth();
 
   currentChildQueue = queue;
@@ -336,11 +358,13 @@ export async function togglePlayPause(): Promise<void> {
 
 /** Skip to the next track in the queue. */
 export async function skipToNext(): Promise<void> {
+  isUserSkipping = true;
   await TrackPlayer.skipToNext();
 }
 
 /** Skip to the previous track in the queue. */
 export async function skipToPrevious(): Promise<void> {
+  isUserSkipping = true;
   await TrackPlayer.skipToPrevious();
 }
 
@@ -386,6 +410,7 @@ export async function seekTo(position: number): Promise<void> {
 
 /** Skip to a specific track in the queue by index. */
 export async function skipToTrack(index: number): Promise<void> {
+  isUserSkipping = true;
   await TrackPlayer.skip(index);
   await TrackPlayer.play();
 }
