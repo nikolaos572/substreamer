@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   heroImageWrap: {
     width: '100%',
     aspectRatio: 1,
-    backgroundColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: 'rgba(128,128,128,0.12)',
     borderRadius: 8,
     overflow: 'hidden',
   },

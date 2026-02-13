@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
     width: HERO_IMAGE_SIZE,
     height: HERO_IMAGE_SIZE,
     borderRadius: HERO_IMAGE_SIZE / 2,
-    backgroundColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: 'rgba(128,128,128,0.12)',
   },
   artistName: {
     fontSize: 26,

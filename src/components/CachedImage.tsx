@@ -15,6 +15,7 @@ import {
   Animated,
   type ImageProps,
   type ImageStyle,
+  type LayoutChangeEvent,
   StyleSheet,
   View,
   type ViewStyle,
@@ -38,7 +39,7 @@ const FADE_DURATION_MS = 300;
 /** Min size for the placeholder logo (dp). */
 const MIN_LOGO_SIZE = 16;
 /** Max size for the placeholder logo (dp). */
-const MAX_LOGO_SIZE = 48;
+const MAX_LOGO_SIZE = 80;
 /** Logo size as a fraction of the image's smaller dimension. */
 const LOGO_SCALE = 0.4;
 /** Default colour for the placeholder waveform bars. */
@@ -92,6 +93,17 @@ export const CachedImage = memo(function CachedImage({
 
   const fadeAnim = useRef(new Animated.Value(hasInitialImage ? 1 : 0)).current;
   const currentIdRef = useRef(coverArtId);
+
+  /* ---- measure actual rendered size for placeholder logo ---- */
+  const [layoutSize, setLayoutSize] = useState<{ w: number; h: number } | null>(null);
+
+  const handleLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setLayoutSize((prev) => {
+      if (prev && Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1) return prev;
+      return { w: width, h: height };
+    });
+  }, []);
 
   /* ---- synchronous reset when props change (prevents stale images) ---- */
   useLayoutEffect(() => {
@@ -167,15 +179,15 @@ export const CachedImage = memo(function CachedImage({
     });
   }, [fadeAnim]);
 
-  /* ---- derive logo size from numeric style dimensions ---- */
+  /* ---- derive logo size from measured layout (or style fallback) ---- */
   const flatStyle = StyleSheet.flatten(style) as (ImageStyle & ViewStyle) | undefined;
   const logoSize = computeLogoSize(
-    typeof flatStyle?.width === 'number' ? flatStyle.width : undefined,
-    typeof flatStyle?.height === 'number' ? flatStyle.height : undefined,
+    layoutSize?.w ?? (typeof flatStyle?.width === 'number' ? flatStyle.width : undefined),
+    layoutSize?.h ?? (typeof flatStyle?.height === 'number' ? flatStyle.height : undefined),
   );
 
   return (
-    <View style={[style as ViewStyle, styles.container]}>
+    <View style={[style as ViewStyle, styles.container]} onLayout={handleLayout}>
       {showPlaceholder && (
         <View style={styles.placeholder}>
           <WaveformLogo
