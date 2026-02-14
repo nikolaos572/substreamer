@@ -44,6 +44,53 @@ export function LoginScreen() {
   const [certHostname, setCertHostname] = useState('');
   const [isCertRotation, setIsCertRotation] = useState(false);
 
+  const handleTrustCertificate = useCallback(async () => {
+    if (!certInfo || !certHostname) return;
+
+    setCertModalVisible(false);
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Trust the certificate at the native level
+      await trustCertificate(certHostname, certInfo.sha256Fingerprint);
+
+      // Also persist in the Zustand store
+      sslCertStore
+        .getState()
+        .trustCertificate(certHostname, certInfo.sha256Fingerprint);
+
+      // Retry the login
+      const url = serverUrl.trim();
+      const user = username.trim();
+      const pass = password;
+
+      const result = await subsonicLogin(url, user, pass);
+      setLoading(false);
+
+      if (result.success) {
+        setSession(url, user, pass, result.version);
+        const info = await fetchServerInfo();
+        if (info) serverInfoStore.getState().setServerInfo(info);
+        router.replace('/');
+      } else {
+        setError(result.error || 'Connection failed after trusting certificate.');
+      }
+    } catch (e) {
+      setLoading(false);
+      setError(
+        `Failed to trust certificate: ${
+          e instanceof Error ? e.message : 'Unknown error'
+        }`
+      );
+    }
+  }, [certInfo, certHostname, serverUrl, username, password, setSession, router]);
+
+  const handleCancelCert = useCallback(() => {
+    setCertModalVisible(false);
+    setError('Connection cancelled: untrusted certificate.');
+  }, []);
+
   if (isLoggedIn) {
     return <Redirect href="/" />;
   }
@@ -110,53 +157,6 @@ export function LoginScreen() {
       setError(errorMsg);
     }
   };
-
-  const handleTrustCertificate = useCallback(async () => {
-    if (!certInfo || !certHostname) return;
-
-    setCertModalVisible(false);
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Trust the certificate at the native level
-      await trustCertificate(certHostname, certInfo.sha256Fingerprint);
-
-      // Also persist in the Zustand store
-      sslCertStore
-        .getState()
-        .trustCertificate(certHostname, certInfo.sha256Fingerprint);
-
-      // Retry the login
-      const url = serverUrl.trim();
-      const user = username.trim();
-      const pass = password;
-
-      const result = await subsonicLogin(url, user, pass);
-      setLoading(false);
-
-      if (result.success) {
-        setSession(url, user, pass, result.version);
-        const info = await fetchServerInfo();
-        if (info) serverInfoStore.getState().setServerInfo(info);
-        router.replace('/');
-      } else {
-        setError(result.error || 'Connection failed after trusting certificate.');
-      }
-    } catch (e) {
-      setLoading(false);
-      setError(
-        `Failed to trust certificate: ${
-          e instanceof Error ? e.message : 'Unknown error'
-        }`
-      );
-    }
-  }, [certInfo, certHostname, serverUrl, username, password, setSession, router]);
-
-  const handleCancelCert = useCallback(() => {
-    setCertModalVisible(false);
-    setError('Connection cancelled: untrusted certificate.');
-  }, []);
 
   return (
     <KeyboardAvoidingView
