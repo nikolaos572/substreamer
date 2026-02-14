@@ -1,0 +1,228 @@
+package expo.modules.ssltrust
+
+import android.content.Context
+import android.content.SharedPreferences
+import org.json.JSONObject
+import java.security.MessageDigest
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.TrustManager
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509TrustManager
+import java.security.KeyStore
+import java.security.SecureRandom
+
+/**
+ * Manages the persisted store of trusted self-signed certificate fingerprints.
+ * Backed by SharedPreferences for fast native-level access before the JS bridge loads.
+ */
+object SslTrustStore {
+    private const val PREFS_NAME = "expo_ssl_trust_store"
+    private const val KEY_TRUSTED_CERTS = "trusted_certs"
+
+    private var prefs: SharedPreferences? = null
+    // hostname -> { sha256, acceptedAt }
+    private val trustedCerts = mutableMapOf<String, TrustedCertEntry>()
+    // hostname -> DER-encoded certificate data (for ExoPlayer trust)
+    private val certDerData = mutableMapOf<String, ByteArray>()
+
+    data class TrustedCertEntry(
+        val sha256Fingerprint: String,
+        val acceptedAt: Long
+    )
+
+    fun init(context: Context) {
+        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        load()
+        installCustomTrustManager()
+    }
+
+    private fun load() {
+        val json = prefs?.getString(KEY_TRUSTED_CERTS, null) ?: return
+        try {
+            val obj = JSONObject(json)
+            obj.keys().forEach { hostname ->
+                val entry = obj.getJSONObject(hostname)
+                trustedCerts[hostname] = TrustedCertEntry(
+                    sha256Fingerprint = entry.getString("sha256"),
+                    acceptedAt = entry.getLong("acceptedAt")
+                )
+            }
+        } catch (e: Exception) {
+            // Corrupted prefs, start fresh
+            trustedCerts.clear()
+        }
+    }
+
+    private fun save() {
+        val obj = JSONObject()
+        trustedCerts.forEach { (hostname, entry) ->
+            val entryObj = JSONObject()
+            entryObj.put("sha256", entry.sha256Fingerprint)
+            entryObj.put("acceptedAt", entry.acceptedAt)
+            obj.put(hostname, entryObj)
+        }
+        prefs?.edit()?.putString(KEY_TRUSTED_CERTS, obj.toString())?.apply()
+    }
+
+    fun storeCertDerData(hostname: String, derData: ByteArray) {
+        certDerData[hostname] = derData
+    }
+
+    fun trustCertificate(hostname: String, sha256Fingerprint: String) {
+        trustedCerts[hostname] = TrustedCertEntry(
+            sha256Fingerprint = sha256Fingerprint.uppercase(),
+            acceptedAt = System.currentTimeMillis()
+        )
+        save()
+        // Re-install trust manager with updated store
+        installCustomTrustManager()
+    }
+
+    fun removeTrustedCertificate(hostname: String) {
+        trustedCerts.remove(hostname)
+        save()
+        installCustomTrustManager()
+    }
+
+    fun getTrustedCertificates(): List<Map<String, Any>> {
+        return trustedCerts.map { (hostname, entry) ->
+            mapOf(
+                "hostname" to hostname,
+                "sha256Fingerprint" to entry.sha256Fingerprint,
+                "acceptedAt" to entry.acceptedAt
+            )
+        }
+    }
+
+    fun isCertificateTrusted(hostname: String): Boolean {
+        return trustedCerts.containsKey(hostname)
+    }
+
+    /**
+     * Check if a certificate chain is trusted for the given hostname.
+     * Returns true if the cert's SHA-256 fingerprint matches the stored one.
+     * Throws SecurityException with CERT_FINGERPRINT_MISMATCH if the hostname
+     * is in the store but the fingerprint doesn't match (certificate rotation).
+     */
+    fun checkTrust(hostname: String, chain: Array<X509Certificate>): Boolean {
+        val entry = trustedCerts[hostname] ?: return false
+        val serverFingerprint = getFingerprint(chain[0])
+        if (serverFingerprint.equals(entry.sha256Fingerprint, ignoreCase = true)) {
+            return true
+        }
+        // Hostname is known but fingerprint changed - certificate rotation detected
+        throw SecurityException("CERT_FINGERPRINT_MISMATCH: Certificate for $hostname has changed. " +
+            "Expected ${entry.sha256Fingerprint}, got $serverFingerprint")
+    }
+
+    fun getFingerprint(cert: X509Certificate): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hash = digest.digest(cert.encoded)
+        return hash.joinToString(":") { "%02X".format(it) }
+    }
+
+    // ---------- Custom TrustManager installation ----------
+
+    private var defaultTrustManager: X509TrustManager? = null
+    private var customSslSocketFactory: SSLSocketFactory? = null
+    private var customTrustManager: X509TrustManager? = null
+
+    fun getCustomSslSocketFactory(): SSLSocketFactory? = customSslSocketFactory
+    fun getCustomTrustManager(): X509TrustManager? = customTrustManager
+
+    private fun getDefaultTrustManager(): X509TrustManager {
+        if (defaultTrustManager == null) {
+            val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+            tmf.init(null as KeyStore?)
+            defaultTrustManager = tmf.trustManagers
+                .filterIsInstance<X509TrustManager>()
+                .first()
+        }
+        return defaultTrustManager!!
+    }
+
+    private fun installCustomTrustManager() {
+        val appTrustManager = AppTrustManager(getDefaultTrustManager())
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, arrayOf<TrustManager>(appTrustManager), SecureRandom())
+        customSslSocketFactory = sslContext.socketFactory
+        customTrustManager = appTrustManager
+
+        // 1. Set the global default SSLSocketFactory and HostnameVerifier.
+        //    This covers HttpsURLConnection-based networking, which ExoPlayer
+        //    (used by react-native-track-player) uses for audio streaming.
+        javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(customSslSocketFactory)
+        javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(
+            CustomOkHttpClientFactory.CustomHostnameVerifier()
+        )
+
+        // 2. Install the custom OkHttpClient factory for React Native networking
+        //    (fetch, Image loading, etc.)
+        try {
+            val providerClass = Class.forName("com.facebook.react.modules.network.OkHttpClientProvider")
+            val factoryClass = Class.forName("com.facebook.react.modules.network.OkHttpClientFactory")
+            val setMethod = providerClass.getMethod("setOkHttpClientFactory", factoryClass)
+            val factory = CustomOkHttpClientFactory(customSslSocketFactory!!, appTrustManager)
+
+            // Create a proxy that implements OkHttpClientFactory
+            val proxy = java.lang.reflect.Proxy.newProxyInstance(
+                factoryClass.classLoader,
+                arrayOf(factoryClass)
+            ) { _, method, args ->
+                if (method.name == "createNewNetworkModuleClient") {
+                    factory.createNewNetworkModuleClient()
+                } else {
+                    null
+                }
+            }
+            setMethod.invoke(null, proxy)
+        } catch (e: Exception) {
+            android.util.Log.w("SslTrustStore", "Could not install custom OkHttpClientFactory: ${e.message}")
+        }
+    }
+
+    /**
+     * Custom X509TrustManager that first tries the system trust store,
+     * then falls back to our app-level trust store.
+     */
+    class AppTrustManager(
+        private val systemTrustManager: X509TrustManager
+    ) : X509TrustManager {
+
+        override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {
+            systemTrustManager.checkClientTrusted(chain, authType)
+        }
+
+        override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
+            try {
+                // First, try the system trust store
+                systemTrustManager.checkServerTrusted(chain, authType)
+            } catch (e: Exception) {
+                // System trust failed. Check our custom trust store.
+                // Try to match against all trusted hostnames by fingerprint.
+                val serverFingerprint = getFingerprint(chain[0])
+                val matchingEntry = trustedCerts.entries.find { (_, entry) ->
+                    entry.sha256Fingerprint.equals(serverFingerprint, ignoreCase = true)
+                }
+                if (matchingEntry != null) {
+                    return // Trusted by fingerprint match
+                }
+
+                // Also check against stored DER data for exact certificate match
+                val serverEncoded = chain[0].encoded
+                val matchingDer = certDerData.values.any { it.contentEquals(serverEncoded) }
+                if (matchingDer) {
+                    return // Trusted by DER data match
+                }
+
+                throw e
+            }
+        }
+
+        override fun getAcceptedIssuers(): Array<X509Certificate> {
+            return systemTrustManager.acceptedIssuers
+        }
+    }
+}

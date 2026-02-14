@@ -10,6 +10,7 @@ import { getImageCacheStats, initImageCache } from '../services/imageCacheServic
 import { initPlayer } from '../services/playerService';
 import { fetchScanStatus } from '../services/scanService';
 import { initScrobbleService } from '../services/scrobbleService';
+import { initSslTrustStore } from '../services/sslTrustService';
 import { albumListsStore } from '../store/albumListsStore';
 import { imageCacheStore } from '../store/imageCacheStore';
 import { authStore, clearPersistedData } from '../store/authStore';
@@ -24,6 +25,10 @@ SplashScreen.preventAutoHideAsync();
 
 // Initialise the on-disk image cache directory at module load.
 initImageCache();
+
+// Initialise the SSL trust store so the custom TrustManager / URLSession
+// delegate is installed before any network requests are made.
+initSslTrustStore();
 
 // Reconcile persisted cache stats with the actual filesystem.
 imageCacheStore.getState().recalculate(getImageCacheStats());

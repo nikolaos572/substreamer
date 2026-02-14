@@ -1,0 +1,100 @@
+package expo.modules.ssltrust
+
+import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.Promise
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+class ExpoSslTrustModule : Module() {
+    override fun definition() = ModuleDefinition {
+        Name("ExpoSslTrust")
+
+        AsyncFunction("initTrustStore") { promise: Promise ->
+            try {
+                val context = appContext.reactContext ?: throw Exception("React context not available")
+                SslTrustStore.init(context)
+                promise.resolve(null)
+            } catch (e: Exception) {
+                promise.reject("ERR_INIT_TRUST_STORE", e.message, e)
+            }
+        }
+
+        AsyncFunction("getCertificateInfo") { url: String, promise: Promise ->
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val info = CertificateInspector.getCertificateInfo(url)
+                    
+                    // Store the DER data temporarily so it's available
+                    // when the user trusts the certificate
+                    if (info.derData != null) {
+                        try {
+                            val parsedUrl = java.net.URL(
+                                if (url.startsWith("http")) url else "https://$url"
+                            )
+                            SslTrustStore.storeCertDerData(parsedUrl.host, info.derData)
+                        } catch (_: Exception) { }
+                    }
+                    
+                    val result = mapOf(
+                        "subject" to info.subject,
+                        "issuer" to info.issuer,
+                        "sha256Fingerprint" to info.sha256Fingerprint,
+                        "validFrom" to info.validFrom,
+                        "validTo" to info.validTo,
+                        "serialNumber" to info.serialNumber,
+                        "isSelfSigned" to info.isSelfSigned
+                    )
+                    promise.resolve(result)
+                } catch (e: Exception) {
+                    promise.reject("ERR_CERT_FETCH", "Failed to fetch certificate: ${e.message}", e)
+                }
+            }
+        }
+
+        AsyncFunction("trustCertificate") { hostname: String, sha256Fingerprint: String, promise: Promise ->
+            try {
+                val context = appContext.reactContext ?: throw Exception("React context not available")
+                SslTrustStore.init(context) // Ensure initialized
+                SslTrustStore.trustCertificate(hostname, sha256Fingerprint)
+                promise.resolve(null)
+            } catch (e: Exception) {
+                promise.reject("ERR_TRUST_CERT", e.message, e)
+            }
+        }
+
+        AsyncFunction("removeTrustedCertificate") { hostname: String, promise: Promise ->
+            try {
+                val context = appContext.reactContext ?: throw Exception("React context not available")
+                SslTrustStore.init(context)
+                SslTrustStore.removeTrustedCertificate(hostname)
+                promise.resolve(null)
+            } catch (e: Exception) {
+                promise.reject("ERR_REMOVE_CERT", e.message, e)
+            }
+        }
+
+        AsyncFunction("getTrustedCertificates") { promise: Promise ->
+            try {
+                val context = appContext.reactContext ?: throw Exception("React context not available")
+                SslTrustStore.init(context)
+                val certs = SslTrustStore.getTrustedCertificates()
+                promise.resolve(certs)
+            } catch (e: Exception) {
+                promise.reject("ERR_GET_CERTS", e.message, e)
+            }
+        }
+
+        AsyncFunction("isCertificateTrusted") { hostname: String, promise: Promise ->
+            try {
+                val context = appContext.reactContext ?: throw Exception("React context not available")
+                SslTrustStore.init(context)
+                val trusted = SslTrustStore.isCertificateTrusted(hostname)
+                promise.resolve(trusted)
+            } catch (e: Exception) {
+                promise.reject("ERR_CHECK_CERT", e.message, e)
+            }
+        }
+    }
+}

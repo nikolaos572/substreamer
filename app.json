@@ -38,7 +38,8 @@
         }
       ],
       "./plugins/silence-hermes-warning",
-      "expo-sqlite"
+      "expo-sqlite",
+      "./modules/expo-ssl-trust/plugin"
     ]
   }
 }

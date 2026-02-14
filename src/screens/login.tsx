@@ -1,5 +1,5 @@
 import { Redirect, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -11,10 +11,19 @@ import {
   View,
 } from 'react-native';
 
+import { CertificatePromptModal } from '../components/CertificatePromptModal';
 import WaveformLogo from '../components/WaveformLogo';
 import { fetchServerInfo, login as subsonicLogin } from '../services/subsonicService';
 import { authStore } from '../store/authStore';
 import { serverInfoStore } from '../store/serverInfoStore';
+import { sslCertStore } from '../store/sslCertStore';
+
+import {
+  getCertificateInfo,
+  isSSLError,
+  trustCertificate,
+  type CertificateInfo,
+} from '../../modules/expo-ssl-trust/src';
 
 const PRIMARY = '#1D9BF0';
 
@@ -29,9 +38,27 @@ export function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // SSL certificate prompt state
+  const [certModalVisible, setCertModalVisible] = useState(false);
+  const [certInfo, setCertInfo] = useState<CertificateInfo | null>(null);
+  const [certHostname, setCertHostname] = useState('');
+  const [isCertRotation, setIsCertRotation] = useState(false);
+
   if (isLoggedIn) {
     return <Redirect href="/" />;
   }
+
+  const extractHostname = (url: string): string => {
+    let normalized = url.trim();
+    if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+      normalized = `https://${normalized}`;
+    }
+    try {
+      return new URL(normalized).hostname;
+    } catch {
+      return normalized;
+    }
+  };
 
   const handleSubmit = async () => {
     const url = serverUrl.trim();
@@ -46,17 +73,90 @@ export function LoginScreen() {
     setLoading(true);
 
     const result = await subsonicLogin(url, user, pass);
-    setLoading(false);
 
     if (result.success) {
+      setLoading(false);
       setSession(url, user, pass, result.version);
       const info = await fetchServerInfo();
       if (info) serverInfoStore.getState().setServerInfo(info);
       router.replace('/');
+      return;
+    }
+
+    // Check if the error is SSL-related
+    const errorMsg = result.error || 'Connection failed';
+    if (isSSLError(errorMsg)) {
+      // Try to fetch the certificate for inspection
+      try {
+        const hostname = extractHostname(url);
+        const info = await getCertificateInfo(url);
+        const isRotation = errorMsg.includes('CERT_FINGERPRINT_MISMATCH');
+
+        setCertInfo(info);
+        setCertHostname(hostname);
+        setIsCertRotation(isRotation);
+        setCertModalVisible(true);
+        setLoading(false);
+      } catch (certErr) {
+        setLoading(false);
+        setError(
+          `SSL certificate error: Could not retrieve certificate details. ${
+            certErr instanceof Error ? certErr.message : ''
+          }`.trim()
+        );
+      }
     } else {
-      setError(result.error || 'Invalid server or credentials.');
+      setLoading(false);
+      setError(errorMsg);
     }
   };
+
+  const handleTrustCertificate = useCallback(async () => {
+    if (!certInfo || !certHostname) return;
+
+    setCertModalVisible(false);
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Trust the certificate at the native level
+      await trustCertificate(certHostname, certInfo.sha256Fingerprint);
+
+      // Also persist in the Zustand store
+      sslCertStore
+        .getState()
+        .trustCertificate(certHostname, certInfo.sha256Fingerprint);
+
+      // Retry the login
+      const url = serverUrl.trim();
+      const user = username.trim();
+      const pass = password;
+
+      const result = await subsonicLogin(url, user, pass);
+      setLoading(false);
+
+      if (result.success) {
+        setSession(url, user, pass, result.version);
+        const info = await fetchServerInfo();
+        if (info) serverInfoStore.getState().setServerInfo(info);
+        router.replace('/');
+      } else {
+        setError(result.error || 'Connection failed after trusting certificate.');
+      }
+    } catch (e) {
+      setLoading(false);
+      setError(
+        `Failed to trust certificate: ${
+          e instanceof Error ? e.message : 'Unknown error'
+        }`
+      );
+    }
+  }, [certInfo, certHostname, serverUrl, username, password, setSession, router]);
+
+  const handleCancelCert = useCallback(() => {
+    setCertModalVisible(false);
+    setError('Connection cancelled: untrusted certificate.');
+  }, []);
 
   return (
     <KeyboardAvoidingView
@@ -140,6 +240,16 @@ export function LoginScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* SSL Certificate Prompt */}
+      <CertificatePromptModal
+        visible={certModalVisible}
+        certInfo={certInfo}
+        hostname={certHostname}
+        isRotation={isCertRotation}
+        onTrust={handleTrustCertificate}
+        onCancel={handleCancelCert}
+      />
     </KeyboardAvoidingView>
   );
 }
