@@ -202,11 +202,12 @@ export async function initPlayer(): Promise<void> {
 
   try {
     await TrackPlayer.setupPlayer({
-      // On iOS minBuffer maps to AVPlayerItem.preferredForwardBufferDuration
-      // and any non-zero value disables automaticallyWaitsToMinimizeStalling,
-      // giving us fast playback start.  A very large value tells AVPlayer to
-      // keep buffering aggressively until the entire track is downloaded
-      // rather than capping at a short window.
+      // On iOS minBuffer maps to AVPlayerItem.preferredForwardBufferDuration.
+      // A very large value tells AVPlayer to keep buffering aggressively
+      // until the entire track is downloaded rather than capping at a
+      // short window.  automaticallyWaitsToMinimizeStalling is left at
+      // its default (true) so the player properly waits for sufficient
+      // buffer before starting playback.
       minBuffer: 86400,
       // maxBuffer is Android-only (ExoPlayer); generous value for parity.
       maxBuffer: 300,
