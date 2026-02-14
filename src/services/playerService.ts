@@ -265,9 +265,14 @@ export async function initPlayer(): Promise<void> {
 
   try {
     await TrackPlayer.setupPlayer({
-      // Small buffer for quicker start on cellular.
-      minBuffer: 15,
-      maxBuffer: 50,
+      // On iOS minBuffer maps to AVPlayerItem.preferredForwardBufferDuration
+      // and any non-zero value disables automaticallyWaitsToMinimizeStalling,
+      // giving us fast playback start.  A very large value tells AVPlayer to
+      // keep buffering aggressively until the entire track is downloaded
+      // rather than capping at a short window.
+      minBuffer: 86400,
+      // maxBuffer is Android-only (ExoPlayer); generous value for parity.
+      maxBuffer: 300,
       waitForBuffer: true,
     });
   } catch {
