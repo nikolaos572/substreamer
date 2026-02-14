@@ -251,9 +251,9 @@ export function AlbumDetailScreen() {
                   Disc {discNum}
                 </Text>
               )}
-              {tracks.map((track) => (
+              {tracks.map((track, index) => (
                 <TrackRow
-                  key={track.id}
+                  key={`${track.id}-${index}`}
                   track={track}
                   trackNumber={track.track != null ? `${track.track}. ` : undefined}
                   colors={colors}

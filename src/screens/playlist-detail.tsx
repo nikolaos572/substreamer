@@ -199,7 +199,7 @@ export function PlaylistDetailScreen() {
           <View style={styles.trackList}>
             {tracks.map((track, index) => (
               <TrackRow
-                key={track.id}
+                key={`${track.id}-${index}`}
                 track={track}
                 trackNumber={`${index + 1}. `}
                 showArtist
