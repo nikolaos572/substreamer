@@ -4,8 +4,13 @@
  * Stores cover art images in {Paths.document}/image-cache/ so they
  * survive app updates and are not purged by the OS.
  *
- * Each cover art ID is cached at 4 size tiers (50, 150, 300, 600)
- * matching every size the app requests.
+ * Each cover art ID gets its own subdirectory containing up to 4 size
+ * variants (50, 150, 300, 600):
+ *
+ *   image-cache/{coverArtId}/50.jpg
+ *   image-cache/{coverArtId}/150.jpg
+ *   image-cache/{coverArtId}/300.jpg
+ *   image-cache/{coverArtId}/600.jpg
  */
 
 import { Directory, File, Paths } from 'expo-file-system';
@@ -77,10 +82,10 @@ export function getCachedImageUri(
   size: number,
 ): string | null {
   if (!coverArtId) return null;
-  const dir = ensureCacheDir();
-  const base = `${coverArtId}_${size}`;
+  const subDir = new Directory(ensureCacheDir(), coverArtId);
+  if (!subDir.exists) return null;
   for (const ext of EXTENSIONS) {
-    const file = new File(dir, `${base}${ext}`);
+    const file = new File(subDir, `${size}${ext}`);
     if (file.exists) return file.uri;
   }
   return null;
@@ -109,9 +114,9 @@ async function downloadOne(
     const contentType = response.headers.get('content-type') ?? '';
     const ext = MIME_TO_EXT[contentType.split(';')[0].trim()] ?? '.jpg';
 
-    const dir = ensureCacheDir();
-    const fileName = `${coverArtId}_${size}${ext}`;
-    const file = new File(dir, fileName);
+    const subDir = new Directory(ensureCacheDir(), coverArtId);
+    if (!subDir.exists) subDir.create();
+    const file = new File(subDir, `${size}${ext}`);
 
     const bytes = new Uint8Array(await response.arrayBuffer());
     file.write(bytes);
@@ -154,16 +159,14 @@ export function getImageCacheStats(): ImageCacheStats {
   const dir = ensureCacheDir();
   const totalBytes = dir.size ?? 0;
 
-  // Count files, then derive unique image count (4 variants each).
-  let fileCount = 0;
+  // Each subdirectory represents one unique cover art image.
+  let imageCount = 0;
   try {
     const contents = dir.list();
-    fileCount = contents.filter((item) => item instanceof File).length;
+    imageCount = contents.filter((item) => item instanceof Directory).length;
   } catch {
-    fileCount = 0;
+    imageCount = 0;
   }
-
-  const imageCount = Math.floor(fileCount / IMAGE_SIZES.length);
 
   return { totalBytes, imageCount };
 }
@@ -185,8 +188,8 @@ export interface CachedImageEntry {
   files: CachedFileEntry[];
 }
 
-/** Regex to parse cached filenames: {coverArtId}_{size}.{ext} */
-const FILE_NAME_RE = /^(.+)_(50|150|300|600)\.(jpg|png|webp)$/;
+/** Regex to parse size-variant filenames: {size}.{ext} */
+const SIZE_FILE_RE = /^(50|150|300|600)\.(jpg|png|webp)$/;
 
 /**
  * List all cached images grouped by coverArtId.
@@ -194,34 +197,39 @@ const FILE_NAME_RE = /^(.+)_(50|150|300|600)\.(jpg|png|webp)$/;
  */
 export function listCachedImages(): CachedImageEntry[] {
   const dir = ensureCacheDir();
-  let items: (File | Directory)[];
+  let subDirs: (File | Directory)[];
   try {
-    items = dir.list();
+    subDirs = dir.list();
   } catch {
     return [];
   }
 
-  const groups = new Map<string, CachedFileEntry[]>();
-
-  for (const item of items) {
-    if (!(item instanceof File)) continue;
-    // item.name is just the filename portion (e.g. "al-abc_300.jpg")
-    const name = item.uri.split('/').pop() ?? '';
-    const match = FILE_NAME_RE.exec(name);
-    if (!match) continue;
-
-    const coverArtId = match[1];
-    const size = Number(match[2]);
-
-    if (!groups.has(coverArtId)) groups.set(coverArtId, []);
-    groups.get(coverArtId)!.push({ size, fileName: name, uri: item.uri });
-  }
-
   const entries: CachedImageEntry[] = [];
-  for (const [coverArtId, files] of groups) {
-    files.sort((a, b) => a.size - b.size);
-    entries.push({ coverArtId, files });
+
+  for (const subDir of subDirs) {
+    if (!(subDir instanceof Directory)) continue;
+    const coverArtId = subDir.uri.split('/').filter(Boolean).pop() ?? '';
+    if (!coverArtId) continue;
+
+    const files: CachedFileEntry[] = [];
+    try {
+      for (const item of subDir.list()) {
+        if (!(item instanceof File)) continue;
+        const name = item.uri.split('/').pop() ?? '';
+        const match = SIZE_FILE_RE.exec(name);
+        if (!match) continue;
+        files.push({ size: Number(match[1]), fileName: name, uri: item.uri });
+      }
+    } catch {
+      continue;
+    }
+
+    if (files.length > 0) {
+      files.sort((a, b) => a.size - b.size);
+      entries.push({ coverArtId, files });
+    }
   }
+
   entries.sort((a, b) => a.coverArtId.localeCompare(b.coverArtId));
   return entries;
 }
@@ -233,33 +241,41 @@ export function listCachedImages(): CachedImageEntry[] {
  */
 export async function listCachedImagesAsync(): Promise<CachedImageEntry[]> {
   const dir = ensureCacheDir();
-  let fileNames: string[];
+  const dirUri = dir.uri.endsWith('/') ? dir.uri : `${dir.uri}/`;
+
+  let subDirNames: string[];
   try {
-    fileNames = await readDirectoryAsync(dir.uri);
+    subDirNames = await readDirectoryAsync(dir.uri);
   } catch {
     return [];
   }
 
-  const dirUri = dir.uri.endsWith('/') ? dir.uri : `${dir.uri}/`;
-  const groups = new Map<string, CachedFileEntry[]>();
-
-  for (const name of fileNames) {
-    const match = FILE_NAME_RE.exec(name);
-    if (!match) continue;
-
-    const coverArtId = match[1];
-    const size = Number(match[2]);
-    const uri = `${dirUri}${name}`;
-
-    if (!groups.has(coverArtId)) groups.set(coverArtId, []);
-    groups.get(coverArtId)!.push({ size, fileName: name, uri });
-  }
-
   const entries: CachedImageEntry[] = [];
-  for (const [coverArtId, files] of groups) {
-    files.sort((a, b) => a.size - b.size);
-    entries.push({ coverArtId, files });
+
+  for (const coverArtId of subDirNames) {
+    const subDirUri = `${dirUri}${coverArtId}`;
+    let fileNames: string[];
+    try {
+      fileNames = await readDirectoryAsync(subDirUri);
+    } catch {
+      continue;
+    }
+
+    const subUri = subDirUri.endsWith('/') ? subDirUri : `${subDirUri}/`;
+    const files: CachedFileEntry[] = [];
+
+    for (const name of fileNames) {
+      const match = SIZE_FILE_RE.exec(name);
+      if (!match) continue;
+      files.push({ size: Number(match[1]), fileName: name, uri: `${subUri}${name}` });
+    }
+
+    if (files.length > 0) {
+      files.sort((a, b) => a.size - b.size);
+      entries.push({ coverArtId, files });
+    }
   }
+
   entries.sort((a, b) => a.coverArtId.localeCompare(b.coverArtId));
   return entries;
 }
@@ -270,19 +286,27 @@ export async function listCachedImagesAsync(): Promise<CachedImageEntry[]> {
  */
 export function deleteCachedImage(coverArtId: string): void {
   if (!coverArtId) return;
-  const dir = ensureCacheDir();
+  const subDir = new Directory(ensureCacheDir(), coverArtId);
+  if (!subDir.exists) return;
+
+  // Tally files before deleting the directory.
   let deletedCount = 0;
   let deletedBytes = 0;
-
-  for (const size of IMAGE_SIZES) {
-    for (const ext of EXTENSIONS) {
-      const file = new File(dir, `${coverArtId}_${size}${ext}`);
-      if (file.exists) {
-        deletedBytes += file.size ?? 0;
-        file.delete();
+  try {
+    for (const item of subDir.list()) {
+      if (item instanceof File) {
+        deletedBytes += item.size ?? 0;
         deletedCount++;
       }
     }
+  } catch {
+    // Best-effort – proceed with deletion regardless.
+  }
+
+  try {
+    subDir.delete();
+  } catch {
+    // May fail if already removed; ignore.
   }
 
   if (deletedCount > 0) {
