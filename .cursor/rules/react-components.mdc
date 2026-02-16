@@ -19,6 +19,27 @@ export const AlbumCard = memo(function AlbumCard({ album, width }: { album: Albu
 });
 ```
 
+## Props Typing
+
+Most memo'd components use **inline props** directly in the function signature:
+
+```tsx
+export const AlbumRow = memo(function AlbumRow({ album }: { album: AlbumID3 }) {
+```
+
+Use a named `ComponentNameProps` interface when the props type is complex, shared, or referenced elsewhere:
+
+```tsx
+interface AlphabetScrollerProps {
+  letters: string[];
+  onLetterChange: (letter: string) => void;
+  listRef: RefObject<FlashListRef<unknown>>;
+  sectionMap: Map<string, number>;
+}
+
+export const AlphabetScroller = memo(function AlphabetScroller(props: AlphabetScrollerProps) {
+```
+
 ## Entity Component Pairs
 
 Each entity (Album, Artist, Song, Playlist) follows a Card + Row + ListView pattern:

@@ -56,7 +56,7 @@ Persistence uses a shared SQLite adapter (`src/store/sqliteStorage.ts`) backed b
 2. **Persist key naming:** `'substreamer-{domain}'` (e.g. `'substreamer-auth'`, `'substreamer-theme'`).
 3. **`partialize`** to exclude transient state (`loading`, `error`) from persistence.
 4. **Types co-located** with the store – define interfaces and type aliases in the same file.
-5. **Non-persistent stores** omit the `persist` wrapper (e.g. `playerStore`, `searchStore`).
+5. **Non-persistent stores** omit the `persist` wrapper (e.g. `playerStore`, `searchStore`, `migrationStore`).
 
 ## Consuming Stores
 
@@ -82,15 +82,23 @@ albumListsStore.getState().refreshAll();
 | `themeStore` | Yes | Theme preference (light/dark/system), primary color |
 | `albumListsStore` | Yes | Home screen album lists (recent, frequent, etc.) |
 | `albumLibraryStore` | Yes | Full album library with sorting |
+| `albumDetailStore` | Yes | Cached album detail data by ID |
 | `artistLibraryStore` | Yes | Artist library |
+| `artistDetailStore` | Yes | Cached artist detail data (albums, info, top songs) |
 | `playlistLibraryStore` | Yes | Playlist library |
+| `playlistDetailStore` | Yes | Cached playlist detail data with songs |
 | `favoritesStore` | Yes | Starred albums, artists, songs |
 | `layoutPreferencesStore` | Yes | List/grid toggle, sort order per view |
 | `playbackSettingsStore` | Yes | Stream format, bitrate, content length |
+| `serverInfoStore` | Yes | Server version, type, extensions |
+| `imageCacheStore` | Yes | Cache statistics (total bytes, file count) |
+| `completedScrobbleStore` | Yes | Completed scrobble records |
+| `pendingScrobbleStore` | Yes | Pending scrobble entries awaiting submission |
+| `scanStatusStore` | Yes | Library scan status and timestamps |
+| `sslCertStore` | Yes | Trusted SSL certificate fingerprints by hostname |
 | `playerStore` | No | Current track, queue, playback position |
 | `searchStore` | No | Search query and results |
-| `serverInfoStore` | No | Server version, type, extensions |
-| `imageCacheStore` | No | Cache statistics |
+| `migrationStore` | No | Migration version tracking |
 
 ## Error Handling in Stores
 

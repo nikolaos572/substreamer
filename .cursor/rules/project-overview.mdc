@@ -11,7 +11,7 @@ Substreamer is a React Native music streaming client for Subsonic-compatible ser
 
 - **Framework:** Expo ~54 / React Native 0.81 (New Architecture enabled)
 - **Routing:** Expo Router (file-based) with Stack + Tab navigators
-- **State:** Zustand with AsyncStorage persistence
+- **State:** Zustand with SQLite persistence (`expo-sqlite`)
 - **API:** `subsonic-api` library for Subsonic REST protocol
 - **Audio:** `react-native-track-player` (RNTP) for streaming and background playback
 - **Lists:** `@shopify/flash-list` v2 (FlashList) for all performant lists – replaces React Native FlatList
@@ -30,10 +30,10 @@ src/
     artist/[id]
     playlist/[id]
   screens/        # Screen components with business logic
-  components/     # Reusable UI components (28+)
+  components/     # Reusable UI components (33)
   hooks/          # Custom hooks (useTheme, useCachedCoverArt, useColorExtraction)
   services/       # API clients and external integrations
-  store/          # Zustand stores (13 stores)
+  store/          # Zustand stores (22 stores)
   constants/      # Theme definitions
   utils/          # Formatting and color helpers
   assets/         # App icons, splash images
@@ -42,7 +42,7 @@ src/
 ## Key Architectural Patterns
 
 1. **Route/Screen separation:** Route files in `app/` are thin wrappers that render screen components from `screens/`. Keep business logic in screens, not routes.
-2. **Zustand stores** manage all app state. Persistent stores use `persist` middleware with `createJSONStorage(() => AsyncStorage)`.
+2. **Zustand stores** manage all app state. Persistent stores use `persist` middleware with `createJSONStorage(() => sqliteStorage)` backed by `expo-sqlite`.
 3. **Services** are plain modules exporting async functions (no classes). `subsonicService.ts` wraps the `subsonic-api` library.
 4. **CachedImage** is the standard component for all cover art rendering – never use raw `<Image>` for Subsonic artwork.
 5. **`useTheme()`** provides `{ theme, colors }` – all components consume colors from this hook rather than importing theme constants directly.
@@ -60,7 +60,7 @@ src/
 | Constants | UPPER_SNAKE_CASE | `ROW_HEIGHT`, `COVER_SIZE` |
 | Handler functions | `handle` prefix | `handlePress` |
 | Callback props | `on` prefix | `onPress`, `onClose` |
-| Props interfaces | `ComponentNameProps` | `TrackRowProps` |
+| Props types | Inline for simple; named `ComponentNameProps` for complex | `{ album: AlbumID3; width: number }`, `AlphabetScrollerProps` |
 
 ## Import Organization
 

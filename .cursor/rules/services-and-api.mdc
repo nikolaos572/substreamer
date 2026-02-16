@@ -63,6 +63,31 @@ export async function getAlbum(albumId: string): Promise<AlbumWithSongsID3 | nul
 - Rate limiting with delay between requests.
 - Returns `null` on any failure (best-effort enrichment).
 
+## Scan Service (`scanService.ts`)
+
+- Manages server-side library scanning (start scan, poll status).
+- Polls the server at intervals for scan progress, auto-stopping when complete.
+- Supports Navidrome full-scan option.
+- Updates `scanStatusStore` with scanning state, count, and timestamps.
+
+## Scrobble Service (`scrobbleService.ts`)
+
+- Sends "now playing" notifications and completed playback scrobbles to the Subsonic server.
+- Maintains a persisted pending-scrobble queue (`pendingScrobbleStore`) with retry logic.
+- Processes the queue periodically, moving successful entries to `completedScrobbleStore`.
+
+## SSL Trust Service (`sslTrustService.ts`)
+
+- Syncs trusted SSL certificate fingerprints between `sslCertStore` and native trust stores.
+- Bridges to platform-specific trust managers (Android TrustManager / iOS URLProtocol).
+- Allows users to accept self-signed or custom certificates per hostname.
+
+## Migration Service (`migrationService.ts`)
+
+- Defines and runs versioned data migration tasks sequentially on app launch.
+- Tracks completed migration versions via `migrationStore`.
+- Handles schema changes and legacy data cleanup across app updates.
+
 ## Error Handling
 
 - Login returns a discriminated union: `{ success: true; version: string } | { success: false; error: string }`.
