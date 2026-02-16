@@ -484,15 +484,17 @@ const PlayerListHeader = memo(function PlayerListHeader({
                   <Pressable
                     onPress={handleClearQueue}
                     hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear queue"
                     style={({ pressed }) => [
-                      styles.clearButton,
-                      { borderColor: colors.primary, opacity: pressed ? 0.5 : 0.75 },
+                      styles.queueActionButton,
+                      pressed && styles.pressed,
                     ]}
                   >
                     <Text
                       style={[
                         styles.clearButtonText,
-                        { color: colors.primary },
+                        { color: colors.textPrimary },
                       ]}
                     >
                       Clear
@@ -725,14 +727,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  clearButton: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+  queueActionButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
   },
   clearButtonText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
   },
   shuffleOverlay: {
