@@ -5,6 +5,9 @@
  * Each action appears as a colored circular disc with a white icon and label,
  * matching the iOS Mail style.
  *
+ * Supports an optional "full swipe" mode (like Apple Mail) where swiping past
+ * a threshold automatically triggers the first action without requiring a tap.
+ *
  * - Swipe physics, snap-back, and alignment handled by the library
  * - Long press and tap handled via a Pressable wrapper
  * - Module-level `closeOpenRow()` export for scroll-to-close behaviour
@@ -17,7 +20,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, {
   interpolate,
+  runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 
@@ -64,6 +72,12 @@ export interface SwipeableRowProps {
   rightActions?: SwipeAction[];
   /** Actions revealed when swiping LEFT (content moves left, buttons on right). */
   leftActions?: SwipeAction[];
+  /** Full swipe right auto-triggers the first rightAction. */
+  enableFullSwipeRight?: boolean;
+  /** Full swipe left auto-triggers the first leftAction. */
+  enableFullSwipeLeft?: boolean;
+  /** Override the action panel background color (defaults to theme background). */
+  actionPanelBackground?: string;
   /** Called when a long-press gesture activates. */
   onLongPress?: () => void;
   /** Called when the row is tapped. */
@@ -79,6 +93,12 @@ const ACTION_WIDTH = 74;
 const ICON_SIZE = 22;
 const ICON_DISC_SIZE = 46;
 
+/** Progress threshold beyond which a swipe counts as "full" (1.5x action panel width). */
+const FULL_SWIPE_PROGRESS_THRESHOLD = 1.5;
+
+/** Fallback timeout (ms) to close the row if onSwipeableOpen never fires. */
+const FULL_SWIPE_CLOSE_TIMEOUT = 500;
+
 /* ------------------------------------------------------------------ */
 /*  SwipeableRow                                                       */
 /* ------------------------------------------------------------------ */
@@ -86,6 +106,9 @@ const ICON_DISC_SIZE = 46;
 export const SwipeableRow = memo(function SwipeableRow({
   rightActions = [],
   leftActions = [],
+  enableFullSwipeRight = false,
+  enableFullSwipeLeft = false,
+  actionPanelBackground,
   onLongPress,
   onPress,
   children,
@@ -93,9 +116,26 @@ export const SwipeableRow = memo(function SwipeableRow({
   const { colors } = useTheme();
   const swipeableRef = useRef<SwipeableMethods>(null);
   const isOpenRef = useRef(false);
+  const pendingFullSwipeCloseRef = useRef(false);
 
   const hasRight = rightActions.length > 0;
   const hasLeft = leftActions.length > 0;
+
+  // SharedValues for UI-thread operations (haptic, icon pop) – race-free
+  const fullSwipeRightTriggered = useSharedValue(false);
+  const fullSwipeLeftTriggered = useSharedValue(false);
+
+  // JS refs for JS-thread reads (callbacks) – set via runOnJS to guarantee ordering
+  const fullSwipeRightRef = useRef(false);
+  const fullSwipeLeftRef = useRef(false);
+
+  const setFullSwipeRight = useCallback((v: boolean) => {
+    fullSwipeRightRef.current = v;
+  }, []);
+
+  const setFullSwipeLeft = useCallback((v: boolean) => {
+    fullSwipeLeftRef.current = v;
+  }, []);
 
   /* ---- Swipeable event handlers ---- */
 
@@ -106,13 +146,58 @@ export const SwipeableRow = memo(function SwipeableRow({
     }
   }, []);
 
+  const handleSwipeableWillOpen = useCallback(
+    (direction: 'left' | 'right') => {
+      if (
+        direction === 'right' &&
+        enableFullSwipeRight &&
+        fullSwipeRightRef.current
+      ) {
+        fullSwipeRightRef.current = false;
+        rightActions[0]?.onPress();
+        pendingFullSwipeCloseRef.current = true;
+        setTimeout(() => {
+          if (pendingFullSwipeCloseRef.current) {
+            pendingFullSwipeCloseRef.current = false;
+            swipeableRef.current?.close();
+          }
+        }, FULL_SWIPE_CLOSE_TIMEOUT);
+        return;
+      }
+      if (
+        direction === 'left' &&
+        enableFullSwipeLeft &&
+        fullSwipeLeftRef.current
+      ) {
+        fullSwipeLeftRef.current = false;
+        leftActions[0]?.onPress();
+        pendingFullSwipeCloseRef.current = true;
+        setTimeout(() => {
+          if (pendingFullSwipeCloseRef.current) {
+            pendingFullSwipeCloseRef.current = false;
+            swipeableRef.current?.close();
+          }
+        }, FULL_SWIPE_CLOSE_TIMEOUT);
+      }
+    },
+    [enableFullSwipeRight, enableFullSwipeLeft, rightActions, leftActions],
+  );
+
   const handleSwipeableOpen = useCallback(() => {
+    if (pendingFullSwipeCloseRef.current) {
+      pendingFullSwipeCloseRef.current = false;
+      swipeableRef.current?.close();
+      return;
+    }
     isOpenRef.current = true;
     _activeRef = swipeableRef.current;
   }, []);
 
   const handleSwipeableClose = useCallback(() => {
     isOpenRef.current = false;
+    fullSwipeRightRef.current = false;
+    fullSwipeLeftRef.current = false;
+    pendingFullSwipeCloseRef.current = false;
     if (_activeRef === swipeableRef.current) {
       _activeRef = null;
     }
@@ -139,6 +224,13 @@ export const SwipeableRow = memo(function SwipeableRow({
 
   /* ---- Action panel render functions ---- */
 
+  const hasFullSwipe =
+    (enableFullSwipeRight && hasRight) || (enableFullSwipeLeft && hasLeft);
+  const effectiveFriction = hasFullSwipe ? 1.5 : 2;
+  const effectiveOvershootFriction = hasFullSwipe ? 1 : 8;
+
+  const panelBg = actionPanelBackground ?? colors.background;
+
   // renderLeftActions = shown when swiping RIGHT = our rightActions
   const renderLeftPanel = useCallback(
     (
@@ -149,11 +241,14 @@ export const SwipeableRow = memo(function SwipeableRow({
       <ActionPanel
         actions={rightActions}
         progress={progress}
-        bgColor={colors.background}
+        bgColor={panelBg}
         methods={methods}
+        enableFullSwipe={enableFullSwipeRight}
+        fullSwipeTriggered={fullSwipeRightTriggered}
+        onFullSwipeChange={setFullSwipeRight}
       />
     ),
-    [rightActions, colors.background],
+    [rightActions, panelBg, enableFullSwipeRight, fullSwipeRightTriggered, setFullSwipeRight],
   );
 
   // renderRightActions = shown when swiping LEFT = our leftActions
@@ -166,18 +261,21 @@ export const SwipeableRow = memo(function SwipeableRow({
       <ActionPanel
         actions={leftActions}
         progress={progress}
-        bgColor={colors.background}
+        bgColor={panelBg}
         methods={methods}
+        enableFullSwipe={enableFullSwipeLeft}
+        fullSwipeTriggered={fullSwipeLeftTriggered}
+        onFullSwipeChange={setFullSwipeLeft}
       />
     ),
-    [leftActions, colors.background],
+    [leftActions, panelBg, enableFullSwipeLeft, fullSwipeLeftTriggered, setFullSwipeLeft],
   );
 
   return (
     <ReanimatedSwipeable
       ref={swipeableRef as any}
-      friction={2}
-      overshootFriction={8}
+      friction={effectiveFriction}
+      overshootFriction={effectiveOvershootFriction}
       leftThreshold={40}
       rightThreshold={40}
       overshootLeft={hasRight}
@@ -185,6 +283,7 @@ export const SwipeableRow = memo(function SwipeableRow({
       renderLeftActions={hasRight ? renderLeftPanel : undefined}
       renderRightActions={hasLeft ? renderRightPanel : undefined}
       onSwipeableOpenStartDrag={handleOpenStartDrag}
+      onSwipeableWillOpen={handleSwipeableWillOpen}
       onSwipeableOpen={handleSwipeableOpen}
       onSwipeableClose={handleSwipeableClose}
     >
@@ -208,9 +307,52 @@ interface ActionPanelProps {
   progress: SharedValue<number>;
   bgColor: string;
   methods: SwipeableMethods;
+  enableFullSwipe: boolean;
+  fullSwipeTriggered: SharedValue<boolean>;
+  onFullSwipeChange: (triggered: boolean) => void;
 }
 
-function ActionPanel({ actions, progress, bgColor, methods }: ActionPanelProps) {
+function ActionPanel({
+  actions,
+  progress,
+  bgColor,
+  methods,
+  enableFullSwipe,
+  fullSwipeTriggered,
+  onFullSwipeChange,
+}: ActionPanelProps) {
+  const iconPopScale = useSharedValue(1);
+
+  useAnimatedReaction(
+    () => progress.value,
+    (current, previous) => {
+      if (!enableFullSwipe) return;
+
+      const prev = previous ?? 0;
+
+      if (
+        current >= FULL_SWIPE_PROGRESS_THRESHOLD &&
+        prev < FULL_SWIPE_PROGRESS_THRESHOLD
+      ) {
+        fullSwipeTriggered.value = true;
+        runOnJS(onFullSwipeChange)(true);
+        runOnJS(Haptics.selectionAsync)();
+        iconPopScale.value = withSequence(
+          withTiming(1.35, { duration: 120 }),
+          withTiming(1.22, { duration: 100 }),
+          withTiming(1.35, { duration: 100 }),
+          withTiming(1, { duration: 180 }),
+        );
+      } else if (
+        current < FULL_SWIPE_PROGRESS_THRESHOLD &&
+        prev >= FULL_SWIPE_PROGRESS_THRESHOLD
+      ) {
+        fullSwipeTriggered.value = false;
+        runOnJS(onFullSwipeChange)(false);
+      }
+    },
+  );
+
   return (
     <View style={[styles.actionPanel, { backgroundColor: bgColor }]}>
       {actions.map((action, index) => (
@@ -219,6 +361,7 @@ function ActionPanel({ actions, progress, bgColor, methods }: ActionPanelProps) 
           action={action}
           progress={progress}
           methods={methods}
+          popScale={enableFullSwipe && index === 0 ? iconPopScale : undefined}
         />
       ))}
     </View>
@@ -233,26 +376,28 @@ interface ActionButtonProps {
   action: SwipeAction;
   progress: SharedValue<number>;
   methods: SwipeableMethods;
+  popScale?: SharedValue<number>;
 }
 
 const ActionButton = memo(function ActionButton({
   action,
   progress,
   methods,
+  popScale,
 }: ActionButtonProps) {
-  const discStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        scale: interpolate(
-          progress.value,
-          [0, 0.6, 1],
-          [0.5, 1, 1],
-          'clamp',
-        ),
-      },
-    ],
-    opacity: interpolate(progress.value, [0, 0.3, 1], [0, 1, 1], 'clamp'),
-  }));
+  const discStyle = useAnimatedStyle(() => {
+    const baseScale = interpolate(
+      progress.value,
+      [0, 0.6, 1],
+      [0.5, 1, 1],
+      'clamp',
+    );
+    const extra = popScale ? popScale.value : 1;
+    return {
+      transform: [{ scale: baseScale * extra }],
+      opacity: interpolate(progress.value, [0, 0.3, 1], [0, 1, 1], 'clamp'),
+    };
+  });
 
   const handlePress = useCallback(() => {
     action.onPress();

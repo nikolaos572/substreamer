@@ -18,7 +18,7 @@ import type { ThemeColors } from '../constants/theme';
 const COVER_SIZE = 40;
 
 /** Total row height (paddingVertical 14*2 + cover 40 = 68). Exported for estimatedItemSize. */
-export const QUEUE_ROW_HEIGHT = 68;
+export const QUEUE_ROW_HEIGHT = 80;
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -88,7 +88,7 @@ export const QueueItemRow = memo(function QueueItemRow({
   );
 
   return (
-    <SwipeableRow rightActions={rightActions} leftActions={leftActions} onPress={handlePress}>
+    <SwipeableRow rightActions={rightActions} leftActions={leftActions} enableFullSwipeRight enableFullSwipeLeft actionPanelBackground="transparent" onPress={handlePress}>
       <View style={[styles.row, { borderBottomColor: colors.border }]}>
         {/* Cover art with now-playing overlay */}
         <View style={styles.coverWrap}>
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 20,
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

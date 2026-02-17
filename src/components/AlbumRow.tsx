@@ -59,6 +59,8 @@ export const AlbumRow = memo(function AlbumRow({ album }: { album: AlbumID3 }) {
     <SwipeableRow
       rightActions={rightActions}
       leftActions={leftActions}
+      enableFullSwipeRight
+      enableFullSwipeLeft
       onLongPress={handleLongPress}
       onPress={onPress}
     >

@@ -40,6 +40,7 @@ export const PlaylistRow = memo(function PlaylistRow({ playlist }: { playlist: P
   return (
     <SwipeableRow
       rightActions={rightActions}
+      enableFullSwipeRight
       onLongPress={handleLongPress}
       onPress={onPress}
     >

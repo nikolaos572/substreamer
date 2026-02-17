@@ -204,7 +204,6 @@ export function PlaylistDetailScreen() {
                 key={`${track.id}-${index}`}
                 track={track}
                 trackNumber={`${index + 1}. `}
-                showArtist
                 colors={colors}
                 onPress={() => playTrack(track, tracks)}
               />

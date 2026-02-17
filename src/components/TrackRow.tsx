@@ -25,14 +25,12 @@ export interface TrackRowProps {
   track: Child;
   /** Formatted track number label, e.g. "3. " or "1. ". Omit to hide the number. */
   trackNumber?: string;
-  /** Whether to show the track.artist subtitle below the title. */
-  showArtist?: boolean;
   colors: ThemeColors;
   /** Called when the row is tapped to start playback. */
   onPress?: () => void;
 }
 
-export function TrackRow({ track, trackNumber, showArtist, colors, onPress }: TrackRowProps) {
+export function TrackRow({ track, trackNumber, colors, onPress }: TrackRowProps) {
   const duration = track.duration != null ? formatTrackDuration(track.duration) : '—';
   const starred = useIsStarred('song', track.id);
   const rating = track.userRating;
@@ -70,6 +68,9 @@ export function TrackRow({ track, trackNumber, showArtist, colors, onPress }: Tr
     <SwipeableRow
       rightActions={rightActions}
       leftActions={leftActions}
+      enableFullSwipeRight
+      enableFullSwipeLeft
+      actionPanelBackground="transparent"
       onLongPress={handleLongPress}
       onPress={onPress}
     >
@@ -89,11 +90,9 @@ export function TrackRow({ track, trackNumber, showArtist, colors, onPress }: Tr
             <Text style={[styles.trackTitle, { color: colors.textPrimary }]} numberOfLines={1}>
               {track.title}
             </Text>
-            {showArtist && track.artist && (
-              <Text style={[styles.trackArtist, { color: colors.textSecondary }]} numberOfLines={1}>
-                {track.artist}
-              </Text>
-            )}
+            <Text style={[styles.trackArtist, { color: colors.textSecondary }]} numberOfLines={1}>
+              {track.artist ?? 'Unknown Artist'}
+            </Text>
           </View>
         </View>
         <View style={styles.trackRight}>
@@ -119,8 +118,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 68,
-    paddingVertical: 12,
+    minHeight: 80,
+    paddingVertical: 18,
     paddingHorizontal: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
@@ -140,9 +139,10 @@ const styles = StyleSheet.create({
   },
   trackTitle: {
     fontSize: 16,
+    fontWeight: '600',
   },
   trackArtist: {
-    fontSize: 13,
+    fontSize: 14,
     marginTop: 2,
   },
   trackRight: {

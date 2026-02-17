@@ -48,6 +48,7 @@ export const ArtistRow = memo(function ArtistRow({ artist }: { artist: ArtistID3
   return (
     <SwipeableRow
       leftActions={leftActions}
+      enableFullSwipeLeft
       onLongPress={handleLongPress}
       onPress={onPress}
     >

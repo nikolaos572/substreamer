@@ -55,6 +55,8 @@ export const SongRow = memo(function SongRow({ song, onPress }: { song: Child; o
     <SwipeableRow
       rightActions={rightActions}
       leftActions={leftActions}
+      enableFullSwipeRight
+      enableFullSwipeLeft
       onLongPress={handleLongPress}
       onPress={onPress}
     >
