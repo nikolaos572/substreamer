@@ -13,7 +13,7 @@ import { moreOptionsStore } from '../store/moreOptionsStore';
 
 const COVER_SIZE = 300;
 
-/** Total row height (padding 12*2 + image 56 = 80). Exported for getItemLayout. */
+/** Total row height (padding 12*2 + image 56 = 80). */
 export const ROW_HEIGHT = 80;
 
 export const ArtistRow = memo(function ArtistRow({ artist }: { artist: ArtistID3 }) {

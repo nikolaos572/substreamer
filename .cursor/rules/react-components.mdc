@@ -80,7 +80,7 @@ Uses `@shopify/flash-list` v2 (`FlashList`) instead of React Native's `FlatList`
 
 - Use `keyExtractor={(item) => item.id}`.
 - Memoize `renderItem` with `useCallback`.
-- Do **not** pass `windowSize`, `maxToRenderPerBatch`, `initialNumToRender`, `removeClippedSubviews`, or `getItemLayout` – FlashList manages these internally.
+- Do **not** pass `windowSize`, `maxToRenderPerBatch`, `initialNumToRender`, `removeClippedSubviews`, or `getItemLayout` – these are FlatList-only concepts that do not exist in FlashList's architecture.
 - Use `drawDistance` (pixels) to control off-screen rendering distance when needed (default 250px is usually sufficient; use 300 for lists with alphabet scrollers).
 - Grid: use `numColumns={2}`. Handle inter-column gaps via padding on individual grid items (FlashList does not support `columnWrapperStyle`):
 
