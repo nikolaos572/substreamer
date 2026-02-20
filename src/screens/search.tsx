@@ -1,16 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
-  Pressable,
   SectionList,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
-import { CachedImage } from '../components/CachedImage';
+import { AlbumRow } from '../components/AlbumRow';
+import { ArtistRow } from '../components/ArtistRow';
+import { SongRow } from '../components/SongRow';
 import { useTheme } from '../hooks/useTheme';
+import { playTrack } from '../services/playerService';
 import { minDelay } from '../utils/stringHelpers';
 import {
   type AlbumID3,
@@ -18,8 +19,6 @@ import {
   type Child,
 } from '../services/subsonicService';
 import { searchStore } from '../store/searchStore';
-
-const COVER_SIZE = 300;
 
 /* ------------------------------------------------------------------ */
 /*  Section data types                                                */
@@ -36,110 +35,11 @@ interface ResultSection {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Result row components                                             */
-/* ------------------------------------------------------------------ */
-
-function ArtistResultRow({
-  artist,
-  colors,
-  onPress,
-}: {
-  artist: ArtistID3;
-  colors: ReturnType<typeof useTheme>['colors'];
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.row,
-        { backgroundColor: colors.card },
-        pressed && styles.pressed,
-      ]}
-    >
-      <CachedImage coverArtId={artist.coverArt} size={COVER_SIZE} style={styles.coverCircle} resizeMode="cover" />
-      <View style={styles.rowText}>
-        <Text style={[styles.primaryText, { color: colors.textPrimary }]} numberOfLines={1}>
-          {artist.name}
-        </Text>
-        <View style={styles.meta}>
-          <Ionicons name="disc-outline" size={14} color={colors.primary} />
-          <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-            {artist.albumCount === 1 ? '1 album' : `${artist.albumCount} albums`}
-          </Text>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-function AlbumResultRow({
-  album,
-  colors,
-  onPress,
-}: {
-  album: AlbumID3;
-  colors: ReturnType<typeof useTheme>['colors'];
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.row,
-        { backgroundColor: colors.card },
-        pressed && styles.pressed,
-      ]}
-    >
-      <CachedImage coverArtId={album.coverArt} size={COVER_SIZE} style={styles.cover} resizeMode="cover" />
-      <View style={styles.rowText}>
-        <Text style={[styles.primaryText, { color: colors.textPrimary }]} numberOfLines={1}>
-          {album.name}
-        </Text>
-        <Text style={[styles.secondaryText, { color: colors.textSecondary }]} numberOfLines={1}>
-          {album.artist ?? 'Unknown Artist'}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
-function SongResultRow({
-  song,
-  colors,
-}: {
-  song: Child;
-  colors: ReturnType<typeof useTheme>['colors'];
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.row,
-        { backgroundColor: colors.card },
-        pressed && styles.pressed,
-      ]}
-    >
-      <CachedImage coverArtId={song.coverArt} size={COVER_SIZE} style={styles.cover} resizeMode="cover" />
-      <View style={styles.rowText}>
-        <Text style={[styles.primaryText, { color: colors.textPrimary }]} numberOfLines={1}>
-          {song.title}
-        </Text>
-        <Text style={[styles.secondaryText, { color: colors.textSecondary }]} numberOfLines={1}>
-          {song.artist ?? 'Unknown Artist'}
-          {song.album ? ` \u2022 ${song.album}` : ''}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  SearchScreen                                                      */
 /* ------------------------------------------------------------------ */
 
 export function SearchScreen() {
   const { colors } = useTheme();
-  const router = useRouter();
 
   const query = searchStore((s) => s.query);
   const results = searchStore((s) => s.results);
@@ -151,7 +51,6 @@ export function SearchScreen() {
     results.albums.length > 0 ||
     results.songs.length > 0;
 
-  // Build sections from results
   const sections: ResultSection[] = [];
   if (results.artists.length > 0) {
     sections.push({
@@ -187,26 +86,19 @@ export function SearchScreen() {
     ({ item }: { item: SectionItem }) => {
       switch (item.type) {
         case 'artist':
-          return (
-            <ArtistResultRow
-              artist={item.data}
-              colors={colors}
-              onPress={() => router.push(`/artist/${item.data.id}`)}
-            />
-          );
+          return <ArtistRow artist={item.data} />;
         case 'album':
+          return <AlbumRow album={item.data} />;
+        case 'song':
           return (
-            <AlbumResultRow
-              album={item.data}
-              colors={colors}
-              onPress={() => router.push(`/album/${item.data.id}`)}
+            <SongRow
+              song={item.data}
+              onPress={() => playTrack(item.data, results.songs)}
             />
           );
-        case 'song':
-          return <SongResultRow song={item.data} colors={colors} />;
       }
     },
-    [colors, router]
+    [results.songs]
   );
 
   const renderSectionHeader = useCallback(
@@ -223,7 +115,6 @@ export function SearchScreen() {
     []
   );
 
-  // Empty state: no query or no results
   if (!query.trim() || (!hasResults && !loading)) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -286,49 +177,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 8,
     marginTop: 16,
-    marginLeft: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: 12,
-    marginBottom: 6,
-  },
-  pressed: {
-    opacity: 0.85,
-  },
-  cover: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-  },
-  coverCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-  },
-  rowText: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  primaryText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  secondaryText: {
-    fontSize: 14,
-    marginTop: 2,
-  },
-  meta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  metaText: {
-    fontSize: 13,
     marginLeft: 4,
   },
   emptyContainer: {

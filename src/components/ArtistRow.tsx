@@ -62,10 +62,13 @@ export const ArtistRow = memo(function ArtistRow({ artist }: { artist: ArtistID3
             {artist.name}
           </Text>
           <View style={styles.meta}>
-            <Ionicons name="disc-outline" size={14} color={colors.primary} />
-            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-              {artist.albumCount === 1 ? '1 album' : `${artist.albumCount} albums`}
-            </Text>
+            <View style={styles.metaLeft}>
+              <Ionicons name="disc-outline" size={14} color={colors.primary} />
+              <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+                {artist.albumCount === 1 ? '1 album' : `${artist.albumCount} albums`}
+              </Text>
+            </View>
+            {starred && <Ionicons name="heart" size={14} color={colors.red} style={styles.indicator} />}
           </View>
         </View>
       </View>
@@ -98,7 +101,16 @@ const styles = StyleSheet.create({
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 3,
+    marginTop: 10,
+  },
+  metaLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  indicator: {
+    marginLeft: 6,
   },
   metaText: {
     fontSize: 13,

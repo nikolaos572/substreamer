@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { CachedImage } from './CachedImage';
 import { SwipeableRow, type SwipeAction } from './SwipeableRow';
+import { useDownloadStatus } from '../hooks/useDownloadStatus';
 import { useTheme } from '../hooks/useTheme';
 import { addPlaylistToQueue } from '../services/moreOptionsService';
 import { type Playlist } from '../services/subsonicService';
@@ -19,6 +20,7 @@ const ROW_HEIGHT = 80;
 export const PlaylistRow = memo(function PlaylistRow({ playlist }: { playlist: Playlist }) {
   const { colors } = useTheme();
   const router = useRouter();
+  const downloaded = useDownloadStatus('playlist', playlist.id) === 'complete';
 
   const onPress = useCallback(() => {
     router.push(`/playlist/${playlist.id}`);
@@ -60,6 +62,7 @@ export const PlaylistRow = memo(function PlaylistRow({ playlist }: { playlist: P
                 {playlist.songCount} {playlist.songCount === 1 ? 'track' : 'tracks'}
               </Text>
             </View>
+            {downloaded && <Ionicons name="arrow-down-circle" size={14} color={colors.primary} style={styles.indicator} />}
             <View style={styles.metaRight}>
               <Ionicons name="time-outline" size={14} color={colors.primary} />
               <Text style={[styles.metaText, { color: colors.textSecondary }]}>
@@ -95,10 +98,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  indicator: {
+    marginLeft: 6,
+  },
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 3,
+    marginTop: 10,
   },
   metaLeft: {
     flex: 1,

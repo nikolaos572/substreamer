@@ -1,9 +1,11 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { memo, useCallback } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { CachedImage } from './CachedImage';
 import { LongPressable } from './LongPressable';
+import { useIsStarred } from '../hooks/useIsStarred';
 import { useTheme } from '../hooks/useTheme';
 import { type ArtistID3 } from '../services/subsonicService';
 import { moreOptionsStore } from '../store/moreOptionsStore';
@@ -19,6 +21,7 @@ export const ArtistCard = memo(function ArtistCard({
 }) {
   const { colors } = useTheme();
   const router = useRouter();
+  const starred = useIsStarred('artist', artist.id);
   const imageSize = width - 16; // 8px padding on each side
 
   const onPress = useCallback(() => {
@@ -32,12 +35,19 @@ export const ArtistCard = memo(function ArtistCard({
   return (
     <LongPressable onPress={onPress} onLongPress={onLongPress}>
       <View style={[styles.card, { backgroundColor: colors.card, width }]}>
-        <CachedImage
-          coverArtId={artist.coverArt}
-          size={COVER_SIZE}
-          style={[styles.cover, { width: imageSize, height: imageSize }]}
-          resizeMode="cover"
-        />
+        <View style={{ width: imageSize, height: imageSize }}>
+          <CachedImage
+            coverArtId={artist.coverArt}
+            size={COVER_SIZE}
+            style={[styles.cover, { width: imageSize, height: imageSize }]}
+            resizeMode="cover"
+          />
+          {starred && (
+            <View style={styles.indicators}>
+              <Ionicons name="heart" size={14} color={colors.red} />
+            </View>
+          )}
+        </View>
         <Text
           style={[styles.artistName, { color: colors.textPrimary }]}
           numberOfLines={1}
@@ -65,6 +75,13 @@ const styles = StyleSheet.create({
   cover: {
     borderRadius: 999,
     backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  indicators: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    flexDirection: 'row',
+    gap: 4,
   },
   artistName: {
     fontSize: 14,

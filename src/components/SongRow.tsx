@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { CachedImage } from './CachedImage';
 import { SwipeableRow, type SwipeAction } from './SwipeableRow';
+import { useDownloadStatus } from '../hooks/useDownloadStatus';
 import { useIsStarred } from '../hooks/useIsStarred';
 import { useTheme } from '../hooks/useTheme';
 import { addSongToQueue, toggleStar } from '../services/moreOptionsService';
@@ -19,6 +20,7 @@ const ROW_HEIGHT = 80;
 export const SongRow = memo(function SongRow({ song, onPress }: { song: Child; onPress?: () => void }) {
   const { colors } = useTheme();
   const starred = useIsStarred('song', song.id);
+  const downloaded = useDownloadStatus('song', song.id) === 'complete';
   const duration =
     song.duration != null ? formatTrackDuration(song.duration) : '—';
 
@@ -87,6 +89,8 @@ export const SongRow = memo(function SongRow({ song, onPress }: { song: Child; o
                 </Text>
               </View>
             </View>
+            {starred && <Ionicons name="heart" size={14} color={colors.red} style={styles.indicator} />}
+            {downloaded && <Ionicons name="arrow-down-circle" size={14} color={colors.primary} style={styles.indicator} />}
             <View style={styles.metaDuration}>
               <Ionicons name="time-outline" size={14} color={colors.primary} />
               <Text style={[styles.durationText, { color: colors.textSecondary }]}>
@@ -121,6 +125,9 @@ const styles = StyleSheet.create({
   songName: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  indicator: {
+    marginLeft: 6,
   },
   artistName: {
     fontSize: 14,
