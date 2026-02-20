@@ -16,7 +16,7 @@ export const DownloadedIcon = memo(function DownloadedIcon({
   circleColor: string;
   arrowColor: string;
 }) {
-  const backingSize = Math.round(size * 0.84);
+  const backingSize = Math.round(size * 0.75);
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
