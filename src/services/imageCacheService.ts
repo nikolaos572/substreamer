@@ -112,6 +112,14 @@ export function getCachedImageUri(
   return null;
 }
 
+/**
+ * Evict a single in-memory cache entry so the next lookup hits the
+ * filesystem. Used by CachedImage's onError recovery path.
+ */
+export function evictUriCacheEntry(coverArtId: string, size: number): void {
+  uriCache.delete(uriCacheKey(coverArtId, size));
+}
+
 /* ------------------------------------------------------------------ */
 /*  Download helpers                                                   */
 /* ------------------------------------------------------------------ */

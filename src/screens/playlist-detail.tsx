@@ -2,6 +2,7 @@ import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   RefreshControl,
@@ -12,8 +13,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
+import {
+  Pressable as GHPressable,
+  TouchableOpacity,
+} from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import DraggableFlatList, {
+  ScaleDecorator,
+  type RenderItemParams,
+  type DragEndParams,
+} from 'react-native-draggable-flatlist';
 
 import { CachedImage } from '../components/CachedImage';
 import { DownloadButton } from '../components/DownloadButton';
@@ -24,11 +35,15 @@ import { TrackRow } from '../components/TrackRow';
 import { useColorExtraction } from '../hooks/useColorExtraction';
 import { useTheme } from '../hooks/useTheme';
 import { useTransitionComplete } from '../hooks/useTransitionComplete';
-import { refreshCachedImage } from '../services/imageCacheService';
-import { minDelay } from '../utils/stringHelpers';
+import { cacheAllSizes, refreshCachedImage } from '../services/imageCacheService';
+import { syncCachedPlaylistTracks } from '../services/musicCacheService';
 import { playTrack } from '../services/playerService';
+import { updatePlaylistOrder } from '../services/subsonicService';
+import { minDelay } from '../utils/stringHelpers';
 import { moreOptionsStore } from '../store/moreOptionsStore';
+import { musicCacheStore } from '../store/musicCacheStore';
 import { playlistDetailStore } from '../store/playlistDetailStore';
+
 import { formatCompactDuration } from '../utils/formatters';
 
 import { type Child, type PlaylistWithSongs } from '../services/subsonicService';
@@ -36,6 +51,7 @@ import { type Child, type PlaylistWithSongs } from '../services/subsonicService'
 const HERO_PADDING = 24;
 const HERO_COVER_SIZE = 600;
 const HEADER_BAR_HEIGHT = 44;
+const EDIT_ROW_HEIGHT = 64;
 
 export function PlaylistDetailScreen() {
   const { colors } = useTheme();
@@ -49,28 +65,14 @@ export function PlaylistDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const transitionComplete = useTransitionComplete();
 
+  const [editing, setEditing] = useState(false);
+  const [editedTracks, setEditedTracks] = useState<Child[]>([]);
+  const [saving, setSaving] = useState(false);
+
   const { coverBackgroundColor, gradientOpacity } = useColorExtraction(
     playlist?.coverArt,
     colors.background,
   );
-
-  /* ---- Header right: download button + more options ---- */
-  useEffect(() => {
-    if (!playlist || !id) return;
-    navigation.setOptions({
-      headerRight: () => (
-        <View style={styles.headerRight}>
-          <DownloadButton itemId={id} type="playlist" />
-          <MoreOptionsButton
-            onPress={() =>
-              moreOptionsStore.getState().show({ type: 'playlist', item: playlist })
-            }
-            color={colors.textPrimary}
-          />
-        </View>
-      ),
-    });
-  }, [playlist, id, navigation, colors.textPrimary]);
 
   /* ---- Data fetching ---- */
   const { fetchPlaylist } = playlistDetailStore.getState();
@@ -101,12 +103,157 @@ export function PlaylistDetailScreen() {
     }
   }, [id, fetchPlaylist]);
 
-  // Only fetch on mount if no cached data
   useEffect(() => { if (!cachedEntry) fetchData(); }, [fetchData, cachedEntry]);
 
   const onRefresh = useCallback(() => fetchData(true), [fetchData]);
 
   const tracks = useMemo(() => playlist?.entry ?? [], [playlist?.entry]);
+
+  /* ---- Edit mode handlers ---- */
+
+  const handleStartEdit = useCallback(() => {
+    setEditedTracks([...tracks]);
+    setEditing(true);
+  }, [tracks]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditing(false);
+    setEditedTracks([]);
+  }, []);
+
+  const handleReorder = useCallback(({ data }: DragEndParams<Child>) => {
+    setEditedTracks(data);
+  }, []);
+
+  const handleDeleteTrack = useCallback(
+    (index: number) => {
+      const track = editedTracks[index];
+      if (!track) return;
+      Alert.alert(
+        'Remove Track',
+        `Remove "${track.title}" from this playlist?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => {
+              setEditedTracks((prev) => prev.filter((_, i) => i !== index));
+            },
+          },
+        ],
+      );
+    },
+    [editedTracks],
+  );
+
+  const handleSave = useCallback(async () => {
+    if (!playlist || !id) return;
+
+    const originalIds = tracks.map((t) => t.id).join(',');
+    const editedIds = editedTracks.map((t) => t.id).join(',');
+    if (originalIds === editedIds) {
+      setEditing(false);
+      setEditedTracks([]);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const success = await updatePlaylistOrder(
+        id,
+        playlist.name,
+        editedTracks.map((t) => t.id),
+      );
+      if (!success) {
+        Alert.alert('Error', 'Failed to update playlist.');
+        setSaving(false);
+        return;
+      }
+
+      if (id in musicCacheStore.getState().cachedItems) {
+        syncCachedPlaylistTracks(id, editedTracks.map((t) => t.id));
+      }
+
+      const fresh = await fetchPlaylist(id);
+      if (fresh?.coverArt) {
+        await cacheAllSizes(fresh.coverArt);
+      }
+      if (fresh) setPlaylist(fresh);
+
+      setEditing(false);
+      setEditedTracks([]);
+    } catch {
+      Alert.alert('Error', 'Failed to save playlist changes.');
+    } finally {
+      setSaving(false);
+    }
+  }, [playlist, id, tracks, editedTracks, fetchPlaylist]);
+
+  /* ---- Header ---- */
+
+  useEffect(() => {
+    if (!playlist || !id) return;
+
+    if (editing) {
+      navigation.setOptions({
+        headerLeft: () => (
+          <Pressable onPress={handleCancelEdit} hitSlop={8}>
+            <Text style={[styles.headerButtonText, { color: colors.textPrimary }]}>
+              Cancel
+            </Text>
+          </Pressable>
+        ),
+        headerRight: () => (
+          <Pressable onPress={handleSave} disabled={saving} hitSlop={8}>
+            {saving ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Text
+                style={[
+                  styles.headerButtonText,
+                  { color: colors.textPrimary, fontWeight: '700' },
+                ]}
+              >
+                Save
+              </Text>
+            )}
+          </Pressable>
+        ),
+      });
+    } else {
+      navigation.setOptions({
+        headerLeft: undefined,
+        headerRight: () => (
+          <View style={styles.headerRight}>
+            <Pressable onPress={handleStartEdit} hitSlop={8} style={styles.headerIcon}>
+              <Ionicons name="pencil-outline" size={22} color={colors.textPrimary} />
+            </Pressable>
+            <DownloadButton itemId={id} type="playlist" />
+            <MoreOptionsButton
+              onPress={() =>
+                moreOptionsStore.getState().show({ type: 'playlist', item: playlist })
+              }
+              color={colors.textPrimary}
+            />
+          </View>
+        ),
+      });
+    }
+  }, [
+    playlist,
+    id,
+    navigation,
+    colors.textPrimary,
+    colors.primary,
+    editing,
+    saving,
+    handleStartEdit,
+    handleCancelEdit,
+    handleSave,
+  ]);
+
+  /* ---- Normal-mode renderItem ---- */
 
   const renderItem = useCallback(
     ({ item, index }: { item: Child; index: number }) => (
@@ -124,15 +271,79 @@ export function PlaylistDetailScreen() {
     [colors, tracks],
   );
 
+  /* ---- Edit-mode renderItem ---- */
+
+  const renderEditItem = useCallback(
+    ({ item, getIndex, drag, isActive }: RenderItemParams<Child>) => {
+      const index = getIndex() ?? 0;
+      return (
+        <ScaleDecorator activeScale={1.03}>
+          <TouchableOpacity onLongPress={drag} delayLongPress={200} disabled={isActive} activeOpacity={0.7}>
+            <View
+              style={[
+                styles.editRow,
+                { borderBottomColor: colors.border, backgroundColor: colors.background },
+                isActive && { backgroundColor: colors.card, borderRadius: 8 },
+              ]}
+            >
+              <GHPressable
+                onPress={() => handleDeleteTrack(index)}
+                hitSlop={8}
+                style={styles.editDeleteBtn}
+              >
+                <Ionicons name="remove-circle" size={22} color={colors.red} />
+              </GHPressable>
+
+              <CachedImage
+                coverArtId={item.coverArt}
+                size={300}
+                style={styles.editCover}
+                resizeMode="cover"
+              />
+
+              <View style={styles.editTrackInfo}>
+                <Text
+                  style={[styles.editTrackTitle, { color: colors.textPrimary }]}
+                  numberOfLines={1}
+                >
+                  {index + 1}. {item.title}
+                </Text>
+                <Text
+                  style={[styles.editTrackArtist, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                >
+                  {item.artist ?? 'Unknown Artist'}
+                </Text>
+              </View>
+
+              <View style={styles.editDragHandle}>
+                <Ionicons name="reorder-three" size={24} color={colors.textSecondary} />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </ScaleDecorator>
+      );
+    },
+    [colors, handleDeleteTrack],
+  );
+
   const keyExtractor = useCallback(
     (item: Child, index: number) => `${item.id}-${index}`,
     [],
   );
 
+  /* ---- List header ---- */
+
   const listHeader = useMemo(() => {
     if (!playlist) return null;
+    const displayTracks = editing ? editedTracks : tracks;
+    const songCount = editing ? editedTracks.length : playlist.songCount;
+    const duration = editing
+      ? editedTracks.reduce((sum, t) => sum + (t.duration ?? 0), 0)
+      : playlist.duration;
+
     return (
-      <>
+      <View>
         <View style={styles.hero}>
           <View style={styles.heroImageWrap}>
             <CachedImage
@@ -161,18 +372,18 @@ export function PlaylistDetailScreen() {
             <View style={styles.meta}>
               <Ionicons name="musical-notes-outline" size={14} color={colors.primary} />
               <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                {playlist.songCount} {playlist.songCount === 1 ? 'song' : 'songs'}
+                {songCount} {songCount === 1 ? 'song' : 'songs'}
               </Text>
               <View style={styles.metaSpacer} />
               <Ionicons name="time-outline" size={14} color={colors.primary} />
               <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-                {formatCompactDuration(playlist.duration)}
+                {formatCompactDuration(duration)}
               </Text>
             </View>
           </View>
-          {tracks.length > 0 && (
+          {!editing && displayTracks.length > 0 && (
             <Pressable
-              onPress={() => playTrack(tracks[0], tracks)}
+              onPress={() => playTrack(displayTracks[0], displayTracks)}
               style={({ pressed }) => [
                 styles.playAllButton,
                 { backgroundColor: colors.primary },
@@ -184,9 +395,9 @@ export function PlaylistDetailScreen() {
           )}
         </View>
         <View style={styles.trackListSpacer} />
-      </>
+      </View>
     );
-  }, [playlist, colors, tracks]);
+  }, [playlist, colors, tracks, editing, editedTracks]);
 
   const listEmpty = useMemo(
     () => (
@@ -228,6 +439,18 @@ export function PlaylistDetailScreen() {
     { top: -insets.top, left: 0, right: 0, bottom: 0 },
   ];
 
+  const listContentStyle = {
+    paddingBottom: 32,
+    ...(Platform.OS !== 'ios' ? { paddingTop: insets.top + HEADER_BAR_HEIGHT } : undefined),
+  };
+
+  const iosInset =
+    Platform.OS === 'ios' ? { top: insets.top + HEADER_BAR_HEIGHT } : undefined;
+  const iosOffset =
+    Platform.OS === 'ios'
+      ? { x: 0, y: -(insets.top + HEADER_BAR_HEIGHT) }
+      : undefined;
+
   return (
     <View style={styles.container}>
       <View style={[gradientFillStyle, { backgroundColor: colors.background }]} />
@@ -241,29 +464,42 @@ export function PlaylistDetailScreen() {
           style={StyleSheet.absoluteFillObject}
         />
       </Animated.View>
-      <FlashList
-        data={tracks}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        ListHeaderComponent={listHeader}
-        ListEmptyComponent={listEmpty}
-        onScrollBeginDrag={closeOpenRow}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingBottom: 32,
-          ...(Platform.OS !== 'ios' ? { paddingTop: insets.top + HEADER_BAR_HEIGHT } : undefined),
-        }}
-        contentInset={Platform.OS === 'ios' ? { top: insets.top + HEADER_BAR_HEIGHT } : undefined}
-        contentOffset={Platform.OS === 'ios' ? { x: 0, y: -(insets.top + HEADER_BAR_HEIGHT) } : undefined}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-            progressViewOffset={insets.top + HEADER_BAR_HEIGHT}
-          />
-        }
-      />
+
+      {editing ? (
+        <DraggableFlatList
+          data={editedTracks}
+          renderItem={renderEditItem}
+          keyExtractor={keyExtractor}
+          onDragEnd={handleReorder}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={listContentStyle}
+          contentInset={iosInset}
+          contentOffset={iosOffset}
+        />
+      ) : (
+        <FlashList
+          data={tracks}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          onScrollBeginDrag={closeOpenRow}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={listContentStyle}
+          contentInset={iosInset}
+          contentOffset={iosOffset}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              progressViewOffset={insets.top + HEADER_BAR_HEIGHT}
+            />
+          }
+        />
+      )}
     </View>
   );
 }
@@ -309,6 +545,15 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  headerIcon: {
+    padding: 4,
+    marginLeft: 4,
+    marginRight: 4,
+  },
+  headerButtonText: {
+    fontSize: 17,
+    fontWeight: '400',
   },
   playAllButton: {
     width: 52,
@@ -363,5 +608,46 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
+  },
+
+  /* ---- Edit mode ---- */
+  editRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: EDIT_ROW_HEIGHT,
+    paddingVertical: 10,
+    paddingLeft: 12,
+    paddingRight: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  editDeleteBtn: {
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editCover: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+    marginRight: 10,
+  },
+  editTrackInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  editTrackTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  editTrackArtist: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  editDragHandle: {
+    width: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
   },
 });

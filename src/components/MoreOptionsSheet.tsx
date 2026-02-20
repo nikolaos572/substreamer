@@ -11,10 +11,11 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   StyleSheet,
@@ -37,17 +38,22 @@ import {
   removeDownload,
   toggleStar,
 } from '../services/moreOptionsService';
+import { deleteCachedItem } from '../services/musicCacheService';
 import {
+  deletePlaylist,
   type AlbumID3,
   type Child,
   type Playlist,
 } from '../services/subsonicService';
-import { musicCacheStore } from '../store/musicCacheStore';
 import { createShareStore } from '../store/createShareStore';
+import { musicCacheStore } from '../store/musicCacheStore';
 import {
   moreOptionsStore,
   type MoreOptionsEntity,
 } from '../store/moreOptionsStore';
+import { playlistDetailStore } from '../store/playlistDetailStore';
+import { playlistLibraryStore } from '../store/playlistLibraryStore';
+import { processingOverlayStore } from '../store/processingOverlayStore';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -114,6 +120,10 @@ function canDownload(entity: MoreOptionsEntity): boolean {
   return entity.type === 'album' || entity.type === 'playlist';
 }
 
+function canDeletePlaylist(entity: MoreOptionsEntity): boolean {
+  return entity.type === 'playlist';
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
@@ -136,6 +146,7 @@ export function MoreOptionsSheet() {
 
   const { colors } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
 
   const [busy, setBusy] = useState(false);
@@ -248,6 +259,49 @@ export function MoreOptionsSheet() {
     }, 300);
   }, [entity, handleClose]);
 
+  const handleDeletePlaylist = useCallback(() => {
+    if (!entity || entity.type !== 'playlist') return;
+    const playlistId = entity.item.id;
+    const playlistName = entity.item.name;
+    const onDetailView = pathname === `/playlist/${playlistId}`;
+    handleClose();
+
+    setTimeout(() => {
+      Alert.alert(
+        'Delete Playlist',
+        `Are you sure you want to delete "${playlistName}"?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              processingOverlayStore.getState().show('Deleting…');
+              try {
+                const success = await deletePlaylist(playlistId);
+                if (!success) throw new Error('API returned false');
+
+                playlistDetailStore.getState().removePlaylist(playlistId);
+                playlistLibraryStore.getState().removePlaylist(playlistId);
+                if (playlistId in musicCacheStore.getState().cachedItems) {
+                  deleteCachedItem(playlistId);
+                }
+
+                processingOverlayStore.getState().showSuccess('Playlist Deleted');
+
+                if (onDetailView) {
+                  setTimeout(() => router.back(), 800);
+                }
+              } catch {
+                processingOverlayStore.getState().showError('Failed to delete playlist');
+              }
+            },
+          },
+        ],
+      );
+    }, 350);
+  }, [entity, handleClose, pathname, router]);
+
   if (!entity) {
     return (
       <>
@@ -275,6 +329,7 @@ export function MoreOptionsSheet() {
   const showDetails = hasAlbumDetails(entity);
   const showShare = canShare(entity);
   const showDownload = canDownload(entity);
+  const showDelete = canDeletePlaylist(entity);
 
   return (
     <>
@@ -484,6 +539,28 @@ export function MoreOptionsSheet() {
               </Text>
             </Pressable>
           )}
+
+          {/* Delete Playlist */}
+          {showDelete && (
+            <Pressable
+              onPress={handleDeletePlaylist}
+              style={({ pressed }) => [
+                styles.option,
+                styles.deleteOption,
+                pressed && styles.optionPressed,
+              ]}
+            >
+              <Ionicons
+                name="trash-outline"
+                size={22}
+                color={colors.red}
+                style={styles.optionIcon}
+              />
+              <Text style={[styles.optionLabel, { color: colors.red }]}>
+                Delete Playlist
+              </Text>
+            </Pressable>
+          )}
         </View>
       </Modal>
 
@@ -543,6 +620,12 @@ const styles = StyleSheet.create({
   },
   optionPressed: {
     opacity: 0.6,
+  },
+  deleteOption: {
+    marginTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(128,128,128,0.2)',
+    paddingTop: 16,
   },
   optionIcon: {
     width: 28,

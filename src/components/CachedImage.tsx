@@ -30,6 +30,7 @@ import Animated, {
 import WaveformLogo from './WaveformLogo';
 import {
   cacheAllSizes,
+  evictUriCacheEntry,
   getCachedImageUri,
 } from '../services/imageCacheService';
 import { getCoverArtUrl } from '../services/subsonicService';
@@ -99,6 +100,7 @@ export const CachedImage = memo(function CachedImage({
 
   const fadeAnim = useSharedValue(hasInitialImage ? 1 : 0);
   const currentIdRef = useRef(coverArtId);
+  const retriedRef = useRef(false);
 
   /* ---- measure actual rendered size for placeholder logo ---- */
   const [layoutSize, setLayoutSize] = useState<{ w: number; h: number } | null>(null);
@@ -114,6 +116,7 @@ export const CachedImage = memo(function CachedImage({
   /* ---- synchronous reset when props change (prevents stale images) ---- */
   useLayoutEffect(() => {
     currentIdRef.current = coverArtId;
+    retriedRef.current = false;
     const cached = coverArtId ? getCachedImageUri(coverArtId, size) : null;
 
     if (cached) {
@@ -175,6 +178,31 @@ export const CachedImage = memo(function CachedImage({
     });
   }, [fadeAnim]);
 
+  /* ---- recovery when a cached file is deleted externally ---- */
+  const handleImageError = useCallback(() => {
+    if (!coverArtId || retriedRef.current) return;
+    retriedRef.current = true;
+
+    evictUriCacheEntry(coverArtId, size);
+
+    const freshCached = getCachedImageUri(coverArtId, size);
+    if (freshCached) {
+      setUri(freshCached);
+      return;
+    }
+
+    const remoteUrl = getCoverArtUrl(coverArtId, size);
+    if (remoteUrl) setUri(remoteUrl);
+
+    cacheAllSizes(coverArtId)
+      .then(() => {
+        if (currentIdRef.current !== coverArtId) return;
+        const newCached = getCachedImageUri(coverArtId, size);
+        if (newCached) setUri(newCached);
+      })
+      .catch(() => {});
+  }, [coverArtId, size]);
+
   const fadeStyle = useAnimatedStyle(() => ({
     opacity: fadeAnim.value,
   }));
@@ -202,6 +230,7 @@ export const CachedImage = memo(function CachedImage({
           source={{ uri }}
           style={[StyleSheet.absoluteFill, fadeStyle]}
           onLoad={handleImageLoad}
+          onError={handleImageError}
         />
       )}
     </View>

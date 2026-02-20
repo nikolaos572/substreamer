@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AnimatedSplashScreen from '../components/AnimatedSplashScreen';
 import { CreateShareSheet } from '../components/CreateShareSheet';
 import { MoreOptionsSheet } from '../components/MoreOptionsSheet';
+import { ProcessingOverlay } from '../components/ProcessingOverlay';
 import { useTheme } from '../hooks/useTheme';
 import { getImageCacheStats, initImageCache } from '../services/imageCacheService';
 import { getMusicCacheStats, initMusicCache } from '../services/musicCacheService';
@@ -205,6 +206,9 @@ export default function RootLayout() {
 
       {/* Global create-share bottom sheet driven by createShareStore */}
       <CreateShareSheet />
+
+      {/* Global processing overlay for async operations (delete, etc.) */}
+      <ProcessingOverlay />
 
       {/* Animated splash renders as an overlay on top of the Stack so the
           navigator is always mounted and ready for auth-based navigation. */}

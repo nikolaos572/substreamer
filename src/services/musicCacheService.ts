@@ -623,6 +623,96 @@ export function deleteCachedItem(itemId: string): void {
 }
 
 /**
+ * Remove a single track from a cached playlist and delete the file
+ * from disk if no other cached item references the same trackId.
+ */
+export function removeCachedPlaylistTrack(itemId: string, trackIndex: number): void {
+  const cached = musicCacheStore.getState().cachedItems[itemId];
+  if (!cached || cached.type !== 'playlist') return;
+  if (trackIndex < 0 || trackIndex >= cached.tracks.length) return;
+
+  const track = cached.tracks[trackIndex];
+
+  trackToItems.get(track.id)?.delete(itemId);
+  const remainingRefs = trackToItems.get(track.id);
+  const isOrphan = !remainingRefs || remainingRefs.size === 0;
+
+  if (isOrphan) {
+    trackUriMap.delete(track.id);
+    const itemDir = new Directory(ensureCacheDir(), itemId);
+    if (itemDir.exists) {
+      const file = new File(itemDir, track.fileName);
+      if (file.exists) {
+        try { file.delete(); } catch { /* best-effort */ }
+      }
+    }
+  }
+
+  musicCacheStore.getState().removeCachedTrack(itemId, trackIndex);
+}
+
+/**
+ * Reorder a track within a cached playlist. No file changes needed.
+ */
+export function reorderCachedPlaylistTracks(
+  itemId: string,
+  fromIndex: number,
+  toIndex: number,
+): void {
+  musicCacheStore.getState().reorderCachedTracks(itemId, fromIndex, toIndex);
+}
+
+/**
+ * Sync a cached playlist's track list to match a new ordered set of
+ * track IDs (after server-side reorder/removal). Removes orphan files
+ * for tracks that are no longer in any cached item.
+ */
+export function syncCachedPlaylistTracks(
+  playlistId: string,
+  newTrackIds: string[],
+): void {
+  const cached = musicCacheStore.getState().cachedItems[playlistId];
+  if (!cached || cached.type !== 'playlist') return;
+
+  const keepSet = new Set(newTrackIds);
+
+  for (const track of cached.tracks) {
+    if (keepSet.has(track.id)) continue;
+    trackToItems.get(track.id)?.delete(playlistId);
+    const remaining = trackToItems.get(track.id);
+    if (!remaining || remaining.size === 0) {
+      trackUriMap.delete(track.id);
+      const itemDir = new Directory(ensureCacheDir(), playlistId);
+      if (itemDir.exists) {
+        const file = new File(itemDir, track.fileName);
+        if (file.exists) {
+          try { file.delete(); } catch { /* best-effort */ }
+        }
+      }
+    }
+  }
+
+  const trackMap = new Map(cached.tracks.map((t) => [t.id, t]));
+  const newTracks = newTrackIds
+    .map((tid) => trackMap.get(tid))
+    .filter((t): t is CachedTrack => t != null);
+
+  const newTotalBytes = newTracks.reduce((sum, t) => sum + t.bytes, 0);
+  const removedBytes = cached.totalBytes - newTotalBytes;
+  const removedFiles = cached.tracks.length - newTracks.length;
+
+  const state = musicCacheStore.getState();
+  musicCacheStore.setState({
+    cachedItems: {
+      ...state.cachedItems,
+      [playlistId]: { ...cached, tracks: newTracks, totalBytes: newTotalBytes },
+    },
+    totalBytes: Math.max(0, state.totalBytes - removedBytes),
+    totalFiles: Math.max(0, state.totalFiles - removedFiles),
+  });
+}
+
+/**
  * Cancel a queued or in-progress download and remove its partial files.
  */
 export function cancelDownload(queueId: string): void {

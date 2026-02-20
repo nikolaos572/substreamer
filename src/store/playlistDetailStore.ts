@@ -20,6 +20,12 @@ export interface PlaylistDetailState {
   playlists: Record<string, PlaylistDetailEntry>;
   /** Fetch playlist from API, store it, and return it. Returns null on failure. */
   fetchPlaylist: (id: string) => Promise<PlaylistWithSongs | null>;
+  /** Reorder a track within the cached playlist entry. */
+  reorderTracks: (id: string, fromIndex: number, toIndex: number) => void;
+  /** Remove a track from the cached playlist entry by index. */
+  removeTrack: (id: string, trackIndex: number) => void;
+  /** Remove a playlist entry from the cache entirely. */
+  removePlaylist: (id: string) => void;
   /** Clear all cached playlist details. */
   clearPlaylists: () => void;
 }
@@ -43,6 +49,57 @@ export const playlistDetailStore = create<PlaylistDetailState>()(
           });
         }
         return data;
+      },
+
+      reorderTracks: (id, fromIndex, toIndex) => {
+        const entry = get().playlists[id];
+        if (!entry) return;
+        const entries = [...(entry.playlist.entry ?? [])];
+        if (
+          fromIndex < 0 || fromIndex >= entries.length ||
+          toIndex < 0 || toIndex >= entries.length ||
+          fromIndex === toIndex
+        ) return;
+        const [moved] = entries.splice(fromIndex, 1);
+        entries.splice(toIndex, 0, moved);
+        set({
+          playlists: {
+            ...get().playlists,
+            [id]: {
+              ...entry,
+              playlist: { ...entry.playlist, entry: entries, songCount: entries.length },
+            },
+          },
+        });
+      },
+
+      removeTrack: (id, trackIndex) => {
+        const entry = get().playlists[id];
+        if (!entry) return;
+        const entries = [...(entry.playlist.entry ?? [])];
+        if (trackIndex < 0 || trackIndex >= entries.length) return;
+        const removed = entries[trackIndex];
+        entries.splice(trackIndex, 1);
+        const newDuration = (entry.playlist.duration ?? 0) - (removed.duration ?? 0);
+        set({
+          playlists: {
+            ...get().playlists,
+            [id]: {
+              ...entry,
+              playlist: {
+                ...entry.playlist,
+                entry: entries,
+                songCount: entries.length,
+                duration: Math.max(0, newDuration),
+              },
+            },
+          },
+        });
+      },
+
+      removePlaylist: (id) => {
+        const { [id]: _, ...rest } = get().playlists;
+        set({ playlists: rest });
       },
 
       clearPlaylists: () => set({ playlists: {} }),

@@ -381,6 +381,57 @@ export async function getPlaylist(id: string): Promise<PlaylistWithSongs | null>
   return response.playlist ?? null;
 }
 
+/**
+ * Delete a playlist by ID.
+ */
+export async function deletePlaylist(id: string): Promise<boolean> {
+  const api = getApi();
+  if (!api) return false;
+  try {
+    await api.deletePlaylist({ id });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Replace the contents of an existing playlist with a new ordered list
+ * of song IDs. Uses createPlaylist with an existing playlistId, which
+ * the Subsonic API treats as a full replacement.
+ */
+export async function updatePlaylistOrder(
+  playlistId: string,
+  name: string,
+  songIds: string[],
+): Promise<boolean> {
+  const api = getApi();
+  if (!api) return false;
+  try {
+    await api.createPlaylist({ playlistId, name, songId: songIds });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Remove songs from a playlist by their zero-based indexes.
+ */
+export async function removeFromPlaylist(
+  playlistId: string,
+  songIndexes: number[],
+): Promise<boolean> {
+  const api = getApi();
+  if (!api) return false;
+  try {
+    await api.updatePlaylist({ playlistId, songIndexToRemove: songIndexes });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchServerInfo(): Promise<ServerInfo | null> {
   const api = getApi();
   if (!api) return null;

@@ -83,6 +83,10 @@ export interface MusicCacheState {
   removeCachedItem: (itemId: string) => void;
   /** Replace a single track entry inside a cached item and adjust byte totals. */
   updateCachedTrack: (itemId: string, trackIndex: number, track: CachedTrack, oldBytes: number) => void;
+  /** Reorder a track within a cached item's track list. */
+  reorderCachedTracks: (itemId: string, fromIndex: number, toIndex: number) => void;
+  /** Remove a track from a cached item by index and adjust totals. */
+  removeCachedTrack: (itemId: string, trackIndex: number) => void;
   setMaxConcurrentDownloads: (max: MaxConcurrentDownloads) => void;
   /** Increment totalBytes by a delta (called per-track during download). */
   addBytes: (bytes: number) => void;
@@ -184,6 +188,43 @@ export const musicCacheStore = create<MusicCacheState>()(
               [itemId]: { ...item, tracks, totalBytes: item.totalBytes + bytesDelta },
             },
             totalBytes: state.totalBytes + bytesDelta,
+          };
+        }),
+
+      reorderCachedTracks: (itemId, fromIndex, toIndex) =>
+        set((state) => {
+          const item = state.cachedItems[itemId];
+          if (!item) return state;
+          const tracks = [...item.tracks];
+          if (
+            fromIndex < 0 || fromIndex >= tracks.length ||
+            toIndex < 0 || toIndex >= tracks.length ||
+            fromIndex === toIndex
+          ) return state;
+          const [moved] = tracks.splice(fromIndex, 1);
+          tracks.splice(toIndex, 0, moved);
+          return {
+            cachedItems: { ...state.cachedItems, [itemId]: { ...item, tracks } },
+          };
+        }),
+
+      removeCachedTrack: (itemId, trackIndex) =>
+        set((state) => {
+          const item = state.cachedItems[itemId];
+          if (!item || trackIndex < 0 || trackIndex >= item.tracks.length) return state;
+          const removed = item.tracks[trackIndex];
+          const tracks = item.tracks.filter((_, i) => i !== trackIndex);
+          return {
+            cachedItems: {
+              ...state.cachedItems,
+              [itemId]: {
+                ...item,
+                tracks,
+                totalBytes: item.totalBytes - removed.bytes,
+              },
+            },
+            totalBytes: Math.max(0, state.totalBytes - removed.bytes),
+            totalFiles: Math.max(0, state.totalFiles - 1),
           };
         }),
 

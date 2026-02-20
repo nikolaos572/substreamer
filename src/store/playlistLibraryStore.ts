@@ -21,6 +21,8 @@ export interface PlaylistLibraryState {
 
   /** Fetch all playlists from the server via getPlaylists. */
   fetchAllPlaylists: () => Promise<void>;
+  /** Remove a single playlist from the library by ID. */
+  removePlaylist: (id: string) => void;
   /** Clear all playlist data */
   clearPlaylists: () => void;
 }
@@ -56,6 +58,11 @@ export const playlistLibraryStore = create<PlaylistLibraryState>()(
           });
         }
       },
+
+      removePlaylist: (id) =>
+        set((state) => ({
+          playlists: state.playlists.filter((p) => p.id !== id),
+        })),
 
       clearPlaylists: () =>
         set({
