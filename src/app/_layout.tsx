@@ -185,6 +185,10 @@ export default function RootLayout() {
           options={{ title: 'Shares', headerBackTitle: 'Settings' }}
         />
         <Stack.Screen
+          name="settings-account"
+          options={{ title: 'Account', headerBackTitle: 'Settings' }}
+        />
+        <Stack.Screen
           name="player"
           options={{
             title: 'Now Playing',
