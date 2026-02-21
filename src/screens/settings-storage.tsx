@@ -3,6 +3,7 @@ import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { StorageUsageBar } from '../components/StorageUsageBar';
@@ -31,6 +32,19 @@ export function SettingsStorageScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [concurrentSheetVisible, setConcurrentSheetVisible] = useState(false);
+  const [dangerousExpanded, setDangerousExpanded] = useState(false);
+  const chevronRotation = useSharedValue(0);
+
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${chevronRotation.value}deg` }],
+  }));
+
+  const handleToggleDangerous = useCallback(() => {
+    setDangerousExpanded((prev) => {
+      chevronRotation.value = withTiming(prev ? 0 : 90, { duration: 200 });
+      return !prev;
+    });
+  }, [chevronRotation]);
 
   const totalBytes = imageCacheStore((s) => s.totalBytes);
   const fileCount = imageCacheStore((s) => s.fileCount);
@@ -137,6 +151,29 @@ export function SettingsStorageScreen() {
       ],
     );
   }, [musicCacheBytes]);
+
+  const handleClearAll = useCallback(() => {
+    Alert.alert(
+      'Clear All Data',
+      'This will remove ALL offline data including downloaded music, cached cover art, and metadata.\n\nThis data is needed for offline playback and efficient online functionality. Rebuilding it requires re-downloading music and re-fetching metadata from your server.\n\nDon\'t do this unless you are really sure.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Everything',
+          style: 'destructive',
+          onPress: async () => {
+            await clearQueue();
+            clearMusicCache();
+            clearImageCache();
+            albumDetailStore.getState().clearAlbums();
+            artistDetailStore.getState().clearArtists();
+            playlistDetailStore.getState().clearPlaylists();
+            checkStorageLimit();
+          },
+        },
+      ],
+    );
+  }, []);
 
   const handleConcurrentPress = useCallback(() => {
     setConcurrentSheetVisible(true);
@@ -265,19 +302,6 @@ export function SettingsStorageScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </Pressable>
-          {imageCount > 0 && (
-            <Pressable
-              onPress={handleClearCache}
-              style={({ pressed }) => [
-                styles.clearCacheButton,
-                { borderColor: colors.red },
-                pressed && styles.pressed,
-              ]}
-            >
-              <Ionicons name="trash-outline" size={18} color={colors.red} />
-              <Text style={[styles.clearCacheText, { color: colors.red }]}>Clear Image Cache</Text>
-            </Pressable>
-          )}
         </View>
       </View>
 
@@ -345,19 +369,6 @@ export function SettingsStorageScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </Pressable>
-          {musicCachedItemCount > 0 && (
-            <Pressable
-              onPress={handleClearMusicCache}
-              style={({ pressed }) => [
-                styles.clearCacheButton,
-                { borderColor: colors.red },
-                pressed && styles.pressed,
-              ]}
-            >
-              <Ionicons name="trash-outline" size={18} color={colors.red} />
-              <Text style={[styles.clearCacheText, { color: colors.red }]}>Clear Downloaded Music</Text>
-            </Pressable>
-          )}
         </View>
       </View>
 
@@ -396,7 +407,45 @@ export function SettingsStorageScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </Pressable>
-          {totalMetadataCount > 0 && (
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Pressable
+          onPress={handleToggleDangerous}
+          style={({ pressed }) => [styles.dangerousHeader, pressed && styles.pressed]}
+        >
+          <Text style={[styles.sectionTitle, styles.dangerousSectionTitle, { color: colors.red }]}>
+            Dangerous
+          </Text>
+          <Animated.View style={chevronStyle}>
+            <Ionicons name="chevron-forward" size={16} color={colors.red} />
+          </Animated.View>
+        </Pressable>
+        {dangerousExpanded && (
+          <View style={[styles.card, dynamicStyles.card]}>
+            <Pressable
+              onPress={handleClearCache}
+              style={({ pressed }) => [
+                styles.clearCacheButton,
+                { borderColor: colors.red },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="warning" size={18} color={colors.red} />
+              <Text style={[styles.clearCacheText, { color: colors.red }]}>Clear Image Cache</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleClearMusicCache}
+              style={({ pressed }) => [
+                styles.clearCacheButton,
+                { borderColor: colors.red },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="warning" size={18} color={colors.red} />
+              <Text style={[styles.clearCacheText, { color: colors.red }]}>Clear Downloaded Music</Text>
+            </Pressable>
             <Pressable
               onPress={handleClearMetadataCache}
               style={({ pressed }) => [
@@ -405,11 +454,22 @@ export function SettingsStorageScreen() {
                 pressed && styles.pressed,
               ]}
             >
-              <Ionicons name="trash-outline" size={18} color={colors.red} />
+              <Ionicons name="warning" size={18} color={colors.red} />
               <Text style={[styles.clearCacheText, { color: colors.red }]}>Clear Metadata Cache</Text>
             </Pressable>
-          )}
-        </View>
+            <Pressable
+              onPress={handleClearAll}
+              style={({ pressed }) => [
+                styles.clearCacheButton,
+                { borderColor: colors.red },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="warning" size={18} color={colors.red} />
+              <Text style={[styles.clearCacheText, { color: colors.red }]}>Clear All Data</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
     </ScrollView>
@@ -529,6 +589,17 @@ const styles = StyleSheet.create({
   clearCacheText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  dangerousHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginLeft: 4,
+    gap: 4,
+  },
+  dangerousSectionTitle: {
+    marginBottom: 0,
+    marginLeft: 0,
   },
   sliderSection: {
     flexDirection: 'row',
