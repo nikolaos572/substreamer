@@ -15,6 +15,7 @@ import { CachedImage } from '../components/CachedImage';
 import { useTheme } from '../hooks/useTheme';
 import { albumDetailStore } from '../store/albumDetailStore';
 import { artistDetailStore } from '../store/artistDetailStore';
+import { offlineModeStore } from '../store/offlineModeStore';
 import { playlistDetailStore } from '../store/playlistDetailStore';
 
 const THUMB_SIZE = 50;
@@ -105,6 +106,7 @@ const MetadataRow = memo(function MetadataRow({
   onDelete: (entry: MetadataEntry) => void;
 }) {
   const busy = status === 'refreshing';
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
 
   return (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
@@ -148,16 +150,18 @@ const MetadataRow = memo(function MetadataRow({
         )}
       </View>
       <View style={styles.actions}>
-        {busy ? (
-          <ActivityIndicator size="small" color={colors.primary} />
-        ) : (
-          <Pressable
-            onPress={() => onRefresh(entry)}
-            hitSlop={8}
-            style={({ pressed }) => pressed && styles.pressed}
-          >
-            <Ionicons name="refresh-outline" size={20} color={colors.primary} />
-          </Pressable>
+        {!offlineMode && (
+          busy ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Pressable
+              onPress={() => onRefresh(entry)}
+              hitSlop={8}
+              style={({ pressed }) => pressed && styles.pressed}
+            >
+              <Ionicons name="refresh-outline" size={20} color={colors.primary} />
+            </Pressable>
+          )
         )}
         <Pressable
           onPress={() => onDelete(entry)}

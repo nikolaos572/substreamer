@@ -9,6 +9,7 @@ import { useDownloadStatus } from '../hooks/useDownloadStatus';
 import { useIsStarred } from '../hooks/useIsStarred';
 import { removeItemFromQueue, toggleStar } from '../services/moreOptionsService';
 import { type Child } from '../services/subsonicService';
+import { offlineModeStore } from '../store/offlineModeStore';
 import { formatTrackDuration } from '../utils/formatters';
 
 import type { ThemeColors } from '../constants/theme';
@@ -57,6 +58,7 @@ export const QueueItemRow = memo(function QueueItemRow({
 
   const starred = useIsStarred('song', track.id);
   const downloaded = useDownloadStatus('song', track.id) === 'complete';
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
 
   const handleRemove = useCallback(() => {
     removeItemFromQueue(index);
@@ -85,19 +87,22 @@ export const QueueItemRow = memo(function QueueItemRow({
   );
 
   const leftActions: SwipeAction[] = useMemo(
-    () => [
-      {
-        icon: starred ? 'heart' : 'heart-outline',
-        color: colors.red,
-        label: starred ? 'Remove' : 'Add',
-        onPress: handleToggleStar,
-      },
-    ],
-    [starred, colors.red, handleToggleStar],
+    () =>
+      offlineMode
+        ? []
+        : [
+            {
+              icon: starred ? 'heart' : 'heart-outline',
+              color: colors.red,
+              label: starred ? 'Remove' : 'Add',
+              onPress: handleToggleStar,
+            },
+          ],
+    [starred, colors.red, handleToggleStar, offlineMode],
   );
 
   return (
-    <SwipeableRow rightActions={rightActions} leftActions={leftActions} enableFullSwipeRight enableFullSwipeLeft actionPanelBackground="transparent" onPress={handlePress} onLongPress={onLongPress ? handleLongPress : undefined}>
+    <SwipeableRow rightActions={rightActions} leftActions={leftActions} enableFullSwipeRight enableFullSwipeLeft={!offlineMode} actionPanelBackground="transparent" onPress={handlePress} onLongPress={onLongPress ? handleLongPress : undefined}>
       <View style={[styles.row, { borderBottomColor: colors.border }]}>
         {/* Cover art with now-playing overlay */}
         <View style={styles.coverWrap}>

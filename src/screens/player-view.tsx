@@ -46,6 +46,7 @@ import { useColorExtraction } from '../hooks/useColorExtraction';
 import { useIsStarred } from '../hooks/useIsStarred';
 import { useTheme } from '../hooks/useTheme';
 import { toggleStar } from '../services/moreOptionsService';
+import { offlineModeStore } from '../store/offlineModeStore';
 import {
   clearQueue,
   retryPlayback,
@@ -104,7 +105,7 @@ export function PlayerView() {
         currentTrack ? (
           <MoreOptionsButton
             onPress={() =>
-              moreOptionsStore.getState().show({ type: 'song', item: currentTrack })
+              moreOptionsStore.getState().show({ type: 'song', item: currentTrack }, 'player')
             }
             color={colors.textPrimary}
           />
@@ -121,7 +122,7 @@ export function PlayerView() {
   }, []);
 
   const handleQueueItemLongPress = useCallback((track: Child) => {
-    moreOptionsStore.getState().show({ type: 'song', item: track });
+    moreOptionsStore.getState().show({ type: 'song', item: track }, 'player');
   }, []);
 
   const handleClearQueue = useCallback(() => {
@@ -305,6 +306,7 @@ const FavoriteButton = memo(function FavoriteButton({
   colors: { red: string; textSecondary: string };
 }) {
   const starred = useIsStarred('song', trackId);
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
 
   const handleToggle = useCallback(() => {
     toggleStar('song', trackId);
@@ -313,12 +315,14 @@ const FavoriteButton = memo(function FavoriteButton({
   return (
     <Pressable
       onPress={handleToggle}
+      disabled={offlineMode}
       hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel={starred ? 'Remove from favorites' : 'Add to favorites'}
       style={({ pressed }) => [
         styles.favoriteButton,
-        pressed && styles.pressed,
+        pressed && !offlineMode && styles.pressed,
+        offlineMode && styles.disabled,
       ]}
     >
       <Ionicons
@@ -666,6 +670,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.6,
+  },
+  disabled: {
+    opacity: 0.4,
   },
   queueSection: {
     paddingHorizontal: 16,

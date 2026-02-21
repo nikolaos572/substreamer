@@ -19,6 +19,7 @@ import {
   refreshCachedImage,
   type CachedImageEntry,
 } from '../services/imageCacheService';
+import { offlineModeStore } from '../store/offlineModeStore';
 
 const THUMB_SIZE = 50;
 
@@ -37,9 +38,9 @@ const CacheRow = memo(function CacheRow({
   onRefresh: (coverArtId: string) => void;
   onDelete: (coverArtId: string) => void;
 }) {
-  // Use the smallest variant as the thumbnail.
   const thumbUri = entry.files[0]?.uri;
   const busy = status === 'refreshing';
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
 
   return (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
@@ -78,16 +79,18 @@ const CacheRow = memo(function CacheRow({
         )}
       </View>
       <View style={styles.actions}>
-        {busy ? (
-          <ActivityIndicator size="small" color={colors.primary} />
-        ) : (
-          <Pressable
-            onPress={() => onRefresh(entry.coverArtId)}
-            hitSlop={8}
-            style={({ pressed }) => pressed && styles.pressed}
-          >
-            <Ionicons name="refresh-outline" size={20} color={colors.primary} />
-          </Pressable>
+        {!offlineMode && (
+          busy ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Pressable
+              onPress={() => onRefresh(entry.coverArtId)}
+              hitSlop={8}
+              style={({ pressed }) => pressed && styles.pressed}
+            >
+              <Ionicons name="refresh-outline" size={20} color={colors.primary} />
+            </Pressable>
+          )
         )}
         <Pressable
           onPress={() => onDelete(entry.coverArtId)}

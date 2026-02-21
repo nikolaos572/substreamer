@@ -18,6 +18,7 @@ import {
   redownloadItem,
   redownloadTrack,
 } from '../services/musicCacheService';
+import { offlineModeStore } from '../store/offlineModeStore';
 import {
   musicCacheStore,
   type CachedMusicItem,
@@ -39,6 +40,7 @@ const TrackFileRow = memo(function TrackFileRow({
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
   const [busy, setBusy] = useState(false);
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
 
   const handleRedownload = useCallback(async () => {
     setBusy(true);
@@ -59,16 +61,18 @@ const TrackFileRow = memo(function TrackFileRow({
           {track.artist} · {formatBytes(track.bytes)}
         </Text>
       </View>
-      {busy ? (
-        <ActivityIndicator size="small" color={colors.primary} />
-      ) : (
-        <Pressable
-          onPress={handleRedownload}
-          hitSlop={8}
-          style={({ pressed }) => pressed && styles.pressed}
-        >
-          <Ionicons name="refresh" size={18} color={colors.primary} />
-        </Pressable>
+      {!offlineMode && (
+        busy ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <Pressable
+            onPress={handleRedownload}
+            hitSlop={8}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Ionicons name="refresh" size={18} color={colors.primary} />
+          </Pressable>
+        )
       )}
     </View>
   );
@@ -93,6 +97,7 @@ const CacheRow = memo(function CacheRow({
   onDelete: (itemId: string) => void;
   onRedownload: (itemId: string) => void;
 }) {
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
   const trackLabel = item.tracks.length === 1
     ? '1 track'
     : `${item.tracks.length} tracks`;
@@ -123,13 +128,15 @@ const CacheRow = memo(function CacheRow({
           </Text>
         </View>
         <View style={styles.rowActions}>
-          <Pressable
-            onPress={() => onRedownload(item.itemId)}
-            hitSlop={8}
-            style={({ pressed }) => pressed && styles.pressed}
-          >
-            <Ionicons name="refresh" size={20} color={colors.primary} />
-          </Pressable>
+          {!offlineMode && (
+            <Pressable
+              onPress={() => onRedownload(item.itemId)}
+              hitSlop={8}
+              style={({ pressed }) => pressed && styles.pressed}
+            >
+              <Ionicons name="refresh" size={20} color={colors.primary} />
+            </Pressable>
+          )}
           <Pressable
             onPress={() => onDelete(item.itemId)}
             hitSlop={8}

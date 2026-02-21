@@ -5,17 +5,20 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { DownloadButton } from './DownloadButton';
 import { useTheme } from '../hooks/useTheme';
 import { filterBarStore } from '../store/filterBarStore';
+import { offlineModeStore } from '../store/offlineModeStore';
 
 function FilterChip({
   label,
   icon,
   active,
+  locked,
   onToggle,
   colors,
 }: {
   label: string;
   icon: string;
   active: boolean;
+  locked?: boolean;
   onToggle: () => void;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
@@ -25,6 +28,7 @@ function FilterChip({
       style={[
         styles.chip,
         { backgroundColor: active ? colors.primary : colors.inputBg },
+        locked && styles.chipLocked,
       ]}
     >
       <Ionicons
@@ -61,23 +65,38 @@ export const FilterBar = memo(function FilterBar({
   const layoutToggle = filterBarStore((s) => s.layoutToggle);
   const downloadButtonConfig = filterBarStore((s) => s.downloadButtonConfig);
 
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
+  const showInFilterBar = offlineModeStore((s) => s.showInFilterBar);
+  const toggleOfflineMode = offlineModeStore((s) => s.toggleOfflineMode);
+
   const handleLayoutToggle = useCallback(() => {
     layoutToggle?.onToggle();
   }, [layoutToggle]);
 
   if (routeName === 'settings') return null;
 
+  const showOfflineChip = showInFilterBar;
   const showDownloadedChip = !hideDownloaded;
   const showFavoritesChip = routeName !== 'favorites' && !hideFavorites;
 
   return (
     <View style={styles.container}>
       <View style={styles.chips}>
+        {showOfflineChip && (
+          <FilterChip
+            label="Offline"
+            icon="cloud-offline"
+            active={offlineMode}
+            onToggle={toggleOfflineMode}
+            colors={colors}
+          />
+        )}
         {showDownloadedChip && (
           <FilterChip
             label="Downloaded"
             icon="arrow-down-circle"
             active={downloadedOnly}
+            locked={offlineMode}
             onToggle={toggleDownloaded}
             colors={colors}
           />
@@ -142,6 +161,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 6,
+  },
+  chipLocked: {
+    opacity: 0.7,
   },
   chipIcon: {
     marginRight: 5,

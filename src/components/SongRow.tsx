@@ -11,6 +11,7 @@ import { useTheme } from '../hooks/useTheme';
 import { addSongToQueue, toggleStar } from '../services/moreOptionsService';
 import { type Child } from '../services/subsonicService';
 import { moreOptionsStore } from '../store/moreOptionsStore';
+import { offlineModeStore } from '../store/offlineModeStore';
 import { formatTrackDuration } from '../utils/formatters';
 
 const COVER_SIZE = 300;
@@ -22,6 +23,7 @@ export const SongRow = memo(function SongRow({ song, onPress }: { song: Child; o
   const { colors } = useTheme();
   const starred = useIsStarred('song', song.id);
   const downloaded = useDownloadStatus('song', song.id) === 'complete';
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
   const duration =
     song.duration != null ? formatTrackDuration(song.duration) : '—';
 
@@ -43,15 +45,18 @@ export const SongRow = memo(function SongRow({ song, onPress }: { song: Child; o
   );
 
   const leftActions: SwipeAction[] = useMemo(
-    () => [
-      {
-        icon: starred ? 'heart' : 'heart-outline',
-        color: colors.red,
-        label: starred ? 'Remove' : 'Add',
-        onPress: handleToggleStar,
-      },
-    ],
-    [starred, colors.red, handleToggleStar],
+    () =>
+      offlineMode
+        ? []
+        : [
+            {
+              icon: starred ? 'heart' : 'heart-outline',
+              color: colors.red,
+              label: starred ? 'Remove' : 'Add',
+              onPress: handleToggleStar,
+            },
+          ],
+    [starred, colors.red, handleToggleStar, offlineMode],
   );
 
   return (
@@ -59,7 +64,7 @@ export const SongRow = memo(function SongRow({ song, onPress }: { song: Child; o
       rightActions={rightActions}
       leftActions={leftActions}
       enableFullSwipeRight
-      enableFullSwipeLeft
+      enableFullSwipeLeft={!offlineMode}
       onLongPress={handleLongPress}
       onPress={onPress}
     >

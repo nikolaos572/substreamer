@@ -24,7 +24,7 @@ const SETTINGS_LINKS: {
   { route: '/settings-server', label: 'Server Management', subtitle: 'Server info, library scanning', icon: 'server-outline' },
   { route: '/settings-appearance', label: 'Appearance & Layout', subtitle: 'Theme, accent color, sort order, grid/list views', icon: 'color-palette-outline' },
   { route: '/settings-audio-quality', label: 'Audio Quality', subtitle: 'Streaming quality, download quality, transcoding', icon: 'musical-notes-outline' },
-  { route: '/settings-connectivity', label: 'Connectivity', subtitle: 'Trusted SSL certificates', icon: 'globe-outline' },
+  { route: '/settings-connectivity', label: 'Connectivity', subtitle: 'Offline mode, trusted SSL certificates', icon: 'globe-outline' },
   { route: '/settings-storage', label: 'Storage & Data', subtitle: 'Image cache, metadata cache, scrobbles', icon: 'folder-outline' },
   { route: '/settings-shares', label: 'Shares', subtitle: 'Manage shared links, alternate URL', icon: 'share-social-outline' },
 ];

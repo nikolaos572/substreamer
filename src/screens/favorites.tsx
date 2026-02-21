@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -14,6 +15,7 @@ import {
 } from '../services/musicCacheService';
 import { minDelay } from '../utils/stringHelpers';
 import { filterBarStore } from '../store/filterBarStore';
+import { offlineModeStore } from '../store/offlineModeStore';
 import {
   layoutPreferencesStore,
   type ItemLayout,
@@ -146,7 +148,9 @@ export function FavoritesScreen() {
     store.setHideDownloaded(activeSegment === 'artists');
     store.setHideFavorites(false);
 
-    const showDownloadButton = activeSegment === 'songs' && songs.length > 0;
+    const starredDownloaded = STARRED_SONGS_ITEM_ID in musicCacheStore.getState().cachedItems;
+    const showDownloadButton =
+      activeSegment === 'songs' && songs.length > 0 && (!offlineMode || starredDownloaded);
     store.setDownloadButtonConfig(
       showDownloadButton
         ? {
@@ -161,6 +165,8 @@ export function FavoritesScreen() {
     isFocused,
     activeSegment,
     songs.length,
+    offlineMode,
+    cachedItems,
     favSongLayout,
     favAlbumLayout,
     favArtistLayout,
@@ -172,6 +178,7 @@ export function FavoritesScreen() {
   ]);
 
   /* ---- Filter state ---- */
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
   const downloadedOnly = filterBarStore((s) => s.downloadedOnly);
   const cachedItems = musicCacheStore((s) => s.cachedItems);
 
@@ -236,16 +243,28 @@ export function FavoritesScreen() {
           />
         )}
         {activeSegment === 'artists' && (
-          <ArtistListView
-            artists={filteredArtists}
-            layout={favArtistLayout}
-            loading={loading}
-            error={error}
-            onRefresh={handleRefresh}
-            refreshing={refreshing}
-            emptyMessage="No favorite artists yet"
-            emptyIcon="heart-outline"
-          />
+          offlineMode ? (
+            <View style={styles.offlinePlaceholder}>
+              <Ionicons name="cloud-offline-outline" size={56} color={colors.textSecondary} />
+              <Text style={[styles.offlineTitle, { color: colors.textPrimary }]}>
+                Not available offline
+              </Text>
+              <Text style={[styles.offlineSubtitle, { color: colors.textSecondary }]}>
+                Artists are not available in offline mode
+              </Text>
+            </View>
+          ) : (
+            <ArtistListView
+              artists={filteredArtists}
+              layout={favArtistLayout}
+              loading={loading}
+              error={error}
+              onRefresh={handleRefresh}
+              refreshing={refreshing}
+              emptyMessage="No favorite artists yet"
+              emptyIcon="heart-outline"
+            />
+          )
         )}
       </View>
     </View>
@@ -290,5 +309,21 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  offlinePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  offlineTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  offlineSubtitle: {
+    fontSize: 15,
+    textAlign: 'center',
   },
 });

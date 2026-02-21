@@ -42,6 +42,7 @@ import { updatePlaylistOrder } from '../services/subsonicService';
 import { minDelay } from '../utils/stringHelpers';
 import { moreOptionsStore } from '../store/moreOptionsStore';
 import { musicCacheStore } from '../store/musicCacheStore';
+import { offlineModeStore } from '../store/offlineModeStore';
 import { playlistDetailStore } from '../store/playlistDetailStore';
 
 import { formatCompactDuration } from '../utils/formatters';
@@ -65,6 +66,7 @@ export function PlaylistDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const transitionComplete = useTransitionComplete();
 
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
   const [editing, setEditing] = useState(false);
   const [editedTracks, setEditedTracks] = useState<Child[]>([]);
   const [saving, setSaving] = useState(false);
@@ -226,9 +228,11 @@ export function PlaylistDetailScreen() {
         headerLeft: undefined,
         headerRight: () => (
           <View style={styles.headerRight}>
-            <Pressable onPress={handleStartEdit} hitSlop={8} style={styles.headerIcon}>
-              <Ionicons name="pencil-outline" size={22} color={colors.textPrimary} />
-            </Pressable>
+            {!offlineMode && (
+              <Pressable onPress={handleStartEdit} hitSlop={8} style={styles.headerIcon}>
+                <Ionicons name="pencil-outline" size={22} color={colors.textPrimary} />
+              </Pressable>
+            )}
             <DownloadButton itemId={id} type="playlist" />
             <MoreOptionsButton
               onPress={() =>
@@ -248,6 +252,7 @@ export function PlaylistDetailScreen() {
     colors.primary,
     editing,
     saving,
+    offlineMode,
     handleStartEdit,
     handleCancelEdit,
     handleSave,

@@ -51,6 +51,7 @@ import {
   moreOptionsStore,
   type MoreOptionsEntity,
 } from '../store/moreOptionsStore';
+import { offlineModeStore } from '../store/offlineModeStore';
 import { playlistDetailStore } from '../store/playlistDetailStore';
 import { playlistLibraryStore } from '../store/playlistLibraryStore';
 import { processingOverlayStore } from '../store/processingOverlayStore';
@@ -131,6 +132,7 @@ function canDeletePlaylist(entity: MoreOptionsEntity): boolean {
 export function MoreOptionsSheet() {
   const visible = moreOptionsStore((s) => s.visible);
   const entity = moreOptionsStore((s) => s.entity);
+  const source = moreOptionsStore((s) => s.source);
   const hide = moreOptionsStore((s) => s.hide);
 
   const starType: 'song' | 'album' | 'artist' =
@@ -322,14 +324,21 @@ export function MoreOptionsSheet() {
     );
   }
 
-  const starrable = isStarrable(entity);
-  const showArtistLink = hasArtistLink(entity);
-  const showAlbumLink = hasAlbumLink(entity);
-  const showAddToQueue = canAddToQueue(entity);
+  const offline = offlineModeStore.getState().offlineMode;
+  const starrable = !offline && isStarrable(entity);
+  const showArtistLink = !offline && hasArtistLink(entity);
+  const showAlbumLink = hasAlbumLink(entity) &&
+    (!offline || (entity.type === 'song' && entity.item.albumId != null &&
+      entity.item.albumId in musicCacheStore.getState().cachedItems));
+  const showAddToQueue = source !== 'player' && canAddToQueue(entity);
   const showDetails = hasAlbumDetails(entity);
-  const showShare = canShare(entity);
+  const showShare = !offline && canShare(entity);
   const showDownload = canDownload(entity);
-  const showDelete = canDeletePlaylist(entity);
+  const showDelete = !offline && canDeletePlaylist(entity);
+
+  const hasAnyOption =
+    starrable || showAddToQueue || showDownload || showAlbumLink ||
+    showArtistLink || showShare || showDetails || showDelete;
 
   return (
     <>
@@ -368,6 +377,16 @@ export function MoreOptionsSheet() {
           >
             {getSubtitle(entity)}
           </Text>
+
+          {/* Empty state when no options are available */}
+          {!hasAnyOption && (
+            <View style={styles.emptyOptions}>
+              <Ionicons name="cloud-offline-outline" size={32} color={colors.textSecondary} />
+              <Text style={[styles.emptyOptionsText, { color: colors.textSecondary }]}>
+                No additional options available in offline mode
+              </Text>
+            </View>
+          )}
 
           {/* Favorite / Unfavorite */}
           {starrable && (
@@ -416,42 +435,6 @@ export function MoreOptionsSheet() {
               />
               <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
                 Add to Queue
-              </Text>
-            </Pressable>
-          )}
-
-          {/* Download / Remove Download */}
-          {showDownload && (
-            <Pressable
-              onPress={handleDownload}
-              style={({ pressed }) => [
-                styles.option,
-                pressed && styles.optionPressed,
-              ]}
-            >
-              <Ionicons
-                name={
-                  downloadStatus === 'complete'
-                    ? 'trash-outline'
-                    : downloadStatus === 'queued' || downloadStatus === 'downloading'
-                      ? 'close-circle-outline'
-                      : 'arrow-down-circle-outline'
-                }
-                size={22}
-                color={downloadStatus === 'complete' ? colors.red : colors.textPrimary}
-                style={styles.optionIcon}
-              />
-              <Text
-                style={[
-                  styles.optionLabel,
-                  { color: downloadStatus === 'complete' ? colors.red : colors.textPrimary },
-                ]}
-              >
-                {downloadStatus === 'complete'
-                  ? 'Remove Download'
-                  : downloadStatus === 'queued' || downloadStatus === 'downloading'
-                    ? 'Cancel Download'
-                    : 'Download'}
               </Text>
             </Pressable>
           )}
@@ -540,6 +523,56 @@ export function MoreOptionsSheet() {
             </Pressable>
           )}
 
+          {/* Download / Cancel Download */}
+          {showDownload && downloadStatus !== 'complete' && (
+            <Pressable
+              onPress={handleDownload}
+              style={({ pressed }) => [
+                styles.option,
+                styles.deleteOption,
+                pressed && styles.optionPressed,
+              ]}
+            >
+              <Ionicons
+                name={
+                  downloadStatus === 'queued' || downloadStatus === 'downloading'
+                    ? 'close-circle-outline'
+                    : 'arrow-down-circle-outline'
+                }
+                size={22}
+                color={colors.textPrimary}
+                style={styles.optionIcon}
+              />
+              <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
+                {downloadStatus === 'queued' || downloadStatus === 'downloading'
+                  ? 'Cancel Download'
+                  : 'Download'}
+              </Text>
+            </Pressable>
+          )}
+
+          {/* Remove Download */}
+          {showDownload && downloadStatus === 'complete' && (
+            <Pressable
+              onPress={handleDownload}
+              style={({ pressed }) => [
+                styles.option,
+                styles.deleteOption,
+                pressed && styles.optionPressed,
+              ]}
+            >
+              <Ionicons
+                name="trash-outline"
+                size={22}
+                color={colors.red}
+                style={styles.optionIcon}
+              />
+              <Text style={[styles.optionLabel, { color: colors.red }]}>
+                Remove Download
+              </Text>
+            </Pressable>
+          )}
+
           {/* Delete Playlist */}
           {showDelete && (
             <Pressable
@@ -611,6 +644,15 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     marginBottom: 12,
     paddingHorizontal: 4,
+  },
+  emptyOptions: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 10,
+  },
+  emptyOptionsText: {
+    fontSize: 14,
+    textAlign: 'center',
   },
   option: {
     flexDirection: 'row',

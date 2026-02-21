@@ -24,19 +24,23 @@ export type MoreOptionsEntity =
 /*  Store                                                              */
 /* ------------------------------------------------------------------ */
 
+export type MoreOptionsSource = 'default' | 'player';
+
 export interface MoreOptionsState {
   visible: boolean;
   entity: MoreOptionsEntity | null;
+  source: MoreOptionsSource;
 
-  show: (entity: MoreOptionsEntity) => void;
+  show: (entity: MoreOptionsEntity, source?: MoreOptionsSource) => void;
   hide: () => void;
 }
 
 export const moreOptionsStore = create<MoreOptionsState>()((set) => ({
   visible: false,
   entity: null,
+  source: 'default',
 
-  show: (entity) => set({ visible: true, entity }),
+  show: (entity, source = 'default') => set({ visible: true, entity, source }),
 
-  hide: () => set({ visible: false, entity: null }),
+  hide: () => set({ visible: false, entity: null, source: 'default' }),
 }));

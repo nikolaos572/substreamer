@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FilterBar } from './FilterBar';
 import { useTheme } from '../hooks/useTheme';
+import { offlineModeStore } from '../store/offlineModeStore';
 import { searchStore } from '../store/searchStore';
 
 const DEBOUNCE_MS = 300;
@@ -21,6 +22,8 @@ export function SearchableHeader({ route }: BottomTabHeaderProps) {
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
 
   const query = searchStore((s) => s.query);
   const setQuery = searchStore((s) => s.setQuery);
@@ -91,7 +94,7 @@ export function SearchableHeader({ route }: BottomTabHeaderProps) {
           <TextInput
             ref={inputRef}
             style={[styles.input, { color: colors.textPrimary }]}
-            placeholder="Search..."
+            placeholder={offlineMode ? 'Offline Search...' : 'Search...'}
             placeholderTextColor={colors.textSecondary}
             value={query}
             onChangeText={handleChangeText}

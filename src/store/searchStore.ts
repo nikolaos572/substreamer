@@ -7,6 +7,10 @@ import {
   type ArtistID3,
   type Child,
 } from '../services/subsonicService';
+import { albumLibraryStore } from './albumLibraryStore';
+import { musicCacheStore } from './musicCacheStore';
+import { offlineModeStore } from './offlineModeStore';
+import { playlistLibraryStore } from './playlistLibraryStore';
 
 export interface SearchResults {
   albums: AlbumID3[];
@@ -19,6 +23,67 @@ const EMPTY_RESULTS: SearchResults = {
   artists: [],
   songs: [],
 };
+
+function performOfflineSearch(query: string): SearchResults {
+  const q = query.toLowerCase();
+  const { cachedItems } = musicCacheStore.getState();
+
+  const cachedIds = new Set(Object.keys(cachedItems));
+
+  const albums = albumLibraryStore
+    .getState()
+    .albums.filter(
+      (a) =>
+        cachedIds.has(a.id) &&
+        (a.name.toLowerCase().includes(q) ||
+          (a.artist?.toLowerCase().includes(q) ?? false))
+    );
+
+  const playlists = playlistLibraryStore
+    .getState()
+    .playlists.filter(
+      (p) => cachedIds.has(p.id) && p.name.toLowerCase().includes(q)
+    );
+
+  // Construct minimal Child objects for playlist results so they appear in
+  // the albums section (Subsonic search3 doesn't return playlists either,
+  // so we merge them as album-shaped results).
+  const playlistAlbums: AlbumID3[] = playlists.map((p) => ({
+    id: p.id,
+    name: p.name,
+    artist: p.owner,
+    coverArt: p.coverArt,
+    songCount: p.songCount,
+    duration: p.duration,
+    created: p.created,
+  }));
+
+  const songs: Child[] = [];
+  for (const item of Object.values(cachedItems)) {
+    for (const track of item.tracks) {
+      if (
+        track.title.toLowerCase().includes(q) ||
+        track.artist.toLowerCase().includes(q)
+      ) {
+        songs.push({
+          id: track.id,
+          title: track.title,
+          artist: track.artist,
+          album: item.name,
+          duration: track.duration,
+          isDir: false,
+          coverArt: item.coverArtId,
+        });
+      }
+    }
+  }
+
+  return {
+    albums: [...albums, ...playlistAlbums],
+    artists: [],
+    songs,
+  };
+}
 
 export interface SearchState {
   /** Current search query text */
@@ -62,6 +127,12 @@ export const searchStore = create<SearchState>()((set, get) => ({
     const { query } = get();
     if (!query.trim()) {
       set({ results: EMPTY_RESULTS, loading: false, error: null });
+      return;
+    }
+
+    if (offlineModeStore.getState().offlineMode) {
+      const results = performOfflineSearch(query.trim());
+      set({ results, loading: false, error: null });
       return;
     }
 

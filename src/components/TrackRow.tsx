@@ -19,6 +19,7 @@ import { useDownloadStatus } from '../hooks/useDownloadStatus';
 import { useIsStarred } from '../hooks/useIsStarred';
 import { addSongToQueue, toggleStar } from '../services/moreOptionsService';
 import { moreOptionsStore } from '../store/moreOptionsStore';
+import { offlineModeStore } from '../store/offlineModeStore';
 import { formatTrackDuration } from '../utils/formatters';
 
 import type { ThemeColors } from '../constants/theme';
@@ -43,6 +44,7 @@ export const TrackRow = memo(function TrackRow({ track, trackNumber, colors, onP
   const duration = track.duration != null ? formatTrackDuration(track.duration) : '—';
   const starred = useIsStarred('song', track.id);
   const downloaded = useDownloadStatus('song', track.id) === 'complete';
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
   const rating = track.userRating;
 
   const handleAddToQueue = useCallback(() => {
@@ -63,15 +65,18 @@ export const TrackRow = memo(function TrackRow({ track, trackNumber, colors, onP
   );
 
   const leftActions: SwipeAction[] = useMemo(
-    () => [
-      {
-        icon: starred ? 'heart' : 'heart-outline',
-        color: colors.red,
-        label: starred ? 'Remove' : 'Add',
-        onPress: handleToggleStar,
-      },
-    ],
-    [starred, colors.red, handleToggleStar],
+    () =>
+      offlineMode
+        ? []
+        : [
+            {
+              icon: starred ? 'heart' : 'heart-outline',
+              color: colors.red,
+              label: starred ? 'Remove' : 'Add',
+              onPress: handleToggleStar,
+            },
+          ],
+    [starred, colors.red, handleToggleStar, offlineMode],
   );
 
   return (
@@ -79,7 +84,7 @@ export const TrackRow = memo(function TrackRow({ track, trackNumber, colors, onP
       rightActions={rightActions}
       leftActions={leftActions}
       enableFullSwipeRight
-      enableFullSwipeLeft
+      enableFullSwipeLeft={!offlineMode}
       actionPanelBackground="transparent"
       onLongPress={handleLongPress}
       onPress={onPress}

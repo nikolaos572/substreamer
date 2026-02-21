@@ -10,6 +10,7 @@ import { useTheme } from '../hooks/useTheme';
 import { toggleStar } from '../services/moreOptionsService';
 import { type ArtistID3 } from '../services/subsonicService';
 import { moreOptionsStore } from '../store/moreOptionsStore';
+import { offlineModeStore } from '../store/offlineModeStore';
 
 const COVER_SIZE = 300;
 
@@ -20,6 +21,7 @@ export const ArtistRow = memo(function ArtistRow({ artist }: { artist: ArtistID3
   const { colors } = useTheme();
   const router = useRouter();
   const starred = useIsStarred('artist', artist.id);
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
 
   const onPress = useCallback(() => {
     router.push(`/artist/${artist.id}`);
@@ -34,21 +36,24 @@ export const ArtistRow = memo(function ArtistRow({ artist }: { artist: ArtistID3
   }, [artist]);
 
   const leftActions: SwipeAction[] = useMemo(
-    () => [
-      {
-        icon: starred ? 'heart' : 'heart-outline',
-        color: colors.red,
-        label: starred ? 'Remove' : 'Add',
-        onPress: handleToggleStar,
-      },
-    ],
-    [starred, colors.red, handleToggleStar],
+    () =>
+      offlineMode
+        ? []
+        : [
+            {
+              icon: starred ? 'heart' : 'heart-outline',
+              color: colors.red,
+              label: starred ? 'Remove' : 'Add',
+              onPress: handleToggleStar,
+            },
+          ],
+    [starred, colors.red, handleToggleStar, offlineMode],
   );
 
   return (
     <SwipeableRow
       leftActions={leftActions}
-      enableFullSwipeLeft
+      enableFullSwipeLeft={!offlineMode}
       onLongPress={handleLongPress}
       onPress={onPress}
     >

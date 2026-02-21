@@ -12,6 +12,7 @@ import { useTheme } from '../hooks/useTheme';
 import { addAlbumToQueue, toggleStar } from '../services/moreOptionsService';
 import { type AlbumID3 } from '../services/subsonicService';
 import { moreOptionsStore } from '../store/moreOptionsStore';
+import { offlineModeStore } from '../store/offlineModeStore';
 import { formatCompactDuration } from '../utils/formatters';
 
 const COVER_SIZE = 300;
@@ -24,6 +25,7 @@ export const AlbumRow = memo(function AlbumRow({ album }: { album: AlbumID3 }) {
   const router = useRouter();
   const starred = useIsStarred('album', album.id);
   const downloaded = useDownloadStatus('album', album.id) === 'complete';
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
 
   const onPress = useCallback(() => {
     router.push(`/album/${album.id}`);
@@ -47,15 +49,18 @@ export const AlbumRow = memo(function AlbumRow({ album }: { album: AlbumID3 }) {
   );
 
   const leftActions: SwipeAction[] = useMemo(
-    () => [
-      {
-        icon: starred ? 'heart' : 'heart-outline',
-        color: colors.red,
-        label: starred ? 'Remove' : 'Add',
-        onPress: handleToggleStar,
-      },
-    ],
-    [starred, colors.red, handleToggleStar],
+    () =>
+      offlineMode
+        ? []
+        : [
+            {
+              icon: starred ? 'heart' : 'heart-outline',
+              color: colors.red,
+              label: starred ? 'Remove' : 'Add',
+              onPress: handleToggleStar,
+            },
+          ],
+    [starred, colors.red, handleToggleStar, offlineMode],
   );
 
   return (
@@ -63,7 +68,7 @@ export const AlbumRow = memo(function AlbumRow({ album }: { album: AlbumID3 }) {
       rightActions={rightActions}
       leftActions={leftActions}
       enableFullSwipeRight
-      enableFullSwipeLeft
+      enableFullSwipeLeft={!offlineMode}
       onLongPress={handleLongPress}
       onPress={onPress}
     >
