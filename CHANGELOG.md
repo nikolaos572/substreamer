@@ -1,5 +1,10 @@
 # Changelog
 
+## [8.0.2] - 2026-02-22
+
+- fix eas workflow
+- fix eas workflow
+- more fixes for release script
 ## [8.0.1] - 2026-02-22
 
 - fix release script
