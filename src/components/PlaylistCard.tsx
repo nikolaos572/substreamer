@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { memo, useCallback } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -57,12 +56,9 @@ export const PlaylistCard = memo(function PlaylistCard({
           {playlist.name}
         </Text>
         <View style={styles.meta}>
-          <Ionicons name="musical-notes-outline" size={12} color={colors.primary} />
-          <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-            {playlist.songCount}
+          <Text style={[styles.metaText, { color: colors.textSecondary }]} numberOfLines={1}>
+            {playlist.songCount === 1 ? '1 track' : `${playlist.songCount} tracks`}
           </Text>
-          <View style={styles.metaSpacer} />
-          <Ionicons name="time-outline" size={12} color={colors.primary} />
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
             {formatCompactDuration(playlist.duration)}
           </Text>
@@ -96,13 +92,10 @@ const styles = StyleSheet.create({
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 3,
   },
   metaText: {
     fontSize: 12,
-    marginLeft: 3,
-  },
-  metaSpacer: {
-    width: 8,
   },
 });
