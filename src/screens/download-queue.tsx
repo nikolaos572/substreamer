@@ -231,19 +231,19 @@ export function DownloadQueueScreen() {
             hitSlop={8}
             style={({ pressed }) => pressed && styles.pressed}
           >
-            <Ionicons name="refresh" size={22} color={colors.primary} />
+            <Ionicons name="refresh" size={22} color={colors.textPrimary} />
           </Pressable>
           <Pressable
             onPress={handleClearAll}
             hitSlop={8}
             style={({ pressed }) => pressed && styles.pressed}
           >
-            <Text style={[styles.clearText, { color: colors.red }]}>Clear</Text>
+            <Text style={[styles.clearText, { color: colors.textPrimary }]}>Clear</Text>
           </Pressable>
         </View>
       ),
     });
-  }, [downloadQueue.length, navigation, handleClearAll, handleRecover, colors.red, colors.primary]);
+  }, [downloadQueue.length, navigation, handleClearAll, handleRecover, colors.textPrimary]);
 
   /* ---- Handlers ---- */
 

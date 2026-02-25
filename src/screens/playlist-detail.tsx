@@ -193,7 +193,7 @@ export function PlaylistDetailScreen() {
         headerRight: () => (
           <Pressable onPress={handleSave} disabled={saving} hitSlop={8} style={{ opacity: 1 }}>
             {saving ? (
-              <ActivityIndicator size="small" color={colors.primary} />
+              <ActivityIndicator size="small" color={colors.textPrimary} />
             ) : (
               <Text
                 style={[
