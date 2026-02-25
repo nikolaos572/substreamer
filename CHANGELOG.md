@@ -1,5 +1,30 @@
 # Changelog
 
+## [8.0.5] - 2026-02-25
+
+- player: fix close sometimes needs to be pressed multiple times to trigger
+- player: fix back gesture to be a down swipe
+- styling: header icons should always use textPrimary colour
+- playlist edit: make the playlist editor use swipe to delete the same as download queue
+- download queue: initial implementation was functional but not really usable. add manual retry option in case queue gets stuck use swipe right default action to delete item from queue use draggable list to reorder keep in progress item at the top of the list keep items needing manual retry at bottom of the list
+- my listening: home screen card stats animate on change
+- my listening: include pending scrobbles in streak calculation.  Otherwise streak appears broken when listening offline
+- detail views: provide visual feedback when playback is started as the miniplayer is not on these pages.
+- imagecache: update the image cache service to be consistent with the music download service. queue based concurrent operation controls in settings tmp file protection for partial operations clean up and recovery on start and restore from background rather than downloading 4 image variants from server, get the largest and then scale locally in native code for variants
+- SQLite database optimisations
+- exclude substreamer files from cloud back. app store rules state that large binary data should not be included in automated system backups.  Add an expo module that reads a list of paths to exlude from automatic backups.
+- standardise capitalization in more options action sheet
+- play similar artists
+- songs: play similar songs from more options menu
+- artist: create top songs playlist from more actions menu
+- artist bio: improve sanitization of bio results. Improve formatting to provide paragraph formatting so it's actually readable.
+- placeholder for empty search results updated to handle offline search
+- fix spacing around action buttons on the filter bar when all options are shown.  action buttons were getting squashed.
+- playing overlay in play queue and progress overlay in download queue should be 100% opacity for visibility
+- split player queue and song actions in the action sheet on player view
+- smoother splash screen transition from native to animated
+- add music download recovery when returning to foreground
+- reduce to 2 animation loops on the splashscreen
 ## [8.0.4] - 2026-02-23
 
 - updated migration paths

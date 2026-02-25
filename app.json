@@ -2,7 +2,7 @@
   "expo": {
     "name": "substreamer",
     "slug": "substreamer",
-    "version": "8.0.4",
+    "version": "8.0.5",
     "scheme": "substreamer",
     "platforms": [
       "android",
@@ -14,7 +14,7 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.ghenry22.substream2",
-      "buildNumber": "88",
+      "buildNumber": "89",
       "supportsTablet": true,
       "infoPlist": {
         "UIBackgroundModes": [
@@ -33,7 +33,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "versionCode": 88,
+      "versionCode": 89,
       "package": "com.ghenry22.substream2"
     },
     "web": {
@@ -53,7 +53,7 @@
       "./plugins/fix-jvm-target",
       "expo-sqlite",
       "./modules/expo-ssl-trust/plugin",
-    "./modules/expo-backup-exclusions/plugin",
+      "./modules/expo-backup-exclusions/plugin",
       "./modules/react-native-track-player/plugin",
       [
         "expo-build-properties",
