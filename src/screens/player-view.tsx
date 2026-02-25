@@ -30,6 +30,7 @@ import Animated, {
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
+import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CachedImage } from '../components/CachedImage';
@@ -93,13 +94,13 @@ export function PlayerView() {
   useEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
-        <Pressable
+        <GHPressable
           onPress={onClose}
           hitSlop={12}
           style={({ pressed }) => [{ opacity: 1 }, pressed && styles.pressed]}
         >
           <Ionicons name="chevron-down" size={28} color={colors.textPrimary} />
-        </Pressable>
+        </GHPressable>
       ),
       headerRight: () =>
         currentTrack ? (
