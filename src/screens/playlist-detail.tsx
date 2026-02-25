@@ -2,7 +2,6 @@ import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   RefreshControl,
@@ -13,10 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  Pressable as GHPressable,
-  TouchableOpacity,
-} from 'react-native-gesture-handler';
+import { TouchableOpacity } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -30,7 +26,7 @@ import { CachedImage } from '../components/CachedImage';
 import { DownloadButton } from '../components/DownloadButton';
 import { MarqueeText } from '../components/MarqueeText';
 import { MoreOptionsButton } from '../components/MoreOptionsButton';
-import { closeOpenRow } from '../components/SwipeableRow';
+import { closeOpenRow, SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
 import { TrackRow } from '../components/TrackRow';
 import { useColorExtraction } from '../hooks/useColorExtraction';
 import { useTheme } from '../hooks/useTheme';
@@ -130,24 +126,9 @@ export function PlaylistDetailScreen() {
 
   const handleDeleteTrack = useCallback(
     (index: number) => {
-      const track = editedTracks[index];
-      if (!track) return;
-      Alert.alert(
-        'Remove Track',
-        `Remove "${track.title}" from this playlist?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: () => {
-              setEditedTracks((prev) => prev.filter((_, i) => i !== index));
-            },
-          },
-        ],
-      );
+      setEditedTracks((prev) => prev.filter((_, i) => i !== index));
     },
-    [editedTracks],
+    [],
   );
 
   const handleSave = useCallback(async () => {
@@ -284,51 +265,48 @@ export function PlaylistDetailScreen() {
   const renderEditItem = useCallback(
     ({ item, getIndex, drag, isActive }: RenderItemParams<Child>) => {
       const index = getIndex() ?? 0;
+      const rightActions: SwipeAction[] = [
+        { icon: 'trash-outline', color: colors.red, label: 'Remove', onPress: () => handleDeleteTrack(index), removesRow: true },
+      ];
       return (
         <ScaleDecorator activeScale={1.03}>
-          <TouchableOpacity onLongPress={drag} delayLongPress={200} disabled={isActive} activeOpacity={0.7}>
-            <View
-              style={[
-                styles.editRow,
-                { borderBottomColor: colors.border, backgroundColor: colors.background },
-                isActive && { backgroundColor: colors.card, borderRadius: 8 },
-              ]}
-            >
-              <GHPressable
-                onPress={() => handleDeleteTrack(index)}
-                hitSlop={8}
-                style={styles.editDeleteBtn}
+          <SwipeableRow rightActions={rightActions} enableFullSwipeRight>
+            <TouchableOpacity onLongPress={drag} delayLongPress={200} disabled={isActive} activeOpacity={0.7}>
+              <View
+                style={[
+                  styles.editRow,
+                  { borderBottomColor: colors.border, backgroundColor: colors.background },
+                  isActive && { backgroundColor: colors.card, borderRadius: 8 },
+                ]}
               >
-                <Ionicons name="remove-circle" size={22} color={colors.red} />
-              </GHPressable>
+                <CachedImage
+                  coverArtId={item.coverArt}
+                  size={300}
+                  style={styles.editCover}
+                  resizeMode="cover"
+                />
 
-              <CachedImage
-                coverArtId={item.coverArt}
-                size={300}
-                style={styles.editCover}
-                resizeMode="cover"
-              />
+                <View style={styles.editTrackInfo}>
+                  <Text
+                    style={[styles.editTrackTitle, { color: colors.textPrimary }]}
+                    numberOfLines={1}
+                  >
+                    {index + 1}. {item.title}
+                  </Text>
+                  <Text
+                    style={[styles.editTrackArtist, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {item.artist ?? 'Unknown Artist'}
+                  </Text>
+                </View>
 
-              <View style={styles.editTrackInfo}>
-                <Text
-                  style={[styles.editTrackTitle, { color: colors.textPrimary }]}
-                  numberOfLines={1}
-                >
-                  {index + 1}. {item.title}
-                </Text>
-                <Text
-                  style={[styles.editTrackArtist, { color: colors.textSecondary }]}
-                  numberOfLines={1}
-                >
-                  {item.artist ?? 'Unknown Artist'}
-                </Text>
+                <View style={styles.editDragHandle}>
+                  <Ionicons name="reorder-three" size={24} color={colors.textSecondary} />
+                </View>
               </View>
-
-              <View style={styles.editDragHandle}>
-                <Ionicons name="reorder-three" size={24} color={colors.textSecondary} />
-              </View>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </SwipeableRow>
         </ScaleDecorator>
       );
     },
@@ -484,6 +462,7 @@ export function PlaylistDetailScreen() {
           renderItem={renderEditItem}
           keyExtractor={keyExtractor}
           onDragEnd={handleReorder}
+          onScrollBeginDrag={closeOpenRow}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={listEmpty}
           showsVerticalScrollIndicator={false}
@@ -639,14 +618,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: EDIT_ROW_HEIGHT,
     paddingVertical: 10,
-    paddingLeft: 12,
-    paddingRight: 4,
+    paddingHorizontal: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  editDeleteBtn: {
-    width: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   editCover: {
     width: 40,
