@@ -47,7 +47,7 @@ const DATE_FORMAT_OPTIONS: { value: DateFormat; label: string; example: string }
 ];
 
 const ACCENT_COLORS: { label: string; hex: string }[] = [
-  { label: 'Default', hex: '#1D9BF0' },
+  { label: 'Blue (default)', hex: '#1D9BF0' },
   { label: 'Red', hex: '#E91429' },
   { label: 'Green', hex: '#00BA7C' },
   { label: 'Orange', hex: '#FF6F00' },
