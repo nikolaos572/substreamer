@@ -60,7 +60,6 @@ import {
 } from '../services/playerService';
 import { type Child } from '../services/subsonicService';
 import { createShareStore } from '../store/createShareStore';
-import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
 import { moreOptionsStore } from '../store/moreOptionsStore';
 import { playerStore } from '../store/playerStore';
 
@@ -78,7 +77,6 @@ export function PlayerView() {
   const currentTrackIndex = playerStore((s) => s.currentTrackIndex);
   const queue = playerStore((s) => s.queue);
   const queueLoading = playerStore((s) => s.queueLoading);
-  const marqueeScrolling = layoutPreferencesStore((s) => s.marqueeScrolling);
 
   const onClose = useCallback(() => router.back(), [router]);
 
@@ -218,7 +216,6 @@ export function PlayerView() {
         currentTrack={currentTrack}
         colors={colors}
         queueLoading={queueLoading}
-        marqueeScrolling={marqueeScrolling}
         handleSeek={handleSeek}
         handleClearQueue={handleClearQueue}
         handleShuffle={handleShuffle}
@@ -231,7 +228,6 @@ export function PlayerView() {
       currentTrack,
       colors,
       queueLoading,
-      marqueeScrolling,
       handleSeek,
       handleClearQueue,
       handleShuffle,
@@ -343,7 +339,6 @@ interface PlayerListHeaderProps {
   currentTrack: Child | null;
   colors: ThemeColors;
   queueLoading: boolean;
-  marqueeScrolling: boolean;
   handleSeek: (seconds: number) => void;
   handleClearQueue: () => void;
   handleShuffle: () => void;
@@ -356,7 +351,6 @@ const PlayerListHeader = memo(function PlayerListHeader({
   currentTrack,
   colors,
   queueLoading,
-  marqueeScrolling,
   handleSeek,
   handleClearQueue,
   handleShuffle,
@@ -410,18 +404,9 @@ const PlayerListHeader = memo(function PlayerListHeader({
           <View style={styles.trackInfo}>
             <View style={styles.trackInfoRow}>
               <View style={styles.trackInfoText}>
-                {marqueeScrolling ? (
-                  <MarqueeText style={marqueeStyle}>
-                    {currentTrack.title}
-                  </MarqueeText>
-                ) : (
-                  <Text
-                    style={[styles.trackTitle, { color: colors.textPrimary }]}
-                    numberOfLines={1}
-                  >
-                    {currentTrack.title}
-                  </Text>
-                )}
+                <MarqueeText style={marqueeStyle}>
+                  {currentTrack.title}
+                </MarqueeText>
                 <Text
                   style={[styles.trackArtist, { color: colors.textSecondary }]}
                   numberOfLines={1}

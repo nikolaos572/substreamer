@@ -53,11 +53,21 @@ export const MarqueeText = memo(function MarqueeText({
   // Stable key that changes whenever the text content changes.
   const childrenKey = typeof children === 'string' ? children : JSON.stringify(children);
 
+  // Detect stale textWidth during content transitions. When the title
+  // changes, textWidth still holds the previous title's measurement for
+  // one render. If the new title is longer, the stale width is too
+  // narrow and the text wraps briefly, causing a visible layout jump.
+  // Using 10000 during the transition prevents wrapping; the container's
+  // overflow:'hidden' keeps the visual result identical.
+  const prevKeyRef = useRef(childrenKey);
+  const isStale = prevKeyRef.current !== childrenKey;
+
   // Snap back to the start position when content changes.
   // NOTE: do NOT reset textWidth here – onLayout fires before this
   // effect and would be clobbered, preventing the animation from
   // ever starting on subsequent tracks.
   useEffect(() => {
+    prevKeyRef.current = childrenKey;
     translateX.setValue(0);
   }, [childrenKey, translateX]);
 
@@ -104,10 +114,7 @@ export const MarqueeText = memo(function MarqueeText({
     };
   }, [shouldScroll, scrollDistance, speed, pauseDuration, initialDelay, translateX, childrenKey]);
 
-  // Use measured text width when available, otherwise a large value
-  // so the text never wraps. This avoids a flash of "..." truncation
-  // before measurement completes.
-  const innerWidth = textWidth > 0 ? textWidth : 10000;
+  const innerWidth = (textWidth > 0 && !isStale) ? textWidth : 10000;
 
   return (
     <View style={styles.container} onLayout={handleContainerLayout} pointerEvents="none">

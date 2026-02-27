@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../hooks/useTheme';
 import type { ThemePreference } from '../store/themeStore';
@@ -93,9 +93,6 @@ export function SettingsAppearanceScreen() {
   const setFavSongLayout = layoutPreferencesStore((s) => s.setFavSongLayout);
   const setFavAlbumLayout = layoutPreferencesStore((s) => s.setFavAlbumLayout);
   const setFavArtistLayout = layoutPreferencesStore((s) => s.setFavArtistLayout);
-
-  const marqueeScrolling = layoutPreferencesStore((s) => s.marqueeScrolling);
-  const setMarqueeScrolling = layoutPreferencesStore((s) => s.setMarqueeScrolling);
 
   const dateFormat = layoutPreferencesStore((s) => s.dateFormat);
   const setDateFormat = layoutPreferencesStore((s) => s.setDateFormat);
@@ -243,22 +240,6 @@ export function SettingsAppearanceScreen() {
               )}
             </View>
           )}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>Player</Text>
-        <View style={styles.themeCard}>
-          <View style={[styles.layoutRow, dynamicStyles.layoutRow]}>
-            <Text style={[styles.layoutRowLabel, dynamicStyles.layoutRowLabel]}>
-              Marquee scrolling
-            </Text>
-            <Switch
-              value={marqueeScrolling}
-              onValueChange={setMarqueeScrolling}
-              trackColor={{ false: colors.border, true: colors.primary }}
-            />
-          </View>
         </View>
       </View>
 

@@ -26,7 +26,6 @@ import WaveformLogo from './WaveformLogo';
 import { useCachedCoverArt } from '../hooks/useCachedCoverArt';
 import { useTheme } from '../hooks/useTheme';
 import { togglePlayPause } from '../services/playerService';
-import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
 import { playerStore } from '../store/playerStore';
 import { getProminentColor, type ExtractedColors } from '../utils/colors';
 
@@ -42,7 +41,6 @@ export function MiniPlayer() {
   const position = playerStore((s) => s.position);
   const duration = playerStore((s) => s.duration);
   const queueLoading = playerStore((s) => s.queueLoading);
-  const marqueeScrolling = layoutPreferencesStore((s) => s.marqueeScrolling);
 
   const progress = duration > 0 ? position / duration : 0;
   const progressAnim = useSharedValue(0);
@@ -175,15 +173,9 @@ export function MiniPlayer() {
 
         {/* Track info */}
         <View style={styles.info}>
-          {marqueeScrolling ? (
-            <MarqueeText style={marqueeStyle}>
-              {queueLoading ? 'Loading...' : currentTrack.title}
-            </MarqueeText>
-          ) : (
-            <Text style={[styles.title, { color: queueLoading ? colors.textSecondary : colors.textPrimary }]} numberOfLines={1}>
-              {queueLoading ? 'Loading...' : currentTrack.title}
-            </Text>
-          )}
+          <MarqueeText style={marqueeStyle}>
+            {queueLoading ? 'Loading...' : currentTrack.title}
+          </MarqueeText>
           {!queueLoading && (
             <Text style={[styles.artist, { color: colors.textSecondary }]} numberOfLines={1}>
               {currentTrack.artist ?? 'Unknown Artist'}

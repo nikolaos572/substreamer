@@ -17,7 +17,6 @@ export interface LayoutPreferencesState {
   favArtistLayout: ItemLayout;
   albumSortOrder: AlbumSortOrder;
   artistAlbumSortOrder: ArtistAlbumSortOrder;
-  marqueeScrolling: boolean;
   dateFormat: DateFormat;
   setAlbumLayout: (layout: ItemLayout) => void;
   setArtistLayout: (layout: ItemLayout) => void;
@@ -27,7 +26,6 @@ export interface LayoutPreferencesState {
   setFavArtistLayout: (layout: ItemLayout) => void;
   setAlbumSortOrder: (order: AlbumSortOrder) => void;
   setArtistAlbumSortOrder: (order: ArtistAlbumSortOrder) => void;
-  setMarqueeScrolling: (enabled: boolean) => void;
   setDateFormat: (format: DateFormat) => void;
 }
 
@@ -44,7 +42,6 @@ export const layoutPreferencesStore = create<LayoutPreferencesState>()(
       favArtistLayout: 'list',
       albumSortOrder: 'artist',
       artistAlbumSortOrder: 'newest',
-      marqueeScrolling: true,
       dateFormat: 'yyyy/mm/dd',
       setAlbumLayout: (albumLayout) => set({ albumLayout }),
       setArtistLayout: (artistLayout) => set({ artistLayout }),
@@ -55,7 +52,6 @@ export const layoutPreferencesStore = create<LayoutPreferencesState>()(
       setAlbumSortOrder: (albumSortOrder) => set({ albumSortOrder }),
       setArtistAlbumSortOrder: (artistAlbumSortOrder) =>
         set({ artistAlbumSortOrder }),
-      setMarqueeScrolling: (marqueeScrolling) => set({ marqueeScrolling }),
       setDateFormat: (dateFormat) => set({ dateFormat }),
     }),
     {
@@ -70,7 +66,6 @@ export const layoutPreferencesStore = create<LayoutPreferencesState>()(
         favArtistLayout: state.favArtistLayout,
         albumSortOrder: state.albumSortOrder,
         artistAlbumSortOrder: state.artistAlbumSortOrder,
-        marqueeScrolling: state.marqueeScrolling,
         dateFormat: state.dateFormat,
       }),
     }
