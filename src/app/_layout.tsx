@@ -9,6 +9,7 @@ import { CreateShareSheet } from '../components/CreateShareSheet';
 import { MoreOptionsSheet } from '../components/MoreOptionsSheet';
 import { PlaybackToast } from '../components/PlaybackToast';
 import { ProcessingOverlay } from '../components/ProcessingOverlay';
+import { useDownloadBackgroundNotification } from '../hooks/useDownloadBackgroundNotification';
 import { useDownloadKeepAwake } from '../hooks/useDownloadKeepAwake';
 import { useTheme } from '../hooks/useTheme';
 import { deferredImageCacheInit, getImageCacheStats, initImageCache } from '../services/imageCacheService';
@@ -50,6 +51,7 @@ export default function RootLayout() {
   const segments = useSegments();
 
   useDownloadKeepAwake();
+  useDownloadBackgroundNotification();
 
   // --- Exclude cache dirs from iCloud backup (iOS); no-op on Android ---
   useEffect(() => {

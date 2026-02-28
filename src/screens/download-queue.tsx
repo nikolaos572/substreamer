@@ -25,7 +25,7 @@ import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
 import { closeOpenRow, SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
 import { useTheme } from '../hooks/useTheme';
-import { cancelDownload, clearDownloadQueue, recoverStalledDownloadsAsync, retryDownload } from '../services/musicCacheService';
+import { cancelDownload, clearDownloadQueue, forceRecoverDownloadsAsync, retryDownload } from '../services/musicCacheService';
 import {
   musicCacheStore,
   type DownloadQueueItem,
@@ -215,7 +215,7 @@ export function DownloadQueueScreen() {
   }, []);
 
   const handleRecover = useCallback(() => {
-    recoverStalledDownloadsAsync();
+    forceRecoverDownloadsAsync();
   }, []);
 
   useEffect(() => {

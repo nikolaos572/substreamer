@@ -81,6 +81,7 @@ function getTrackFileExtension(track: Child): string {
 
 let cacheDir: Directory | null = null;
 let isProcessing = false;
+let processingId = 0;
 let appStateSubscription: { remove: () => void } | null = null;
 
 /**
@@ -119,7 +120,7 @@ export function initMusicCache(): void {
 
   if (!appStateSubscription) {
     appStateSubscription = AppState.addEventListener('change', (next: AppStateStatus) => {
-      if (next === 'active') {
+      if (next === 'active' && !isProcessing) {
         recoverStalledDownloadsAsync();
       }
     });
@@ -158,6 +159,8 @@ export async function deferredMusicCacheInit(): Promise<void> {
  * expo-async-fs, keeping the JS thread free for UI rendering.
  */
 export async function recoverStalledDownloadsAsync(): Promise<void> {
+  if (isProcessing) return;
+
   const { downloadQueue } = musicCacheStore.getState();
   for (const item of downloadQueue) {
     if (item.status !== 'downloading') continue;
@@ -183,6 +186,19 @@ export async function recoverStalledDownloadsAsync(): Promise<void> {
   if (downloadQueue.some((q) => q.status === 'downloading' || q.status === 'queued')) {
     processQueue();
   }
+}
+
+/**
+ * Force-recover the download queue regardless of current processing
+ * state. Bumps the generation counter so active workers exit at their
+ * next check, then runs normal stalled-download recovery.
+ *
+ * Used by the manual "Recover" button on the download queue screen.
+ */
+export async function forceRecoverDownloadsAsync(): Promise<void> {
+  processingId++;
+  isProcessing = false;
+  await recoverStalledDownloadsAsync();
 }
 
 function ensureCacheDir(): Directory {
@@ -354,9 +370,11 @@ export async function enqueuePlaylistDownload(playlistId: string): Promise<void>
 async function processQueue(): Promise<void> {
   if (isProcessing) return;
   isProcessing = true;
+  const myId = ++processingId;
 
   try {
     while (true) {
+      if (myId !== processingId) return;
       if (checkStorageLimit()) break;
 
       const { downloadQueue } = musicCacheStore.getState();
@@ -364,17 +382,19 @@ async function processQueue(): Promise<void> {
       if (!next) break;
 
       musicCacheStore.getState().updateQueueItem(next.queueId, { status: 'downloading' });
-      await downloadItem(next);
+      await downloadItem(next, myId);
     }
   } finally {
-    isProcessing = false;
+    if (myId === processingId) {
+      isProcessing = false;
+    }
   }
 }
 
 /**
  * Download all tracks for a single queue item using a concurrency pool.
  */
-async function downloadItem(queueItem: DownloadQueueItemSnapshot): Promise<void> {
+async function downloadItem(queueItem: DownloadQueueItemSnapshot, myId: number): Promise<void> {
   const { maxConcurrentDownloads } = musicCacheStore.getState();
   const itemDir = new Directory(ensureCacheDir(), queueItem.itemId);
   if (!itemDir.exists) itemDir.create();
@@ -386,6 +406,8 @@ async function downloadItem(queueItem: DownloadQueueItemSnapshot): Promise<void>
 
   const downloadNext = async (): Promise<void> => {
     while (trackIndex < queueItem.tracks.length) {
+      if (myId !== processingId) return;
+
       const current = musicCacheStore.getState().downloadQueue.find(
         (q) => q.queueId === queueItem.queueId,
       );

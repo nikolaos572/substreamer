@@ -111,7 +111,7 @@ export function initImageCache(): void {
 
   if (!appStateSubscription) {
     appStateSubscription = AppState.addEventListener('change', (next: AppStateStatus) => {
-      if (next === 'active') {
+      if (next === 'active' && !isProcessing) {
         recoverStalledImageDownloadsAsync();
       }
     });
@@ -149,6 +149,8 @@ function ensureCacheDir(): Directory {
  * expo-async-fs, keeping the JS thread free for UI rendering.
  */
 async function recoverStalledImageDownloadsAsync(): Promise<void> {
+  if (isProcessing) return;
+
   const dir = ensureCacheDir();
   let subDirNames: string[];
   try {
