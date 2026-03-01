@@ -5,18 +5,20 @@ const { withEntitlementsPlist } = require("expo/config-plugins");
  *
  * Why this exists:
  *   expo-notifications is installed for local-only notifications (download
- *   progress alerts). However, @expo/prebuild-config auto-applies the
- *   expo-notifications config plugin for every installed Expo package via
- *   `withVersionedExpoSDKPlugins`. That plugin unconditionally injects the
+ *   progress alerts). Its config plugin unconditionally injects the
  *   `aps-environment` entitlement, which requires the provisioning profile
  *   to include the Push Notifications capability — even though this app
- *   never uses remote/push notifications.
+ *   never uses remote/push notifications. The auto-plugin system in
+ *   @expo/prebuild-config also applies it regardless of the plugins array.
  *
- * What it does:
- *   Runs after the auto-applied expo-notifications plugin and deletes the
- *   `aps-environment` key from the iOS entitlements plist. This allows the
- *   build to succeed with a provisioning profile that lacks Push
- *   Notifications, while local notification APIs continue to work normally.
+ * How it works:
+ *   Expo's mod chain is LIFO — the first-registered mod executes last. By
+ *   listing this plugin BEFORE expo-notifications in the plugins array, its
+ *   mod is registered first and therefore runs after expo-notifications has
+ *   added the entitlement, allowing it to delete the key.
+ *
+ * Important:
+ *   This plugin MUST appear BEFORE "expo-notifications" in the plugins array.
  *
  * Impact:
  *   - Remote/push notifications will NOT work (intentional).

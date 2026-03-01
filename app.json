@@ -64,8 +64,8 @@
         }
       ],
       "expo-font",
-      "expo-notifications",
-      "./plugins/strip-push-entitlement"
+      "./plugins/strip-push-entitlement",
+      "expo-notifications"
     ],
     "extra": {
       "router": {},
