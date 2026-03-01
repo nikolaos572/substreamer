@@ -12,12 +12,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TouchableOpacity } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import DraggableFlatList, {
   ScaleDecorator,
+  ShadowDecorator,
   type RenderItemParams,
   type DragEndParams,
 } from 'react-native-draggable-flatlist';
@@ -263,20 +263,19 @@ export function PlaylistDetailScreen() {
   /* ---- Edit-mode renderItem ---- */
 
   const renderEditItem = useCallback(
-    ({ item, getIndex, drag, isActive }: RenderItemParams<Child>) => {
+    ({ item, getIndex, drag }: RenderItemParams<Child>) => {
       const index = getIndex() ?? 0;
       const rightActions: SwipeAction[] = [
         { icon: 'trash-outline', color: colors.red, label: 'Remove', onPress: () => handleDeleteTrack(index), removesRow: true },
       ];
       return (
         <ScaleDecorator activeScale={1.03}>
-          <SwipeableRow rightActions={rightActions} enableFullSwipeRight>
-            <TouchableOpacity onLongPress={drag} delayLongPress={200} disabled={isActive} activeOpacity={0.7}>
+          <ShadowDecorator>
+            <SwipeableRow rightActions={rightActions} enableFullSwipeRight>
               <View
                 style={[
                   styles.editRow,
                   { borderBottomColor: colors.border, backgroundColor: colors.background },
-                  isActive && { backgroundColor: colors.card, borderRadius: 8 },
                 ]}
               >
                 <CachedImage
@@ -301,12 +300,12 @@ export function PlaylistDetailScreen() {
                   </Text>
                 </View>
 
-                <View style={styles.editDragHandle}>
-                  <Ionicons name="reorder-three" size={24} color={colors.textSecondary} />
-                </View>
+                <Pressable onPressIn={drag} hitSlop={8} style={styles.editDragHandle}>
+                  <Ionicons name="reorder-three" size={28} color={colors.textSecondary} />
+                </Pressable>
               </View>
-            </TouchableOpacity>
-          </SwipeableRow>
+            </SwipeableRow>
+          </ShadowDecorator>
         </ScaleDecorator>
       );
     },
@@ -643,9 +642,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   editDragHandle: {
-    width: 44,
+    width: 48,
+    alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
   },
 });

@@ -9,9 +9,9 @@ import {
   Text,
   View,
 } from 'react-native';
-import { TouchableOpacity } from 'react-native-gesture-handler';
 import DraggableFlatList, {
   ScaleDecorator,
+  ShadowDecorator,
   type DragEndParams,
   type RenderItemParams,
 } from 'react-native-draggable-flatlist';
@@ -114,14 +114,12 @@ const QueueRow = memo(function QueueRow({
   item,
   colors,
   drag,
-  isActive,
   onRemove,
   onRetry,
 }: {
   item: DownloadQueueItem;
   colors: ReturnType<typeof useTheme>['colors'];
   drag?: () => void;
-  isActive: boolean;
   onRemove: (queueId: string) => void;
   onRetry: (queueId: string) => void;
 }) {
@@ -153,96 +151,83 @@ const QueueRow = memo(function QueueRow({
     [colors.red, handleRemove],
   );
 
-  const row = (
-    <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={styles.thumbWrap}>
-        <CachedImage
-          coverArtId={item.coverArtId}
-          size={300}
-          style={[styles.thumb, { backgroundColor: colors.border }]}
-          resizeMode="cover"
-        />
-        {isDownloading && (
-          <View style={styles.spinnerOverlay}>
-            <ActivityIndicator size="small" color={colors.primary} style={{ opacity: 1 }} />
-          </View>
-        )}
-      </View>
-      <View style={styles.rowContent}>
-        <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-          {item.name}
-        </Text>
-        {item.artist && (
-          <Text style={[styles.rowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            {item.artist}
-          </Text>
-        )}
-
-        {isDownloading && (
-          <View style={styles.progressSection}>
-            <Text style={[styles.progressText, { color: colors.textSecondary }]}>
-              {item.completedTracks} of {item.totalTracks} tracks
-            </Text>
-            <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
-              {progress > 0 && (
-                <Animated.View
-                  style={[styles.progressSegment, { backgroundColor: colors.primary }, fillStyle]}
-                />
-              )}
-              <Animated.View
-                style={[styles.progressSegment, { backgroundColor: colors.inputBg }, freeStyle]}
-              />
-            </View>
-          </View>
-        )}
-
-        {isQueued && (
-          <Text style={[styles.statusText, { color: colors.textSecondary }]}>
-            {item.totalTracks} {item.totalTracks === 1 ? 'track' : 'tracks'} · Queued
-          </Text>
-        )}
-
-        {isError && (
-          <Text style={[styles.statusText, { color: colors.red }]}>
-            {item.error ?? 'Download failed'}
-          </Text>
-        )}
-      </View>
-
-      {isQueued && (
-        <View style={styles.dragHandle}>
-          <Ionicons name="reorder-three" size={24} color={colors.textSecondary} />
-        </View>
-      )}
-
-      {isError && (
-        <Pressable
-          onPress={() => onRetry(item.queueId)}
-          hitSlop={8}
-          style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
-        >
-          <Ionicons name="refresh" size={20} color={colors.primary} />
-        </Pressable>
-      )}
-    </View>
-  );
-
   return (
     <ScaleDecorator activeScale={1.03}>
-      <SwipeableRow rightActions={rightActions} enableFullSwipeRight>
-        {isQueued && drag ? (
-          <TouchableOpacity
-            onLongPress={drag}
-            delayLongPress={200}
-            disabled={isActive}
-            activeOpacity={0.7}
-          >
-            {row}
-          </TouchableOpacity>
-        ) : (
-          row
-        )}
-      </SwipeableRow>
+      <ShadowDecorator>
+        <SwipeableRow rightActions={rightActions} enableFullSwipeRight>
+          <View style={[styles.row, { borderBottomColor: colors.border }]}>
+            <View style={styles.thumbWrap}>
+              <CachedImage
+                coverArtId={item.coverArtId}
+                size={300}
+                style={[styles.thumb, { backgroundColor: colors.border }]}
+                resizeMode="cover"
+              />
+              {isDownloading && (
+                <View style={styles.spinnerOverlay}>
+                  <ActivityIndicator size="small" color={colors.primary} style={{ opacity: 1 }} />
+                </View>
+              )}
+            </View>
+            <View style={styles.rowContent}>
+              <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                {item.name}
+              </Text>
+              {item.artist && (
+                <Text style={[styles.rowSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {item.artist}
+                </Text>
+              )}
+
+              {isDownloading && (
+                <View style={styles.progressSection}>
+                  <Text style={[styles.progressText, { color: colors.textSecondary }]}>
+                    {item.completedTracks} of {item.totalTracks} tracks
+                  </Text>
+                  <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
+                    {progress > 0 && (
+                      <Animated.View
+                        style={[styles.progressSegment, { backgroundColor: colors.primary }, fillStyle]}
+                      />
+                    )}
+                    <Animated.View
+                      style={[styles.progressSegment, { backgroundColor: colors.inputBg }, freeStyle]}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {isQueued && (
+                <Text style={[styles.statusText, { color: colors.textSecondary }]}>
+                  {item.totalTracks} {item.totalTracks === 1 ? 'track' : 'tracks'} · Queued
+                </Text>
+              )}
+
+              {isError && (
+                <Text style={[styles.statusText, { color: colors.red }]}>
+                  {item.error ?? 'Download failed'}
+                </Text>
+              )}
+            </View>
+
+            {isQueued && drag && (
+              <Pressable onPressIn={drag} hitSlop={8} style={styles.dragHandle}>
+                <Ionicons name="reorder-three" size={28} color={colors.textSecondary} />
+              </Pressable>
+            )}
+
+            {isError && (
+              <Pressable
+                onPress={() => onRetry(item.queueId)}
+                hitSlop={8}
+                style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
+              >
+                <Ionicons name="refresh" size={20} color={colors.primary} />
+              </Pressable>
+            )}
+          </View>
+        </SwipeableRow>
+      </ShadowDecorator>
     </ScaleDecorator>
   );
 });
@@ -374,12 +359,11 @@ export function DownloadQueueScreen() {
   /* ---- Render ---- */
 
   const renderItem = useCallback(
-    ({ item, drag, isActive }: RenderItemParams<DownloadQueueItem>) => (
+    ({ item, drag }: RenderItemParams<DownloadQueueItem>) => (
       <QueueRow
         item={item}
         colors={colors}
         drag={item.status === 'queued' ? drag : undefined}
-        isActive={isActive}
         onRemove={handleRemove}
         onRetry={handleRetry}
       />
@@ -545,8 +529,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   dragHandle: {
-    marginLeft: 12,
-    padding: 4,
+    width: 48,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   retryButton: {
     marginLeft: 12,
