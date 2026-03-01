@@ -1,5 +1,10 @@
 # Changelog
 
+## [8.0.12] - 2026-03-01
+
+- android: expo-fs-async missing deps
+- android: expo-fs-async fix for missing dependencies. Also remove unnecessarily committed build artefects
+- remove expo-notifications from app.json as it always enables push notifications and I only want and use local.
 ## [8.0.11] - 2026-03-01
 
 - keyboard: better keyboard behaviour on search inputs
