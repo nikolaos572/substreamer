@@ -204,12 +204,13 @@ public class AudioPlayer: AVPlayerWrapperDelegate {
             currentItem = item
 
             if (automaticallyUpdateNowPlayingInfo) {
-                // Reset playback values without updating, because that will happen in
-                // the loadNowPlayingMetaValues call straight after:
+                // Seed playback values with the track's metadata duration so the
+                // Control Center progress bar is visible immediately, before
+                // AVPlayer resolves the asset duration.
                 nowPlayingInfoController.setWithoutUpdate(keyValues: [
-                    MediaItemProperty.duration(nil),
-                    NowPlayingInfoProperty.playbackRate(nil),
-                    NowPlayingInfoProperty.elapsedPlaybackTime(nil)
+                    MediaItemProperty.duration(item.getDuration()),
+                    NowPlayingInfoProperty.playbackRate(0),
+                    NowPlayingInfoProperty.elapsedPlaybackTime(0)
                 ])
                 loadNowPlayingMetaValues()
             }
@@ -334,8 +335,12 @@ public class AudioPlayer: AVPlayerWrapperDelegate {
      - Playback rate
      */
     func updateNowPlayingPlaybackValues() {
+        var dur = wrapper.duration
+        if dur <= 0, let metaDur = currentItem?.getDuration(), metaDur > 0 {
+            dur = metaDur
+        }
         nowPlayingInfoController.set(keyValues: [
-            MediaItemProperty.duration(wrapper.duration),
+            MediaItemProperty.duration(dur),
             NowPlayingInfoProperty.playbackRate(wrapper.playWhenReady ? Double(wrapper.rate) : 0),
             NowPlayingInfoProperty.elapsedPlaybackTime(wrapper.currentTime)
         ])
@@ -414,6 +419,9 @@ public class AudioPlayer: AVPlayerWrapperDelegate {
     }
 
     func AVWrapper(didUpdateDuration duration: Double) {
+        if automaticallyUpdateNowPlayingInfo {
+            updateNowPlayingPlaybackValues()
+        }
         event.updateDuration.emit(data: duration)
     }
     
