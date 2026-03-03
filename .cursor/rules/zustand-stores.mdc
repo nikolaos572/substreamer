@@ -101,6 +101,9 @@ albumListsStore.getState().refreshAll();
 | `shareSettingsStore` | Yes | Share expiration/download settings |
 | `sharesStore` | Yes | Server shares list |
 | `storageLimitStore` | Yes | Storage usage limit tracking |
+| `ratingStore` | Yes | Optimistic rating overrides synced with server |
+| `mbidOverrideStore` | Yes | Manual MusicBrainz ID overrides per artist |
+| `backupStore` | Yes | Auto-backup toggle and last backup timestamp |
 | `playerStore` | No | Current track, queue, playback position |
 | `searchStore` | No | Search query and results |
 | `migrationStore` | No | Migration version tracking |
@@ -112,6 +115,8 @@ albumListsStore.getState().refreshAll();
 | `moreOptionsStore` | No | More-options sheet state |
 | `playbackToastStore` | No | Playback toast overlay state |
 | `processingOverlayStore` | No | Processing overlay state |
+| `setRatingStore` | No | Set-rating sheet state |
+| `mbidSearchStore` | No | MBID search sheet state |
 
 ## Cross-Store Subscriptions
 

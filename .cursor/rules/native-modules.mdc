@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Local Expo Native Modules
 
-Custom native functionality lives in `modules/` as local Expo modules. Follow the existing `expo-ssl-trust` and `expo-async-fs` modules as reference.
+Custom native functionality lives in `modules/` as local Expo modules. Current modules: `expo-async-fs`, `expo-ssl-trust`, `expo-gzip`, `expo-backup-exclusions`, and a local fork of `react-native-track-player`. Follow existing modules as reference.
 
 ## Directory Structure
 
@@ -48,13 +48,16 @@ A local module requires **three** registration steps or Metro/native builds will
 }
 ```
 
-3. **Root `package.json`** -- **critical**: add both a dependency entry AND a doctor exclusion:
+3. **Root `package.json`** -- **critical**: add a dependency entry, a doctor exclusion, **and** an install exclusion (prevents `expo install` from overwriting the local version):
 ```json
 {
   "dependencies": {
     "{module-name}": "file:./modules/{module-name}"
   },
   "expo": {
+    "install": {
+      "exclude": ["{module-name}"]
+    },
     "doctor": {
       "reactNativeDirectoryCheck": {
         "exclude": ["{module-name}"]

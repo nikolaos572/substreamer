@@ -111,6 +111,21 @@ export async function getAlbum(albumId: string): Promise<AlbumWithSongsID3 | nul
 - Orchestrates actions triggered from the more-options bottom sheet (e.g. add to playlist, share, delete).
 - Bridges between `moreOptionsStore` and the relevant stores/services for each action.
 
+## Backup Service (`backupService.ts`)
+
+- Creates, lists, restores, and prunes compressed backups of scrobble history and MBID overrides.
+- Backup files are gzip-compressed via `expo-gzip` and stored in `Paths.document/backups/`.
+- Each backup produces a `.meta.json` manifest plus `.scrobbles.gz` and/or `.mbid.gz` data files.
+- `runAutoBackupIfNeeded()` runs on launch — creates a backup if auto-backup is enabled and >24h since the last one, then prunes to keep the 5 most recent.
+- Cleans up orphaned `.tmp` files and data files missing their manifest on startup.
+
+## Download Speed Tracker (`downloadSpeedTracker.ts`)
+
+- Tracks real-time aggregate download speed across all concurrent music downloads.
+- Listens to native progress events from `expo-async-fs` via a global listener registered at module import.
+- Uses a 10-second rolling window of byte deltas for smoothed speed calculation.
+- Exports `getDownloadSpeed()` (bytes/sec), `getActiveDownloadCount()`, `beginDownload(id)`, and `clearDownload(id)`.
+
 ## Export Scoping
 
 Only export functions and types that are consumed by other modules. Keep internal helpers, intermediate types, and implementation details module-private:
