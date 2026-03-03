@@ -98,7 +98,6 @@ export const TrackRow = memo(function TrackRow({ track, trackNumber, colors, onP
       leftActions={leftActions}
       enableFullSwipeRight
       enableFullSwipeLeft={!offlineMode}
-      actionPanelBackground="transparent"
       onLongPress={handleLongPress}
       onPress={onPress}
     >
@@ -175,7 +174,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 80,
     paddingVertical: 18,
-    paddingHorizontal: 0,
+    paddingHorizontal: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   trackLeft: {

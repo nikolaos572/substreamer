@@ -44,6 +44,7 @@ export const PlaylistRow = memo(function PlaylistRow({ playlist }: { playlist: P
     <SwipeableRow
       rightActions={rightActions}
       enableFullSwipeRight
+      rowGap={8}
       onLongPress={handleLongPress}
       onPress={onPress}
     >
@@ -82,8 +83,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
   },
   cover: {
     width: 56,

@@ -57,6 +57,7 @@ export const ArtistRow = memo(function ArtistRow({ artist }: { artist: ArtistID3
     <SwipeableRow
       leftActions={leftActions}
       enableFullSwipeLeft={!offlineMode}
+      rowGap={8}
       onLongPress={handleLongPress}
       onPress={onPress}
     >
@@ -94,8 +95,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
   },
   cover: {
     width: 56,

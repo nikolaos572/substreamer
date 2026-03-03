@@ -79,6 +79,7 @@ export const SongRow = memo(function SongRow({ song, onPress }: { song: Child; o
       leftActions={leftActions}
       enableFullSwipeRight
       enableFullSwipeLeft={!offlineMode}
+      rowGap={8}
       onLongPress={handleLongPress}
       onPress={onPress}
     >
@@ -134,8 +135,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
   },
   cover: {
     width: 56,

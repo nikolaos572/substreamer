@@ -17,7 +17,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from '@/utils/haptics';
-import { memo, useCallback, useRef } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, {
@@ -78,8 +78,10 @@ export interface SwipeableRowProps {
   enableFullSwipeRight?: boolean;
   /** Full swipe left auto-triggers the outermost (last) leftAction. */
   enableFullSwipeLeft?: boolean;
-  /** Override the action panel background color (defaults to theme background). */
-  actionPanelBackground?: string;
+  /** Corner radius for the sliding content card (matches the row content's radius). */
+  borderRadius?: number;
+  /** Vertical spacing below the row, applied outside the rounded content area. */
+  rowGap?: number;
   /** Called when a long-press gesture activates. */
   onLongPress?: () => void;
   /** Called when the row is tapped. */
@@ -110,7 +112,8 @@ export const SwipeableRow = memo(function SwipeableRow({
   leftActions = [],
   enableFullSwipeRight = false,
   enableFullSwipeLeft = false,
-  actionPanelBackground,
+  borderRadius = 16,
+  rowGap = 0,
   onLongPress,
   onPress,
   children,
@@ -126,6 +129,7 @@ export const SwipeableRow = memo(function SwipeableRow({
   // SharedValues for UI-thread operations (haptic, icon pop) – race-free
   const fullSwipeRightTriggered = useSharedValue(false);
   const fullSwipeLeftTriggered = useSharedValue(false);
+  const dragProgress = useSharedValue(0);
 
   // JS refs for JS-thread reads (callbacks) – set via runOnJS to guarantee ordering
   const fullSwipeRightRef = useRef(false);
@@ -222,6 +226,10 @@ export const SwipeableRow = memo(function SwipeableRow({
     opacity: pressOpacity.value,
   }));
 
+  const swipeBgStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(dragProgress.value, [0, 0.5, 1], [0, 1, 1], 'clamp'),
+  }));
+
   const handlePress = useCallback(() => {
     if (isOpenRef.current) {
       swipeableRef.current?.close();
@@ -247,8 +255,6 @@ export const SwipeableRow = memo(function SwipeableRow({
   const effectiveFriction = hasFullSwipe ? 1.5 : 2;
   const effectiveOvershootFriction = hasFullSwipe ? 1 : 8;
 
-  const panelBg = actionPanelBackground ?? colors.background;
-
   // renderLeftActions = shown when swiping RIGHT = our rightActions
   // Outermost action is index 0 (left edge of screen).
   const renderLeftPanel = useCallback(
@@ -260,7 +266,7 @@ export const SwipeableRow = memo(function SwipeableRow({
       <ActionPanel
         actions={rightActions}
         progress={progress}
-        bgColor={panelBg}
+        dragProgress={dragProgress}
         methods={methods}
         enableFullSwipe={enableFullSwipeRight}
         fullSwipeActionIndex={0}
@@ -268,7 +274,7 @@ export const SwipeableRow = memo(function SwipeableRow({
         onFullSwipeChange={setFullSwipeRight}
       />
     ),
-    [rightActions, panelBg, enableFullSwipeRight, fullSwipeRightTriggered, setFullSwipeRight],
+    [rightActions, dragProgress, enableFullSwipeRight, fullSwipeRightTriggered, setFullSwipeRight],
   );
 
   // renderRightActions = shown when swiping LEFT = our leftActions
@@ -282,7 +288,7 @@ export const SwipeableRow = memo(function SwipeableRow({
       <ActionPanel
         actions={leftActions}
         progress={progress}
-        bgColor={panelBg}
+        dragProgress={dragProgress}
         methods={methods}
         enableFullSwipe={enableFullSwipeLeft}
         fullSwipeActionIndex={leftActions.length - 1}
@@ -290,7 +296,20 @@ export const SwipeableRow = memo(function SwipeableRow({
         onFullSwipeChange={setFullSwipeLeft}
       />
     ),
-    [leftActions, panelBg, enableFullSwipeLeft, fullSwipeLeftTriggered, setFullSwipeLeft],
+    [leftActions, dragProgress, enableFullSwipeLeft, fullSwipeLeftTriggered, setFullSwipeLeft],
+  );
+
+  const swipeContainerStyle = useMemo(
+    () => ({
+      backgroundColor: 'transparent' as const,
+      marginBottom: rowGap || undefined,
+    }),
+    [rowGap],
+  );
+
+  const childrenContainerStyle = useMemo(
+    () => ({ borderRadius, overflow: 'hidden' as const }),
+    [borderRadius],
   );
 
   return (
@@ -308,6 +327,8 @@ export const SwipeableRow = memo(function SwipeableRow({
       onSwipeableWillOpen={handleSwipeableWillOpen}
       onSwipeableOpen={handleSwipeableOpen}
       onSwipeableClose={handleSwipeableClose}
+      containerStyle={swipeContainerStyle}
+      childrenContainerStyle={childrenContainerStyle}
     >
       <Pressable
         onPress={handlePress}
@@ -317,6 +338,9 @@ export const SwipeableRow = memo(function SwipeableRow({
         delayLongPress={400}
       >
         <Animated.View style={pressedStyle}>
+          <Animated.View
+            style={[styles.swipeBg, { backgroundColor: colors.inputBg }, swipeBgStyle]}
+          />
           {children}
         </Animated.View>
       </Pressable>
@@ -331,7 +355,7 @@ export const SwipeableRow = memo(function SwipeableRow({
 interface ActionPanelProps {
   actions: SwipeAction[];
   progress: SharedValue<number>;
-  bgColor: string;
+  dragProgress: SharedValue<number>;
   methods: SwipeableMethods;
   enableFullSwipe: boolean;
   /** Which action index receives the pop animation on full swipe. */
@@ -343,7 +367,7 @@ interface ActionPanelProps {
 function ActionPanel({
   actions,
   progress,
-  bgColor,
+  dragProgress,
   methods,
   enableFullSwipe,
   fullSwipeActionIndex,
@@ -351,6 +375,13 @@ function ActionPanel({
   onFullSwipeChange,
 }: ActionPanelProps) {
   const iconPopScale = useSharedValue(1);
+
+  useAnimatedReaction(
+    () => progress.value,
+    (current) => {
+      dragProgress.value = current;
+    },
+  );
 
   useAnimatedReaction(
     () => progress.value,
@@ -383,7 +414,7 @@ function ActionPanel({
   );
 
   return (
-    <View style={[styles.actionPanel, { backgroundColor: bgColor }]}>
+    <View style={styles.actionPanel}>
       {actions.map((action, index) => (
         <ActionButton
           key={index}
@@ -454,6 +485,9 @@ const ActionButton = memo(function ActionButton({
 /* ------------------------------------------------------------------ */
 
 const styles = StyleSheet.create({
+  swipeBg: {
+    ...StyleSheet.absoluteFillObject,
+  },
   actionPanel: {
     flexDirection: 'row',
     alignItems: 'center',
