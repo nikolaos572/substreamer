@@ -1,5 +1,11 @@
 # Changelog
 
+## [8.0.17] - 2026-03-03
+
+- UI: clean up on the storage settings page a bit.
+- backup: backup data only stored locally to the platform native cloud service. Add auto backup functionality to the app Add manual backup function Add restore function Backups up playback history and MBID overrides for artists
+- download icon: remaining percentage should be solid colour not dimmed for visibility
+- music download: change download screen title
 ## [8.0.16] - 2026-03-03
 
 - list views: fix empty list on offline/online switch. fix incorrect list position on filter disable
