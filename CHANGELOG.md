@@ -1,5 +1,15 @@
 # Changelog
 
+## [8.0.15] - 2026-03-03
+
+- expo: update to SDK55
+- list items: background on content when swiping
+- player: set some defaults for audio category and interruption handling. fix contradictory min/max buffer for android
+- RNTP: user supplied duration param does not pass through to the native audio item in SwiftAudioEx, results in no progress and no duration/progress times in remote controls
+- 5 star rating: save button should be save, not done.
+- 5 star rating: enable setting and displaying 5 star ratings for songs, albums, artists.  Limited to navidrome currently as not all servers return userRating on all items like navidrome does.
+- MBID: search and override for mismatched artists.  Closes #12
+- player: seek when paused  progress bar now updates to the correct post seek position
 ## [8.0.14] - 2026-03-01
 
 - expo-notifications: try again to strip the push capability and entitlement that we don't need
