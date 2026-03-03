@@ -8,7 +8,6 @@ import TrackPlayer, {
   Capability,
   Event,
   IOSCategory,
-  IOSCategoryOptions,
   RepeatMode,
   State,
   type Track,
@@ -274,7 +273,6 @@ export async function initPlayer(): Promise<void> {
       // maxBuffer is Android-only (ExoPlayer); must be >= minBuffer.
       maxBuffer: 86400,
       iosCategory: IOSCategory.Playback,
-      iosCategoryOptions: [IOSCategoryOptions.DuckOthers],
       autoHandleInterruptions: true,
     });
   } catch {
