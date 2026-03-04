@@ -52,6 +52,7 @@ class MediaFactory (
         return mediaFactory.supportedTypes
     }
 
+    @Suppress("DEPRECATION", "UNCHECKED_CAST")
     override fun createMediaSource(mediaItem: MediaItem): MediaSource {
 
         val userAgent = mediaItem.mediaMetadata.extras?.getString("user-agent") ?: DEFAULT_USER_AGENT
@@ -61,7 +62,6 @@ class MediaFactory (
             mediaItem.mediaMetadata.extras?.getSerializable("headers")
         }
         val resourceId = mediaItem.mediaMetadata.extras?.getInt("resource-id")
-        // HACK: why are these capitalized?
         val resourceType = mediaItem.mediaMetadata.extras?.getString("type")?.lowercase()
         val uri = Uri.parse(mediaItem.mediaMetadata.extras?.getString("uri")!!)
         val factory: DataSource.Factory = when {

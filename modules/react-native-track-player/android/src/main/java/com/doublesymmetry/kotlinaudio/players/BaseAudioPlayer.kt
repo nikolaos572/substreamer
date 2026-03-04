@@ -1,12 +1,11 @@
 package com.doublesymmetry.kotlinaudio.players
 
 import android.content.Context
+import android.media.AudioAttributes as NativeAudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import androidx.annotation.CallSuper
 import androidx.core.content.ContextCompat
-import androidx.media.AudioAttributesCompat
-import androidx.media.AudioFocusRequestCompat
-import androidx.media.AudioManagerCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
@@ -94,8 +93,11 @@ abstract class BaseAudioPlayer internal constructor(
 
     val duration: Long
         get() {
-            return if (exoPlayer.duration == C.TIME_UNSET) 0
-            else exoPlayer.duration
+            return if (exoPlayer.duration == C.TIME_UNSET) {
+                currentItem?.duration ?: 0
+            } else {
+                exoPlayer.duration
+            }
         }
 
     val isCurrentMediaItemLive: Boolean
@@ -527,70 +529,56 @@ abstract class BaseAudioPlayer internal constructor(
         }
     }
 
-    inner class FocusManager() {
+    inner class FocusManager {
         private var hasAudioFocus = false
-        private var focus: AudioFocusRequestCompat? = null
+        private var focusRequest: AudioFocusRequest? = null
 
         fun requestAudioFocus() {
             if (hasAudioFocus) return
+            val manager = ContextCompat.getSystemService(context, AudioManager::class.java) ?: return
 
-            val manager = ContextCompat.getSystemService(context, AudioManager::class.java)
-
-            focus = AudioFocusRequestCompat.Builder(AudioManagerCompat.AUDIOFOCUS_GAIN)
-                .setOnAudioFocusChangeListener(
-                    { focusChange ->
-                        Timber.d("Audio focus changed")
-                        val isPermanent = focusChange == AudioManager.AUDIOFOCUS_LOSS
-                        val isPaused = when (focusChange) {
-                            AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> true
-                            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> options.alwaysPauseOnInterruption
-                            else -> false
-                        }
-                        if (!options.handleAudioFocus) {
-                            if (isPermanent) focusManager.abandonAudioFocusIfHeld()
-
-                            val isDucking = focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK
-                                    && !options.alwaysPauseOnInterruption
-                            if (isDucking) {
-                                volumeMultiplier = 0.5f
-                                wasDucking = true
-                            } else if (wasDucking) {
-                                volumeMultiplier = 1f
-                                wasDucking = false
-                            }
-                        }
-                        playerEventHolder.updateOnAudioFocusChanged(isPaused, isPermanent)
-                    }
-                )
-                .setAudioAttributes(
-                    AudioAttributesCompat.Builder()
-                        .setUsage(AudioAttributesCompat.USAGE_MEDIA)
-                        .setContentType(AudioAttributesCompat.CONTENT_TYPE_MUSIC)
-                        .build()
-                )
-                .setWillPauseWhenDucked(options.alwaysPauseOnInterruption)
+            val attrs = NativeAudioAttributes.Builder()
+                .setUsage(NativeAudioAttributes.USAGE_MEDIA)
+                .setContentType(NativeAudioAttributes.CONTENT_TYPE_MUSIC)
                 .build()
 
-            val result: Int = if (manager != null && focus != null) {
-                AudioManagerCompat.requestAudioFocus(manager, focus!!)
-            } else {
-                AudioManager.AUDIOFOCUS_REQUEST_FAILED
-            }
+            focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(attrs)
+                .setWillPauseWhenDucked(options.alwaysPauseOnInterruption)
+                .setOnAudioFocusChangeListener { focusChange ->
+                    Timber.d("Audio focus changed")
+                    val isPermanent = focusChange == AudioManager.AUDIOFOCUS_LOSS
+                    val isPaused = when (focusChange) {
+                        AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> true
+                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> options.alwaysPauseOnInterruption
+                        else -> false
+                    }
+                    if (!options.handleAudioFocus) {
+                        if (isPermanent) focusManager.abandonAudioFocusIfHeld()
 
+                        val isDucking = focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK
+                                && !options.alwaysPauseOnInterruption
+                        if (isDucking) {
+                            volumeMultiplier = 0.5f
+                            wasDucking = true
+                        } else if (wasDucking) {
+                            volumeMultiplier = 1f
+                            wasDucking = false
+                        }
+                    }
+                    playerEventHolder.updateOnAudioFocusChanged(isPaused, isPermanent)
+                }
+                .build()
+
+            val result = manager.requestAudioFocus(focusRequest!!)
             hasAudioFocus = (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
         }
 
         fun abandonAudioFocusIfHeld() {
             if (!hasAudioFocus) return
-
-            val manager = ContextCompat.getSystemService(context, AudioManager::class.java)
-
-            val result: Int = if (manager != null && focus != null) {
-                AudioManagerCompat.abandonAudioFocusRequest(manager, focus!!)
-            } else {
-                AudioManager.AUDIOFOCUS_REQUEST_FAILED
-            }
-
+            val manager = ContextCompat.getSystemService(context, AudioManager::class.java) ?: return
+            val result = focusRequest?.let { manager.abandonAudioFocusRequest(it) }
+                ?: AudioManager.AUDIOFOCUS_REQUEST_FAILED
             hasAudioFocus = (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
         }
     }

@@ -11,6 +11,7 @@ data class CustomButton (
     val iconRes: Int = 0,
     val sessionCommand: String? = null,
     val onLayout: Boolean = false,
+    @Suppress("DEPRECATION")
     val commandButton: CommandButton = CommandButton.Builder(CommandButton.ICON_UNDEFINED)
         .setDisplayName(displayName)
         .setIconResId(iconRes)

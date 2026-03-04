@@ -4,7 +4,7 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
-import android.support.v4.media.RatingCompat
+import androidx.media3.session.legacy.RatingCompat
 import com.doublesymmetry.trackplayer.R
 import com.facebook.react.views.imagehelper.ResourceDrawableIdHelper
 import androidx.media3.common.Rating
@@ -17,6 +17,7 @@ import androidx.media3.common.PercentageRating
  * @author Milen Pivchev @mpivchev
  */
 object BundleUtils {
+    @Suppress("DEPRECATION")
     fun getUri(context: Context, data: Bundle?, key: String?): Uri? {
         if (!data!!.containsKey(key)) return null
         val obj = data[key]
@@ -27,8 +28,7 @@ object BundleUtils {
         } else if (obj is Bundle) {
             // require/import
             val uri = obj.getString("uri")
-            val helper = ResourceDrawableIdHelper.getInstance()
-            val id = helper.getResourceDrawableId(context, uri)
+            val id = ResourceDrawableIdHelper.getResourceDrawableId(context, uri)
             return if (id > 0) {
                 // In production, we can obtain the resource uri
                 val res = context.resources
@@ -46,6 +46,7 @@ object BundleUtils {
         return null
     }
 
+    @Suppress("DEPRECATION")
     fun getRawResourceId(context: Context, data: Bundle, key: String?): Int {
         if (!data.containsKey(key)) return 0
         val obj = data[key] as? Bundle ?: return 0
@@ -64,8 +65,7 @@ object BundleUtils {
 
         val bundle = options.getBundle(propertyName) ?: return defaultIcon
 
-        val helper = ResourceDrawableIdHelper.getInstance()
-        val icon = helper.getResourceDrawableId(context, bundle.getString("uri"))
+        val icon = ResourceDrawableIdHelper.getResourceDrawableId(context, bundle.getString("uri"))
         return if (icon == 0) defaultIcon else icon
     }
 
@@ -86,8 +86,7 @@ object BundleUtils {
 
         val bundle = options.getBundle(propertyName) ?: return null
 
-        val helper = ResourceDrawableIdHelper.getInstance()
-        val icon = helper.getResourceDrawableId(context, bundle.getString("uri"))
+        val icon = ResourceDrawableIdHelper.getResourceDrawableId(context, bundle.getString("uri"))
         return if (icon == 0) null else icon
     }
 
@@ -111,6 +110,7 @@ object BundleUtils {
         }
     }
 
+    @Suppress("DEPRECATION")
     fun getInt(data: Bundle?, key: String?, defaultValue: Int): Int {
         val value = data!![key]
         return if (value is Number) {
@@ -118,6 +118,7 @@ object BundleUtils {
         } else defaultValue
     }
 
+    @Suppress("DEPRECATION")
     fun getIntOrNull(data: Bundle?, key: String?): Int? {
         val value = data!![key]
         return if (value is Number) {
@@ -125,6 +126,7 @@ object BundleUtils {
         } else null
     }
 
+    @Suppress("DEPRECATION")
     fun getDoubleOrNull(data: Bundle?, key: String?): Double? {
         val value = data!![key]
         return if (value is Number) {

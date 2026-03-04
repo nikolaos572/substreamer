@@ -27,6 +27,9 @@ open class AudioItem(
             options?.resourceId?.let {
                 putInt("resource-id", it)
             }
+            duration?.let {
+                putLong("duration", it)
+            }
             putString("type", type.toString())
             putString("uri", audioUrl)
         }

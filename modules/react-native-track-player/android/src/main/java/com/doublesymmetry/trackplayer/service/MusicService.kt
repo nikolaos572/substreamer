@@ -13,7 +13,6 @@ import android.provider.Settings
 import android.view.KeyEvent
 import androidx.annotation.MainThread
 import androidx.annotation.OptIn
-import androidx.media.utils.MediaConstants
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -40,7 +39,7 @@ import com.doublesymmetry.trackplayer.model.PlaybackMetadata
 import com.doublesymmetry.trackplayer.model.Track
 import com.doublesymmetry.trackplayer.model.TrackAudioItem
 import com.doublesymmetry.trackplayer.module.MusicEvents
-import com.doublesymmetry.trackplayer.module.MusicEvents.Companion.METADATA_PAYLOAD_KEY
+import com.doublesymmetry.trackplayer.module.MusicEvents.METADATA_PAYLOAD_KEY
 import com.doublesymmetry.trackplayer.utils.BundleUtils
 import com.doublesymmetry.trackplayer.utils.BundleUtils.setRating
 import com.doublesymmetry.trackplayer.utils.CoilBitmapLoader
@@ -107,6 +106,7 @@ class MusicService : HeadlessJsMediaService() {
         mediaSession = MediaLibrarySession.Builder(this, fakePlayer,
             InnerMediaSessionCallback()
         )
+            .setId("TrackPlayer")
             .setBitmapLoader(CacheBitmapLoader(CoilBitmapLoader(this)))
             // https://github.com/androidx/media/issues/1218
             .setSessionActivity(
@@ -796,12 +796,7 @@ class MusicService : HeadlessJsMediaService() {
                 // registers the service being restarted?
                 player.destroy()
                 scope.cancel()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                } else {
-                    @Suppress("DEPRECATION")
-                    stopForeground(true)
-                }
+                stopForeground(STOP_FOREGROUND_REMOVE)
                 onDestroy()
                 // https://github.com/androidx/media/issues/27#issuecomment-1456042326
                 stopSelf()
@@ -831,6 +826,7 @@ class MusicService : HeadlessJsMediaService() {
             activityIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             var activityOptions = ActivityOptions.makeBasic()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                @Suppress("DEPRECATION")
                 activityOptions = activityOptions.setPendingIntentBackgroundActivityStartMode(
                     ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
                 )
@@ -863,6 +859,7 @@ class MusicService : HeadlessJsMediaService() {
         super.onDestroy()
     }
 
+    @Suppress("DEPRECATION")
     fun onMediaKeyEvent(intent: Intent?): Boolean? {
         val keyEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent?.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
@@ -1018,12 +1015,14 @@ class MusicService : HeadlessJsMediaService() {
 
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
-            controller: MediaSession.ControllerInfo
+            controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             emit(MusicEvents.PLAYBACK_RESUME, Bundle().apply {
                 putString("package", controller.packageName)
+                putBoolean("isForPlayback", isForPlayback)
             })
-            return super.onPlaybackResumption(mediaSession, controller)
+            return super.onPlaybackResumption(mediaSession, controller, isForPlayback)
         }
 
         override fun onSetRating(

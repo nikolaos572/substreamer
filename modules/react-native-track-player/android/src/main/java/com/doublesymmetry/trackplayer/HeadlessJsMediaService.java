@@ -20,13 +20,10 @@
  import com.facebook.react.ReactHost;
  import com.facebook.react.bridge.ReactContext;
  import com.facebook.react.bridge.UiThreadUtil;
- import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
  import com.facebook.react.jstasks.HeadlessJsTaskConfig;
  import com.facebook.react.jstasks.HeadlessJsTaskContext;
  import com.facebook.react.jstasks.HeadlessJsTaskEventListener;
- import com.facebook.react.ReactInstanceManager;
  import com.facebook.react.ReactInstanceEventListener;
- import com.facebook.react.ReactNativeHost;
  import com.facebook.react.ReactApplication;
  import java.util.Set;
  import java.util.concurrent.CopyOnWriteArraySet;
@@ -158,22 +155,10 @@
      }
    }
  
-   /**
-    * Get the {@link ReactNativeHost} used by this app. By default, assumes {@link #getApplication()}
-    * is an instance of {@link ReactApplication} and calls {@link
-    * ReactApplication#getReactNativeHost()}. Override this method if your application class does not
-    * implement {@code ReactApplication} or you simply have a different mechanism for storing a
-    * {@code ReactNativeHost}, e.g. as a static field somewhere.
-    */
-   protected ReactNativeHost getReactNativeHost() {
-     return ((ReactApplication) getApplication()).getReactNativeHost();
-   }
-
     /**
      * Get the {@link ReactHost} used by this app. By default, assumes {@link #getApplication()}
      * is an instance of {@link ReactApplication} and calls {@link
      * ReactApplication#getReactHost()}.
-     * This method assumes it is called in new architecture and returns null if not.
      */
     protected ReactHost getReactHost() {
         return ((ReactApplication) getApplication()).getReactHost();
@@ -181,46 +166,23 @@
 
     @SuppressLint("VisibleForTests")
     protected ReactContext getReactContext() {
-        if (DefaultNewArchitectureEntryPoint.getBridgelessEnabled()) {
-            ReactHost reactHost = getReactHost();
-            Assertions.assertNotNull(reactHost, "React host is null in newArchitecture");
-            return reactHost.getCurrentReactContext();
-        }
-
-        final ReactInstanceManager reactInstanceManager =
-                getReactNativeHost().getReactInstanceManager();
-        return reactInstanceManager.getCurrentReactContext();
+        ReactHost reactHost = getReactHost();
+        Assertions.assertNotNull(reactHost, "ReactHost is null");
+        return reactHost.getCurrentReactContext();
     }
 
-
     private void createReactContextAndScheduleTask(final HeadlessJsTaskConfig taskConfig) {
-
-        if (DefaultNewArchitectureEntryPoint.getBridgelessEnabled()) { // new arch
-            final ReactHost reactHost = getReactHost();
-            reactHost.addReactInstanceEventListener(
-                    new ReactInstanceEventListener() {
-                        @Override
-                        public void onReactContextInitialized(@NonNull ReactContext reactContext) {
-                            invokeStartTask(reactContext, taskConfig);
-                            reactHost.removeReactInstanceEventListener(this);
-                        }
+        final ReactHost reactHost = getReactHost();
+        reactHost.addReactInstanceEventListener(
+                new ReactInstanceEventListener() {
+                    @Override
+                    public void onReactContextInitialized(@NonNull ReactContext reactContext) {
+                        invokeStartTask(reactContext, taskConfig);
+                        reactHost.removeReactInstanceEventListener(this);
                     }
-            );
-            reactHost.start();
-        } else { // old arch
-            final ReactInstanceManager reactInstanceManager =
-                    getReactNativeHost().getReactInstanceManager();
-
-            reactInstanceManager.addReactInstanceEventListener(
-                    new ReactInstanceEventListener() {
-                        @Override
-                        public void onReactContextInitialized(@NonNull ReactContext reactContext) {
-                            invokeStartTask(reactContext, taskConfig);
-                            reactInstanceManager.removeReactInstanceEventListener(this);
-                        }
-                    });
-            reactInstanceManager.createReactContextInBackground();
-        }
+                }
+        );
+        reactHost.start();
     }
  }
  

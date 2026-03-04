@@ -2,21 +2,14 @@ package com.doublesymmetry.trackplayer.module
 
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.module.annotations.ReactModule
-import android.annotation.SuppressLint
 import android.content.*
-import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.net.Uri
-import android.support.v4.media.RatingCompat
-import androidx.media3.common.MediaItem
-import androidx.media.utils.MediaConstants
-import androidx.media3.common.MediaMetadata
+import androidx.media3.session.legacy.RatingCompat
 import com.doublesymmetry.kotlinaudio.models.Capability
 import com.doublesymmetry.kotlinaudio.models.RepeatMode
 import com.doublesymmetry.trackplayer.model.State
 import com.doublesymmetry.trackplayer.model.Track
-import com.doublesymmetry.trackplayer.module.MusicEvents.Companion.EVENT_INTENT
 import com.doublesymmetry.trackplayer.service.MusicService
 import com.doublesymmetry.trackplayer.utils.AppForegroundTracker
 import com.doublesymmetry.trackplayer.utils.RejectionException
@@ -187,7 +180,6 @@ class MusicModule(reactContext: ReactApplicationContext) : NativeTrackPlayerSpec
         }
     }
 
-    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     override fun setupPlayer(data: ReadableMap?, promise: Promise) {
         if (isServiceBound) {
             promise.reject(
@@ -201,18 +193,6 @@ class MusicModule(reactContext: ReactApplicationContext) : NativeTrackPlayerSpec
 
         playerSetUpPromise = promise
         playerOptions = bundledData
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(
-                MusicEvents(context),
-                IntentFilter(EVENT_INTENT), Context.RECEIVER_NOT_EXPORTED
-            )
-        } else {
-            context.registerReceiver(
-                MusicEvents(context),
-                IntentFilter(EVENT_INTENT)
-            )
-        }
 
         val musicModule = this
         try {
