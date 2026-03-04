@@ -113,7 +113,6 @@ export default function AnimatedSplashScreen({ onFinish }: Props) {
   const { container, logo } = BootSplash.useHideAnimation({
     manifest: require('../../assets/bootsplash/manifest.json'),
     logo: require('../../assets/bootsplash/logo.png'),
-    navigationBarTranslucent: true,
 
     animate: () => {
       logoImageOpacity.value = 0;
