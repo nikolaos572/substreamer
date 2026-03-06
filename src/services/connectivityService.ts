@@ -1,4 +1,5 @@
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
+import { AppState, type NativeEventSubscription } from 'react-native';
 
 import { connectivityStore } from '../store/connectivityStore';
 import { getApi } from './subsonicService';
@@ -9,6 +10,7 @@ const PING_TIMEOUT_MS = 5_000;
 const RECONNECTED_DISPLAY_MS = 2_500;
 
 let unsubscribeNetInfo: (() => void) | null = null;
+let appStateSubscription: NativeEventSubscription | null = null;
 let pingTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectedTimer: ReturnType<typeof setTimeout> | null = null;
 let initialCheck = true;
@@ -52,12 +54,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 async function pingServer(): Promise<void> {
   if (pingInFlight) return;
 
-  const { isInternetReachable } = connectivityStore.getState();
-  if (!isInternetReachable) {
-    handleServerResult(false);
-    return;
-  }
-
   const api = getApi();
   if (!api) {
     schedulePing();
@@ -81,6 +77,10 @@ function handleServerResult(reachable: boolean): void {
 
   store.setServerReachable(reachable);
 
+  if (reachable) {
+    store.setInternetReachable(true);
+  }
+
   if (reachable && !wasReachable && !initialCheck) {
     clearReconnectedTimer();
     store.setBannerState('reconnected');
@@ -98,29 +98,12 @@ function handleServerResult(reachable: boolean): void {
 
 function handleNetInfoChange(state: NetInfoState): void {
   const reachable = state.isInternetReachable ?? true;
-  const airplaneMode = state.type === 'none' && state.isConnected === false;
-  const store = connectivityStore.getState();
-  const wasReachable = store.isInternetReachable;
+  connectivityStore.getState().setInternetReachable(reachable);
 
-  store.setInternetReachable(reachable);
-  store.setAirplaneMode(airplaneMode);
-
-  if (!reachable) {
-    clearReconnectedTimer();
-    store.setServerReachable(false);
-    store.setBannerState('unreachable');
+  // NetInfo change is a hint — trigger an immediate ping for fast response.
+  // The ping result is the ground truth for server reachability.
+  if (!pingInFlight) {
     clearPingTimer();
-    return;
-  }
-
-  if (!wasReachable && reachable) {
-    clearPingTimer();
-    pingServer();
-    return;
-  }
-
-  // NetInfo fires immediately on subscribe — avoid duplicate with startMonitoring's ping
-  if (pingTimer == null && !pingInFlight) {
     pingServer();
   }
 }
@@ -131,10 +114,14 @@ export function startMonitoring(): void {
   initialCheck = true;
   pingInFlight = false;
 
-  // NetInfo fires immediately on subscribe, which may trigger a ping.
-  // We let that initial event handle the first ping rather than calling
-  // pingServer() separately to avoid duplicates.
   unsubscribeNetInfo = NetInfo.addEventListener(handleNetInfoChange);
+
+  appStateSubscription = AppState.addEventListener('change', (next) => {
+    if (next === 'active') {
+      clearPingTimer();
+      pingServer();
+    }
+  });
 }
 
 export function stopMonitoring(): void {
@@ -142,13 +129,16 @@ export function stopMonitoring(): void {
     unsubscribeNetInfo();
     unsubscribeNetInfo = null;
   }
+  if (appStateSubscription) {
+    appStateSubscription.remove();
+    appStateSubscription = null;
+  }
   clearPingTimer();
   clearReconnectedTimer();
 
   const store = connectivityStore.getState();
   store.setInternetReachable(true);
   store.setServerReachable(true);
-  store.setAirplaneMode(false);
   store.setBannerState('hidden');
   initialCheck = true;
   pingInFlight = false;
