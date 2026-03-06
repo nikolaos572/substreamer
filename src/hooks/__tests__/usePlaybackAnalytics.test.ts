@@ -11,6 +11,10 @@ function ts(year: number, month: number, day: number): number {
   return Date.UTC(year, month - 1, day, 12, 0, 0);
 }
 
+function localTs(year: number, month: number, day: number, hour = 12, minute = 0): number {
+  return new Date(year, month - 1, day, hour, minute, 0).getTime();
+}
+
 const mockSong = (id: string, artist: string, album: string, duration = 180) =>
   ({ id, artist, album, duration } as ScrobbleRecord['song']);
 
@@ -108,6 +112,64 @@ describe('computeStreaks', () => {
         { time: ts(2025, 1, 14) },
       ]),
     ).toEqual({ longest: 3, current: 3 });
+  });
+
+  it('is not broken by DST spring-forward (23h between midnights)', () => {
+    jest.setSystemTime(new Date(2025, 2, 11, 12, 0));
+    expect(
+      computeStreaks([
+        { time: localTs(2025, 3, 8, 22) },
+        { time: localTs(2025, 3, 9, 1) },
+        { time: localTs(2025, 3, 10, 3) },
+        { time: localTs(2025, 3, 11, 10) },
+      ]),
+    ).toEqual({ longest: 4, current: 4 });
+  });
+
+  it('is not broken by DST fall-back (25h between midnights)', () => {
+    jest.setSystemTime(new Date(2025, 10, 4, 12, 0));
+    expect(
+      computeStreaks([
+        { time: localTs(2025, 11, 1, 23) },
+        { time: localTs(2025, 11, 2, 1) },
+        { time: localTs(2025, 11, 3, 22) },
+        { time: localTs(2025, 11, 4, 10) },
+      ]),
+    ).toEqual({ longest: 4, current: 4 });
+  });
+
+  it('handles streaks across month boundaries', () => {
+    jest.setSystemTime(new Date(2025, 1, 2, 12, 0));
+    expect(
+      computeStreaks([
+        { time: localTs(2025, 1, 30) },
+        { time: localTs(2025, 1, 31) },
+        { time: localTs(2025, 2, 1) },
+        { time: localTs(2025, 2, 2) },
+      ]),
+    ).toEqual({ longest: 4, current: 4 });
+  });
+
+  it('handles streaks across year boundaries', () => {
+    jest.setSystemTime(new Date(2025, 0, 2, 12, 0));
+    expect(
+      computeStreaks([
+        { time: localTs(2024, 12, 30) },
+        { time: localTs(2024, 12, 31) },
+        { time: localTs(2025, 1, 1) },
+        { time: localTs(2025, 1, 2) },
+      ]),
+    ).toEqual({ longest: 4, current: 4 });
+  });
+
+  it('treats late-night and early-morning scrobbles as separate days', () => {
+    jest.setSystemTime(new Date(2025, 0, 15, 12, 0));
+    expect(
+      computeStreaks([
+        { time: localTs(2025, 1, 14, 23, 59) },
+        { time: localTs(2025, 1, 15, 0, 1) },
+      ]),
+    ).toEqual({ longest: 2, current: 2 });
   });
 });
 
@@ -245,6 +307,24 @@ describe('usePlaybackAnalytics', () => {
         [{ time: ts(2025, 1, 15) }],
       ),
     );
+    expect(result.current.currentStreak).toBe(2);
+  });
+
+  it('computes streaks from all scrobbles regardless of period filter', () => {
+    const oldStreak: ScrobbleRecord[] = Array.from({ length: 5 }, (_, i) => ({
+      id: `old${i}`,
+      song: mockSong('s1', 'A', 'B'),
+      time: ts(2024, 12, 1 + i),
+    }));
+    const recent: ScrobbleRecord[] = [
+      { id: 'r1', song: mockSong('s1', 'A', 'B'), time: ts(2025, 1, 14) },
+      { id: 'r2', song: mockSong('s1', 'A', 'B'), time: ts(2025, 1, 15) },
+    ];
+    const { result } = renderHook(() =>
+      usePlaybackAnalytics([...oldStreak, ...recent], '7d'),
+    );
+    expect(result.current.totalPlays).toBe(2);
+    expect(result.current.longestStreak).toBe(5);
     expect(result.current.currentStreak).toBe(2);
   });
 
