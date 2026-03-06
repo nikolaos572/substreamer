@@ -340,3 +340,153 @@ describe('login', () => {
     expect(result).toEqual({ success: true, version: '0.52.5' });
   });
 });
+
+describe('normalizeServerUrl (tested indirectly via login)', () => {
+  const { default: SubsonicAPI } = require('subsonic-api');
+
+  it('trims whitespace from URL', async () => {
+    SubsonicAPI.prototype.ping = jest.fn().mockResolvedValue({
+      status: 'ok',
+      version: '1.16.0',
+    });
+    const { login } = require('../subsonicService');
+    const result = await login('  music.example.com  ', 'user', 'pass');
+    expect(result.success).toBe(true);
+  });
+
+  it('strips trailing slashes', async () => {
+    SubsonicAPI.prototype.ping = jest.fn().mockResolvedValue({
+      status: 'ok',
+      version: '1.16.0',
+    });
+    const { login } = require('../subsonicService');
+    const result = await login('https://music.example.com///', 'user', 'pass');
+    expect(result.success).toBe(true);
+  });
+
+  it('preserves http:// prefix', async () => {
+    SubsonicAPI.prototype.ping = jest.fn().mockResolvedValue({
+      status: 'ok',
+      version: '1.16.0',
+    });
+    const { login } = require('../subsonicService');
+    const result = await login('http://music.local', 'user', 'pass');
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('API wrapper functions', () => {
+  it('getAlbum returns null when getApi returns null', async () => {
+    mockAuthStore.getState.mockReturnValue({ isLoggedIn: false } as any);
+    const { getAlbum } = require('../subsonicService');
+    expect(await getAlbum('a1')).toBeNull();
+  });
+
+  it('getAlbum returns album on success', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getAlbum = jest.fn().mockResolvedValue({
+      album: { id: 'a1', name: 'Test Album' },
+    });
+    const { getAlbum, getApi } = require('../subsonicService');
+    const api = getApi();
+    expect(api).not.toBeNull();
+    const result = await getAlbum('a1');
+    expect(result).toEqual({ id: 'a1', name: 'Test Album' });
+  });
+
+  it('getAlbum returns null on API exception', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getAlbum = jest.fn().mockRejectedValue(new Error('fail'));
+    const { getAlbum, getApi } = require('../subsonicService');
+    getApi();
+    const result = await getAlbum('a1');
+    expect(result).toBeNull();
+  });
+
+  it('getRecentlyAddedAlbums returns empty when no API', async () => {
+    mockAuthStore.getState.mockReturnValue({ isLoggedIn: false } as any);
+    const { getRecentlyAddedAlbums } = require('../subsonicService');
+    expect(await getRecentlyAddedAlbums()).toEqual([]);
+  });
+
+  it('getAllArtists returns empty when no API', async () => {
+    mockAuthStore.getState.mockReturnValue({ isLoggedIn: false } as any);
+    const { getAllArtists } = require('../subsonicService');
+    expect(await getAllArtists()).toEqual([]);
+  });
+
+  it('getAllPlaylists returns empty when no API', async () => {
+    mockAuthStore.getState.mockReturnValue({ isLoggedIn: false } as any);
+    const { getAllPlaylists } = require('../subsonicService');
+    expect(await getAllPlaylists()).toEqual([]);
+  });
+
+  it('getStarred2 returns empty lists when no API', async () => {
+    mockAuthStore.getState.mockReturnValue({ isLoggedIn: false } as any);
+    const { getStarred2 } = require('../subsonicService');
+    expect(await getStarred2()).toEqual({ albums: [], artists: [], songs: [] });
+  });
+
+  it('search3 returns empty results when no API', async () => {
+    mockAuthStore.getState.mockReturnValue({ isLoggedIn: false } as any);
+    const { search3 } = require('../subsonicService');
+    expect(await search3('test')).toEqual({ albums: [], artists: [], songs: [] });
+  });
+
+  it('starSong calls api.star with correct params', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.star = jest.fn().mockResolvedValue(undefined);
+    const { starSong, getApi } = require('../subsonicService');
+    getApi();
+    await starSong('s1');
+    expect(SubsonicAPI.prototype.star).toHaveBeenCalledWith({ id: 's1' });
+  });
+
+  it('unstarSong calls api.unstar with correct params', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.unstar = jest.fn().mockResolvedValue(undefined);
+    const { unstarSong, getApi } = require('../subsonicService');
+    getApi();
+    await unstarSong('s1');
+    expect(SubsonicAPI.prototype.unstar).toHaveBeenCalledWith({ id: 's1' });
+  });
+
+  it('setRating calls api.setRating', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.setRating = jest.fn().mockResolvedValue(undefined);
+    const { setRating, getApi } = require('../subsonicService');
+    getApi();
+    await setRating('s1', 4);
+    expect(SubsonicAPI.prototype.setRating).toHaveBeenCalledWith({ id: 's1', rating: 4 });
+  });
+
+  it('deletePlaylist returns true on success', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.deletePlaylist = jest.fn().mockResolvedValue(undefined);
+    const { deletePlaylist, getApi } = require('../subsonicService');
+    getApi();
+    const result = await deletePlaylist('p1');
+    expect(result).toBe(true);
+  });
+
+  it('deletePlaylist returns false on failure', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.deletePlaylist = jest.fn().mockRejectedValue(new Error('fail'));
+    const { deletePlaylist, getApi } = require('../subsonicService');
+    getApi();
+    const result = await deletePlaylist('p1');
+    expect(result).toBe(false);
+  });
+
+  it('getScanStatus returns null when no API', async () => {
+    mockAuthStore.getState.mockReturnValue({ isLoggedIn: false } as any);
+    const { getScanStatus } = require('../subsonicService');
+    expect(await getScanStatus()).toBeNull();
+  });
+
+  it('getTopSongs returns empty when no API', async () => {
+    mockAuthStore.getState.mockReturnValue({ isLoggedIn: false } as any);
+    const { getTopSongs } = require('../subsonicService');
+    expect(await getTopSongs('Artist')).toEqual([]);
+  });
+});

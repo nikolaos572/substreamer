@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/13</span>
+                <span class='fraction'>13/13</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/7</span>
+                <span class='fraction'>7/7</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/7</span>
+                <span class='fraction'>7/7</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -91,13 +91,13 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">14x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * RNTP headless playback service.
@@ -109,13 +109,13 @@
 &nbsp;
 import TrackPlayer, { Event } from 'react-native-track-player';
 &nbsp;
-<span class="cstat-no" title="statement not covered" >module.exports = async function <span class="fstat-no" title="function not covered" >playbackService(</span>) {</span>
-<span class="cstat-no" title="statement not covered" >  TrackPlayer.addEventListener(Event.RemotePlay, <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >TrackPlayer.play())</span>;</span>
-<span class="cstat-no" title="statement not covered" >  TrackPlayer.addEventListener(Event.RemotePause, <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >TrackPlayer.pause())</span>;</span>
-<span class="cstat-no" title="statement not covered" >  TrackPlayer.addEventListener(Event.RemoteStop, <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >TrackPlayer.stop())</span>;</span>
-<span class="cstat-no" title="statement not covered" >  TrackPlayer.addEventListener(Event.RemoteNext, <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >TrackPlayer.skipToNext())</span>;</span>
-<span class="cstat-no" title="statement not covered" >  TrackPlayer.addEventListener(Event.RemotePrevious, <span class="fstat-no" title="function not covered" >()</span> =&gt; <span class="cstat-no" title="statement not covered" >TrackPlayer.skipToPrevious())</span>;</span>
-<span class="cstat-no" title="statement not covered" >  TrackPlayer.addEventListener(Event.RemoteSeek, <span class="fstat-no" title="function not covered" >(e</span>) =&gt; <span class="cstat-no" title="statement not covered" >TrackPlayer.seekTo(e.position))</span>;</span>
+module.exports = async function playbackService() {
+  TrackPlayer.addEventListener(Event.RemotePlay, () =&gt; TrackPlayer.play());
+  TrackPlayer.addEventListener(Event.RemotePause, () =&gt; TrackPlayer.pause());
+  TrackPlayer.addEventListener(Event.RemoteStop, () =&gt; TrackPlayer.stop());
+  TrackPlayer.addEventListener(Event.RemoteNext, () =&gt; TrackPlayer.skipToNext());
+  TrackPlayer.addEventListener(Event.RemotePrevious, () =&gt; TrackPlayer.skipToPrevious());
+  TrackPlayer.addEventListener(Event.RemoteSeek, (e) =&gt; TrackPlayer.seekTo(e.position));
 };
 &nbsp;</pre></td></tr></table></pre>
 
@@ -124,7 +124,7 @@ import TrackPlayer, { Event } from 'react-native-track-player';
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-03-06T09:38:16.139Z
+                at 2026-03-06T11:20:58.141Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
