@@ -37,13 +37,13 @@ jest.mock('../../store/connectivityStore', () => ({
 
 const mockPing = jest.fn();
 jest.mock('../subsonicService', () => ({
-  getApi: jest.fn(() => ({ ping: mockPing })),
+  getApiUnchecked: jest.fn(() => ({ ping: mockPing })),
 }));
 
-import { getApi } from '../subsonicService';
+import { getApiUnchecked } from '../subsonicService';
 import { startMonitoring, stopMonitoring } from '../connectivityService';
 
-const mockGetApi = getApi as jest.Mock;
+const mockGetApi = getApiUnchecked as jest.Mock;
 
 beforeEach(() => {
   jest.useFakeTimers();
