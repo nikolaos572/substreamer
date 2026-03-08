@@ -1,5 +1,8 @@
 # Changelog
 
+## [8.0.20] - 2026-03-08
+
+- No notable changes
 ## [8.0.19] - 2026-03-08
 
 - offline mode: auto switching based on wifi/mobile or based on defined home network SSIDs offline mode: remove non-downloaded tracks from queue when going offline as they will not play and will stall the queue
