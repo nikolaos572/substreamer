@@ -1,5 +1,18 @@
 # Changelog
 
+## [8.0.19] - 2026-03-08
+
+- offline mode: auto switching based on wifi/mobile or based on defined home network SSIDs offline mode: remove non-downloaded tracks from queue when going offline as they will not play and will stall the queue
+- header: responsive liquid glass icons in headers for detail pages and player
+- logging: hide some logs due to known RN bugs that can't be worked around from client side.  No impact, just spammy logs generated for both.
+- update gitignore
+- my listening: rename from playback-history to match the display name. implement incremental stats generation with persistent storage to avoid scaling problems as stats could grow to 100s of thousands of plays.
+- build: Prod build optimizations
+- tests: bring up coverage on services
+- connectivity monitor: incorrect state flash on hide
+- remove coverage folder from repo
+- tests: update gitignore for generated coverage
+- artists: Handle Various artists for list and detail views, go to artist etc.
 ## [8.0.18] - 2026-03-06
 
 - tests: improve test coverage for services
