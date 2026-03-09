@@ -25,7 +25,8 @@ import { MarqueeText } from './MarqueeText';
 import WaveformLogo from './WaveformLogo';
 import { useCachedCoverArt } from '../hooks/useCachedCoverArt';
 import { useTheme } from '../hooks/useTheme';
-import { togglePlayPause } from '../services/playerService';
+import { skipToNext, togglePlayPause } from '../services/playerService';
+import { playbackSettingsStore } from '../store/playbackSettingsStore';
 import { playerStore } from '../store/playerStore';
 import { getProminentColor, type ExtractedColors } from '../utils/colors';
 
@@ -41,6 +42,9 @@ export function MiniPlayer() {
   const position = playerStore((s) => s.position);
   const duration = playerStore((s) => s.duration);
   const queueLoading = playerStore((s) => s.queueLoading);
+  const currentTrackIndex = playerStore((s) => s.currentTrackIndex);
+  const queue = playerStore((s) => s.queue);
+  const repeatMode = playbackSettingsStore((s) => s.repeatMode);
 
   const progress = duration > 0 ? position / duration : 0;
   const progressAnim = useSharedValue(0);
@@ -52,6 +56,13 @@ export function MiniPlayer() {
   const error = playerStore((s) => s.error);
   const isPlaying = playbackState === 'playing' || playbackState === 'buffering';
   const isBuffering = playbackState === 'buffering' || playbackState === 'loading';
+  const canSkipNext =
+    currentTrackIndex != null &&
+    (currentTrackIndex < queue.length - 1 || repeatMode !== 'off');
+
+  const handleSkipNext = useCallback(() => {
+    if (canSkipNext) skipToNext();
+  }, [canSkipNext]);
 
   const marqueeStyle = useMemo(
     () => [styles.title, { color: queueLoading ? colors.textSecondary : colors.textPrimary }],
@@ -184,22 +195,40 @@ export function MiniPlayer() {
         </View>
       </Pressable>
 
-      {/* Play / Pause / Buffering */}
-      <Pressable
-        onPress={togglePlayPause}
-        hitSlop={12}
-        style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}
-      >
-        {(isBuffering || queueLoading) ? (
-          <ActivityIndicator size="small" color={colors.textPrimary} />
-        ) : (
+      {/* Transport controls */}
+      <View style={styles.controls}>
+        {/* Play / Pause / Buffering */}
+        <Pressable
+          onPress={togglePlayPause}
+          hitSlop={12}
+          style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}
+        >
+          {(isBuffering || queueLoading) ? (
+            <ActivityIndicator size="small" color={colors.textPrimary} />
+          ) : (
+            <Ionicons
+              name={isPlaying ? 'pause' : 'play'}
+              size={28}
+              color={error ? colors.red : colors.textPrimary}
+            />
+          )}
+        </Pressable>
+
+        {/* Skip to next */}
+        <Pressable
+          onPress={handleSkipNext}
+          hitSlop={12}
+          disabled={!canSkipNext}
+          style={({ pressed }) => [styles.skipButton, pressed && canSkipNext && styles.pressed]}
+        >
           <Ionicons
-            name={isPlaying ? 'pause' : 'play'}
-            size={28}
-            color={error ? colors.red : colors.textPrimary}
+            name="play-forward"
+            size={22}
+            color={colors.textPrimary}
+            style={!canSkipNext ? { opacity: 0.35 } : undefined}
           />
-        )}
-      </Pressable>
+        </Pressable>
+      </View>
 
     </View>
   );
@@ -253,8 +282,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   playButton: {
     marginLeft: 8,
+    padding: 4,
+  },
+  skipButton: {
     padding: 4,
   },
   pressed: {
