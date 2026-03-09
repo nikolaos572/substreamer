@@ -892,16 +892,16 @@ describe('PlaybackErrorLog event handler', () => {
 });
 
 describe('PlaybackBufferEmpty event handler', () => {
-  it('logs a warning without throwing', async () => {
+  it('logs buffer empty without throwing', async () => {
     await initPlayer();
     const handlers = eventHandlers;
     const bufferEmptyHandler = handlers[Event.PlaybackBufferEmpty];
 
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const logSpy = jest.spyOn(console, 'log').mockImplementation();
     bufferEmptyHandler({ isEmpty: true });
 
-    expect(warnSpy).toHaveBeenCalledWith('[Player] Buffer empty:', true);
-    warnSpy.mockRestore();
+    expect(logSpy).toHaveBeenCalledWith('[Player] Buffer empty:', true);
+    logSpy.mockRestore();
   });
 });
 

@@ -386,11 +386,11 @@ export async function initPlayer(): Promise<void> {
   });
 
   TrackPlayer.addEventListener(Event.PlaybackBufferEmpty, (e) => {
-    console.warn('[Player] Buffer empty:', e.isEmpty);
+    console.log('[Player] Buffer empty:', e.isEmpty);
   });
 
   TrackPlayer.addEventListener(Event.PlaybackBufferFull, (e) => {
-    console.warn('[Player] Buffer full:', e.isFull);
+    console.log('[Player] Buffer full:', e.isFull);
     if (e.isFull) {
       isFullyBuffered = true;
     }
