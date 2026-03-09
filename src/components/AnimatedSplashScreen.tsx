@@ -1,27 +1,30 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import Animated, {
+  cancelAnimation,
   Easing,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import BootSplash from 'react-native-bootsplash';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AnimatedWaveformLogo from './AnimatedWaveformLogo';
 import { getPendingTasks, runMigrations } from '../services/migrationService';
 import { migrationStore } from '../store/migrationStore';
 
 const PRIMARY = '#1D9BF0';
-const SUCCESS = '#00BA7C';
 
 /**
  * Max time (ms) before we force-finish, even if an animation or
@@ -35,6 +38,9 @@ const SAFETY_TIMEOUT = 15_000;
  */
 const NATIVE_CONTENT_SCALE = 0.8;
 
+const DOT_SIZE = 8;
+const DOT_GAP = 10;
+
 type MigrationPhase = 'idle' | 'running' | 'done';
 
 type Props = {
@@ -42,13 +48,26 @@ type Props = {
 };
 
 export default function AnimatedSplashScreen({ onFinish }: Props) {
+  const insets = useSafeAreaInsets();
+
   const containerOpacity = useSharedValue(1);
   const logoImageOpacity = useSharedValue(1);
   const animatedLogoOpacity = useSharedValue(0);
   const logoContentScale = useSharedValue(NATIVE_CONTENT_SCALE);
   const logoScale = useSharedValue(1);
   const logoTranslateY = useSharedValue(0);
-  const migrationOpacity = useSharedValue(0);
+
+  // Status area shared values
+  const statusOpacity = useSharedValue(0);
+  const dot0Scale = useSharedValue(0.4);
+  const dot1Scale = useSharedValue(0.4);
+  const dot2Scale = useSharedValue(0.4);
+  const dotsOpacity = useSharedValue(1);
+  const dotsScale = useSharedValue(1);
+  const checkOpacity = useSharedValue(0);
+  const checkScale = useSharedValue(0.3);
+  const validatingOpacity = useSharedValue(1);
+  const completeOpacity = useSharedValue(0);
 
   const onFinishRef = useRef(onFinish);
   const didFinish = useRef(false);
@@ -73,19 +92,68 @@ export default function AnimatedSplashScreen({ onFinish }: Props) {
     );
   }, [containerOpacity, complete]);
 
+  const startBreathingDots = useCallback(() => {
+    const breathe = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 400, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.4, { duration: 400, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      false,
+    );
+
+    dot0Scale.value = breathe;
+    dot1Scale.value = withDelay(150, breathe);
+    dot2Scale.value = withDelay(300, breathe);
+  }, [dot0Scale, dot1Scale, dot2Scale]);
+
   const startMigrations = useCallback(
     (completedVersion: number) => {
       runMigrations(completedVersion).then((finalVersion) => {
         migrationStore.getState().setCompletedVersion(finalVersion);
         setMigrationPhase('done');
-
-        setTimeout(() => {
-          fadeOut();
-        }, 1200);
       });
     },
-    [fadeOut],
+    [],
   );
+
+  // Done transition: dots → checkmark, text cross-fade, then fadeOut
+  useEffect(() => {
+    if (migrationPhase !== 'done') return;
+
+    // Cancel breathing dots
+    cancelAnimation(dot0Scale);
+    cancelAnimation(dot1Scale);
+    cancelAnimation(dot2Scale);
+
+    // Dots shrink + fade out
+    dotsOpacity.value = withTiming(0, { duration: 300 });
+    dotsScale.value = withTiming(0.6, { duration: 300 });
+
+    // Checkmark pops in with spring after 150ms overlap
+    checkOpacity.value = withDelay(
+      150,
+      withTiming(1, { duration: 300 }),
+    );
+    checkScale.value = withDelay(
+      150,
+      withSpring(1, { damping: 12, stiffness: 180 }),
+    );
+
+    // Text cross-fade
+    validatingOpacity.value = withTiming(0, { duration: 250 });
+    completeOpacity.value = withDelay(
+      200,
+      withTiming(1, { duration: 250 }),
+    );
+
+    // Hold then fade out
+    const timeout = setTimeout(() => {
+      fadeOut();
+    }, 1200);
+
+    return () => clearTimeout(timeout);
+  }, [migrationPhase, dot0Scale, dot1Scale, dot2Scale, dotsOpacity, dotsScale, checkOpacity, checkScale, validatingOpacity, completeOpacity, fadeOut]);
 
   const handleRippleComplete = useCallback(() => {
     const completedVersion = migrationStore.getState().completedVersion;
@@ -98,18 +166,23 @@ export default function AnimatedSplashScreen({ onFinish }: Props) {
 
     setMigrationPhase('running');
 
-    // Parallel: assign all three concurrently
+    // Logo transforms (unchanged)
     logoScale.value = withSpring(0.6);
     logoTranslateY.value = withSpring(-60);
-    migrationOpacity.value = withTiming(1, { duration: 400 }, (finished) => {
-      if (finished) runOnJS(startMigrations)(completedVersion);
-    });
-  }, [fadeOut, logoScale, logoTranslateY, migrationOpacity, startMigrations]);
 
-  // The useHideAnimation hook provides container + logo props that
-  // exactly replicate the native splash layout. When it determines
-  // everything is ready (layout rendered, logo image loaded) it hides
-  // the native splash and fires our animate callback.
+    // Status area fades in, then starts migrations
+    statusOpacity.value = withTiming(
+      1,
+      { duration: 500, easing: Easing.out(Easing.cubic) },
+      (finished) => {
+        if (finished) runOnJS(startMigrations)(completedVersion);
+      },
+    );
+
+    // Start breathing dots
+    startBreathingDots();
+  }, [fadeOut, logoScale, logoTranslateY, statusOpacity, startMigrations, startBreathingDots]);
+
   const { container, logo } = BootSplash.useHideAnimation({
     manifest: require('../../assets/bootsplash/manifest.json'),
     logo: require('../../assets/bootsplash/logo.png'),
@@ -153,9 +226,41 @@ export default function AnimatedSplashScreen({ onFinish }: Props) {
     transform: [{ scale: logoContentScale.value }],
   }));
 
-  const migrationStyle = useAnimatedStyle(() => ({
-    opacity: migrationOpacity.value,
+  const statusStyle = useAnimatedStyle(() => ({
+    opacity: statusOpacity.value,
   }));
+
+  const dotsContainerStyle = useAnimatedStyle(() => ({
+    opacity: dotsOpacity.value,
+    transform: [{ scale: dotsScale.value }],
+  }));
+
+  const dot0Style = useAnimatedStyle(() => ({
+    transform: [{ scale: dot0Scale.value }],
+  }));
+
+  const dot1Style = useAnimatedStyle(() => ({
+    transform: [{ scale: dot1Scale.value }],
+  }));
+
+  const dot2Style = useAnimatedStyle(() => ({
+    transform: [{ scale: dot2Scale.value }],
+  }));
+
+  const checkStyle = useAnimatedStyle(() => ({
+    opacity: checkOpacity.value,
+    transform: [{ scale: checkScale.value }],
+  }));
+
+  const validatingStyle = useAnimatedStyle(() => ({
+    opacity: validatingOpacity.value,
+  }));
+
+  const completeStyle = useAnimatedStyle(() => ({
+    opacity: completeOpacity.value,
+  }));
+
+  const statusBottom = Math.max(insets.bottom, 24) + 40;
 
   return (
     <Animated.View
@@ -181,30 +286,34 @@ export default function AnimatedSplashScreen({ onFinish }: Props) {
         </Animated.View>
       </Animated.View>
 
-      {/* Migration status */}
+      {/* Status area — bottom-aligned */}
       <Animated.View
-        style={[styles.migrationWrap, migrationStyle]}
+        style={[styles.statusWrap, { bottom: statusBottom }, statusStyle]}
         pointerEvents="none"
       >
-        {migrationPhase === 'done' ? (
-          <Ionicons
-            name="checkmark-circle"
-            size={28}
-            color={SUCCESS}
-            style={{ width: 28, textAlign: 'center' }}
-          />
-        ) : (
-          <ActivityIndicator
-            size="small"
-            color="#FFFFFF"
-            style={{ width: 28, height: 28 }}
-          />
-        )}
-        <Text style={styles.migrationText}>
-          {migrationPhase === 'done'
-            ? 'Migrations complete'
-            : 'Running migrations\u2026'}
-        </Text>
+        <Text style={styles.titleText}>Starting up</Text>
+
+        {/* Indicator row — fixed height for dots/checkmark swap */}
+        <View style={styles.indicatorRow}>
+          <Animated.View style={[styles.dotsRow, dotsContainerStyle]}>
+            <Animated.View style={[styles.dot, dot0Style]} />
+            <Animated.View style={[styles.dot, dot1Style]} />
+            <Animated.View style={[styles.dot, dot2Style]} />
+          </Animated.View>
+          <Animated.View style={[styles.checkWrap, checkStyle]}>
+            <Ionicons name="checkmark" size={24} color="#FFFFFF" />
+          </Animated.View>
+        </View>
+
+        {/* Subtitle row — fixed height for text cross-fade */}
+        <View style={styles.subtitleRow}>
+          <Animated.Text style={[styles.subtitleText, styles.subtitleAbsolute, validatingStyle]}>
+            validating
+          </Animated.Text>
+          <Animated.Text style={[styles.subtitleText, styles.subtitleAbsolute, completeStyle]}>
+            complete
+          </Animated.Text>
+        </View>
       </Animated.View>
     </Animated.View>
   );
@@ -215,17 +324,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  migrationWrap: {
+  statusWrap: {
     position: 'absolute',
     left: 0,
     right: 0,
-    top: '56%',
     alignItems: 'center',
   },
-  migrationText: {
+  titleText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  indicatorRow: {
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dotsRow: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: DOT_GAP,
+  },
+  dot: {
+    width: DOT_SIZE,
+    height: DOT_SIZE,
+    borderRadius: DOT_SIZE / 2,
+    backgroundColor: '#FFFFFF',
+  },
+  checkWrap: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subtitleRow: {
+    height: 20,
+    marginTop: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  subtitleText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
     fontWeight: '500',
-    marginTop: 12,
+  },
+  subtitleAbsolute: {
+    position: 'absolute',
+    alignSelf: 'center',
   },
 });
