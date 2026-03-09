@@ -10,6 +10,8 @@ jobs:
   typecheck-and-test:
     name: TypeScript & Jest
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -24,5 +26,9 @@ jobs:
       - name: TypeScript compilation check
         run: npx tsc --noEmit
 
-      - name: Run tests
-        run: npx jest --no-coverage --ci
+      - name: Run tests with coverage
+        run: npx jest --ci --coverage --coverageReporters=json-summary --coverageReporters=text
+
+      - name: Coverage badge
+        if: github.ref == 'refs/heads/master'
+        uses: we-cli/coverage-badge-action@v1.2.1

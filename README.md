@@ -1,6 +1,7 @@
 # Substreamer
 
 [![Tests](https://github.com/ghenry22/substreamer/actions/workflows/tests.yml/badge.svg)](https://github.com/ghenry22/substreamer/actions/workflows/tests.yml)
+![Coverage](./badges/coverage.svg)
 ![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android-lightgrey)
 ![Expo SDK](https://img.shields.io/badge/Expo%20SDK-55-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)
