@@ -112,6 +112,18 @@ The scripts auto-detect `JAVA_HOME` (Android Studio bundled JBR) and `ANDROID_HO
 
 **After completing work**, run both checks again. There must be no TypeScript errors, and any new warnings introduced by your changes should be seriously considered and resolved. All tests must still pass. Always check if tests need to be updated, added, or removed to keep the test suite aligned with the changes made.
 
+**Coverage target:** Every file that has a corresponding test file must maintain **≥ 80% statement coverage and ≥ 80% branch coverage**. Run `npx jest path/to/test --coverage --coverageReporters=text` to verify after writing or updating tests.
+
+**Test real use cases, not just the happy path.** Tests should cover the scenarios users and code actually encounter:
+
+- Null/undefined inputs and optional fields (e.g. `userRating` absent, `song` array missing)
+- Error and failure paths (API returns null, network error, empty results)
+- Edge cases and boundary conditions (empty arrays, zero values, duplicate calls)
+- State transitions across multiple steps (e.g. lifecycle tests that progress through a sequence without resetting between steps)
+- Interactions between subsystems (e.g. verifying that a store fetch triggers reconciliation in another store)
+
+Avoid tests that only confirm the trivial success case. If a function has branches, test them.
+
 ## AI Instruction Files — Keep in Sync
 
 Three files contain AI agent instructions and must always stay identical in content:
