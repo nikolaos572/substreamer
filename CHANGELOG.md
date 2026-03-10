@@ -1,5 +1,45 @@
 # Changelog
 
+## [8.0.22] - 2026-03-10
+
+- web and readme
+- github: add sponsor ship options, as that would be super helpful...
+- update project rules
+- website tweaks and privacy policy
+- Release Prep: all the prep to open up...
+- gitignore: feature notes
+- Delete CNAME
+- Create CNAME
+- ci: update coverage badge [skip ci]
+- tests: once more
+- tests: fix coverage badge
+- readme: add code coverage
+- player: use progressUpdateEventInterval for native playback progress events versus polling for status.  Required for Android background playback but also makes implementation simpler on all platforms as event driven is cleaner than polling and managing timers anyway.
+- RNTP: behaviour alignment with iOS, make stalled, buffer empty and buffer full events consistent with iOS.  Refactor buffering and loading events to not be bound only to stalls. Handle misleading seek to events on queue change.  Handle misleading playback stopped events when nothing playing or queued.
+- player: buffer events are normal, should not be warnings
+- tests: update color test for change to prefer secondary color on iOS
+- UI: aim to extract a darker colour from images
+- miniplayer: skip ahead button
+- offline mode: refinement of offline mode UI and configuraiton options
+- splashscreen: clean up the layout for migrations
+- auth: oops removed a debug guard but left the debug function and cleared all the persisted data on launch...
+- build: run dev builds on both ios and android concurrently
+- 5 star rating: implement thorough tests for rating lifecycle and real world scenarios.  Implement fix for flaw in previous logic for rating overrides.
+- build: more build updates
+- build: fixes and mods for local dev builds
+- tests autoOfflineService console logging clean up
+- ai: update project rules with test coverage target so I can stop repeating it
+- tests: all coverage over 80%
+- auth: remove some debug
+- update key packages.  Notably netInfo fix for SSID not returning on iOS26
+- tests: run on push to master and PR to master.
+- offline mode: if going offline results in the whole queue clearing (as no tracks were downloaded before) then close the player if it's open.  Add an empty screen placeholder just in case as well.
+- tests: autoOfflineService coverage
+- offline mode: change netInfo config point to start up so all subsequent requests have the right config to return SSID data
+- tests: fix TS errors and add coverage for haptics util
+- ai rules: review and sync
+- tests: updated connectivity service test
+- connectivity monitor: expose an API Ping endpoint that ignores the offline mode and other guards on the standard endpoints (as connectivity monitor is a special case).  Trying to resolve occasionally getting stuck in server unreachable even when clearly online and working.
 ## [8.0.21] - 2026-03-08
 
 - No notable changes
