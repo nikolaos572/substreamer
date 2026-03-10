@@ -1,132 +1,88 @@
+<div align="center">
+
 # Substreamer
+
+**Stream your music library on iOS and Android — free and open source.**
+
+<a href="https://apps.apple.com/us/app/substreamer/id1012991665"><img src="https://img.shields.io/badge/App_Store-0D96F6?style=for-the-badge&logo=app-store&logoColor=white" alt="Download on the App Store"></a>
+<a href="https://play.google.com/store/apps/details?id=com.ghenry22.substream2"><img src="https://img.shields.io/badge/Google_Play-414141?style=for-the-badge&logo=google-play&logoColor=white" alt="Get it on Google Play"></a>
 
 [![Tests](https://github.com/ghenry22/substreamer/actions/workflows/tests.yml/badge.svg)](https://github.com/ghenry22/substreamer/actions/workflows/tests.yml)
 ![Coverage](./badges/coverage.svg)
 ![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android-lightgrey)
-![Expo SDK](https://img.shields.io/badge/Expo%20SDK-55-blue)
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+![GitHub Stars](https://img.shields.io/github/stars/ghenry22/substreamer?style=social)
 
-A React Native music streaming client for Subsonic-compatible servers (Subsonic, Navidrome, etc.), built with Expo SDK 55, React 19, and TypeScript.
+<img src="docs/assets/images/placeholder-hero.svg" alt="Substreamer app preview" width="700">
+
+</div>
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/assets/images/placeholder-screenshot-1.svg" alt="Home Screen" width="180">
+  &nbsp;
+  <img src="docs/assets/images/placeholder-screenshot-2.svg" alt="Library" width="180">
+  &nbsp;
+  <img src="docs/assets/images/placeholder-screenshot-3.svg" alt="Now Playing" width="180">
+  &nbsp;
+  <img src="docs/assets/images/placeholder-screenshot-4.svg" alt="Album Detail" width="180">
+</p>
+
+## Highlights
+
+**Playback** — Background audio, lock screen controls, adjustable playback speed, shuffle and repeat modes, queue management.
+
+**Offline Use** — Download albums and playlists for offline listening, background download queue with progress and automatic recovery, automatic offline mode (if you leave wifi or if you leave your home wifi network specifically), manual offline mode switch at any time, configurable storage limits and visibility of storage use, configurable download Quality.
+
+**Ratings & Favorites** — 5-star ratings for songs, albums, artists (server support dependant), star albums, artists, and songs, dedicated favorites view with filtering, download favorites and keep them in sync with new changes.
+
+**Listening Analytics** — Listening history, activity heatmaps, top artists, albums, and songs by play count, most active hours, listening streaks
+
+**Search** — Quick search access on any main screen, Full search for more results from your entire library, automatically switches to seaching your downloaded content when in offline mode.
+
+**Playlist Management** - Add any song to any playlist or create a new one on the fly, remove or re-order tracks in any saved playlist, quick access to save Artist Top Songs as a new playlist or save your current player queue as a new playlist.
+
+**Sharing** - full support for sharing albums or playlists (currently Navidrome only), allows you to set a server address override in case you have a different public address for people to access what you share with them, quick copy to clipboard so you can share it anywhere.  Full share management functionality in settings.
+
+**Metadata** - Allow MusicbrainzID (MBID) overrides to be set in app, users can search on the artist detail screen to easily correct an incorrect match or choose the right MBID if the server does not provide one.
+
+**Metadata Management** - The storage and data section in settings gives you access to a wealth of information, you can browse, refresh or remove any offline metadata, cached images or downloaded music, pending and completed scrobbles and more.  Great for the curious or for when something funky happens and you just want to know what or quickly fix it!
+
+**Appearance** — Light, dark, and system theme modes, custom accent colors, list and grid layout toggles and default settings, alphabetical quick-scroll for large libraries.
+
+**Backup** - Substreamer does a few things that are outside what the subsonic API accomodates (MBID Overrides, Listening history and analytics) to deal with this we need to keep some detail locally with your app and we don't want it to be lost if you have to re-install the app or get a new device (No one wants to break their listening streak!).  This data is automatically set to be included in your devices native cloud backups.
+
+## Compatible Servers
+
+Substreamer works with any server implementing the [Subsonic API](http://www.subsonic.org/pages/api.jsp).
+
+| Server | Notes |
+|--------|-------|
+| [Navidrome](https://www.navidrome.org/) | Recommended. Full API support including OpenSubsonic extensions. |
+| [Gonic](https://github.com/sentriz/gonic) | Lightweight, full API support. |
+| [Airsonic-Advanced](https://github.com/airsonic-advanced/airsonic-advanced) | Community fork of Airsonic. |
+| [Ampache](https://ampache.org/) | Supports Subsonic API compatibility mode. |
+| [Supysonic](https://github.com/spl0k/supysonic) | Python-based, lightweight. |
+| [Funkwhale](https://funkwhale.audio/) | Supports Subsonic API compatibility mode. |
+| [Subsonic](http://www.subsonic.org/) | The original. |
 
 ## Getting Started
 
-```bash
-# Install dependencies
-npm install
+1. **Set up a server** — Install a Subsonic-compatible server to host your music. [Navidrome](https://www.navidrome.org/docs/installation/) is a great place to start.
 
-# Start the dev server
-npx expo start
-```
+2. **Download Substreamer** — Get the app for free on the [App Store](https://apps.apple.com/us/app/substreamer/id1012991665) or [Google Play](https://play.google.com/store/apps/details?id=com.ghenry22.substream2).
 
-## Native Builds
+3. **Connect** — Open the app, enter your server URL and credentials, and start streaming.
 
-Native Android builds require `JAVA_HOME` and `ANDROID_HOME` to be set. Use the helper script which auto-detects Android Studio's bundled JBR and the Android SDK:
+## Community
 
-```bash
-# Default: runs npx expo run:android with correct env
-scripts/build-android.sh
+- **Reddit:** [r/substreamer](https://www.reddit.com/r/substreamer/)
+- **Bug reports & feature requests:** [GitHub Issues](https://github.com/ghenry22/substreamer/issues)
+- **Contributing:** Pull requests are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
-# Gradle only (assembleDebug)
-scripts/build-android.sh --gradle-only
+## License
 
-# Release variant via Gradle
-scripts/build-android.sh --gradle-only --release
+Substreamer is licensed under the [GNU General Public License v3.0](LICENSE).
 
-# Build without installing on device
-scripts/build-android.sh --no-install
-```
-
-## Releasing
-
-Releases are managed by a script that increments the version, updates the changelog, commits, tags, pushes, and creates a GitHub release.
-
-### Prerequisites
-
-[GitHub CLI](https://cli.github.com) must be installed and authenticated:
-
-```bash
-brew install gh
-gh auth login
-```
-
-### Creating a Release
-
-```bash
-npm run release -- patch   # 8.0.0 → 8.0.1
-npm run release -- minor   # 8.0.0 → 8.1.0
-npm run release -- major   # 8.0.0 → 9.0.0
-```
-
-The script will:
-
-1. Increment the version in `app.json` and `package.json`
-2. Collect all commits since the last release tag
-3. Prepend a new entry to `CHANGELOG.md`
-4. Commit the changes, create a git tag, and push to origin
-5. Create a GitHub release with the changelog as release notes
-
-The working tree must be clean (no uncommitted changes) before running.
-
-## Data Migration System
-
-Substreamer includes a versioned data migration system that runs automatically during the animated splash screen on app launch. Migrations handle changes to stored data or cached files between app versions.
-
-### How It Works
-
-1. On every launch the splash screen plays its logo animation.
-2. After the animation, the system checks for pending migration tasks by comparing the store's `completedVersion` against the task registry.
-3. If there are no pending tasks the splash fades out normally -- the user sees nothing different.
-4. If there are pending tasks the logo shrinks and slides up, a status message and spinner appear, and tasks run sequentially. On completion a green checkmark and "Update complete" message display briefly before the splash fades out.
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/services/migrationService.ts` | Task definitions and runner |
-| `src/store/migrationStore.ts` | Tracks which migration version has completed |
-| `src/components/AnimatedSplashScreen.tsx` | Splash screen with integrated migration UI |
-
-### Adding a New Migration Task
-
-1. Open `src/services/migrationService.ts`.
-2. Add a new entry to the `MIGRATION_TASKS` array with the next sequential `id`:
-
-```typescript
-{
-  id: 2,
-  name: 'Short description for the user',
-  run: async () => {
-    // Your migration logic here.
-    // Use expo-file-system, Zustand stores, or any other service.
-    // Throw an error to signal failure (the task will not be retried
-    // automatically -- handle retries inside `run` if needed).
-  },
-},
-```
-
-3. That's it. The runner picks up any task whose `id` is greater than `completedVersion` and executes them in order.
-
-### Persistence
-
-The migration store is currently **non-persisted** so that migrations run on every app launch during development. This makes it easy to iterate on migration tasks and test the UI.
-
-To persist the store for production (so each task only runs once per device):
-
-```typescript
-// In src/store/migrationStore.ts, add the persist middleware:
-import { createJSONStorage, persist } from 'zustand/middleware';
-import { sqliteStorage } from './sqliteStorage';
-
-export const migrationStore = create<MigrationState>()(
-  persist(
-    (set) => ({
-      completedVersion: 0,
-      setCompletedVersion: (completedVersion) => set({ completedVersion }),
-    }),
-    {
-      name: 'substreamer-migration',
-      storage: createJSONStorage(() => sqliteStorage),
-    }
-  )
-);
-```
+You are free to use, modify, and distribute this software under the terms of the GPL-3.0. Any derivative works must also be distributed under the same license. See the [LICENSE](LICENSE) file for the full text.
