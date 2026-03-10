@@ -11,6 +11,7 @@
 ![Coverage](./badges/coverage.svg)
 ![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-db61a2?style=social)](https://github.com/sponsors/ghenry22)
 ![GitHub Stars](https://img.shields.io/github/stars/ghenry22/substreamer?style=social)
 
 <img src="docs/assets/images/placeholder-hero.svg" alt="Substreamer app preview" width="700">

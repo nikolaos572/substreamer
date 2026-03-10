@@ -129,6 +129,12 @@ Three files contain AI agent instructions and must always stay identical in cont
 
 **When any one of these files is updated, the same change must be applied to all three.** This is non-negotiable. Never update one without updating the others in the same operation.
 
+## Project Markdown Files
+
+When asked to work on any of the project's own markdown files (`README.md`, `CONTRIBUTING.md`, `LICENSE`, etc.), **look in the project root directory only**. Do not search `node_modules/` or other subdirectories for project files. If you cannot find the file in the root, ask the user before looking elsewhere.
+
+Searching `node_modules/` README files and documentation is fine when researching the capabilities of installed packages — just not when looking for the project's own files.
+
 ## Planning
 
 When creating or presenting a plan, **always** end with a **bulleted list of todos** — each a single actionable step using clear, imperative phrasing. Keep the list proportional to the work.
