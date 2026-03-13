@@ -20,7 +20,8 @@
     "release": "node scripts/create-release.js",
     "release:patch": "node scripts/create-release.js patch",
     "release:minor": "node scripts/create-release.js minor",
-    "release:major": "node scripts/create-release.js major"
+    "release:major": "node scripts/create-release.js major",
+    "terminal-log": "script -a /tmp/claude-terminal.txt"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",

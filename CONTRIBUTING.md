@@ -16,6 +16,10 @@ These files contain project conventions, architecture details, and coding standa
 
 **Important:** All three instruction files must stay in sync. If you update one, apply the same change to the other two.
 
+### Terminal Observation
+
+When working with Claude Code, you can share your terminal output so the AI can see your command results. Run `npm run terminal-log` in any terminal you want observed — this starts a `script` session that logs everything to `/tmp/claude-terminal.txt`. Then ask Claude Code to "check my terminal" to have it read the output. Type `exit` to stop recording.
+
 ---
 
 ## Quick Start
