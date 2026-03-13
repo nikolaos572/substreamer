@@ -1,5 +1,9 @@
 # Changelog
 
+## [8.0.25] - 2026-03-13
+
+- build: update to address deprecation warning
+- build: update the release script for new android versionCode
 ## [8.0.24] - 2026-03-13
 
 - android: fix crazy version / versionCode handling.  Now I might actually get a beta release available!
