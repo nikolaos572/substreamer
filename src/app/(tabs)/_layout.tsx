@@ -4,6 +4,7 @@ import { Tabs } from 'expo-router';
 import { useCallback } from 'react';
 import { Keyboard, View } from 'react-native';
 
+import WaveformLogo from '../../components/WaveformLogo';
 import { ConnectivityBanner } from '../../components/ConnectivityBanner';
 import { DownloadBanner } from '../../components/DownloadBanner';
 import { StorageFullBanner } from '../../components/StorageFullBanner';
@@ -54,7 +55,7 @@ export default function TabLayout() {
           options={{
             title: 'Home',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="home" size={size} color={color} />
+              <WaveformLogo size={size} color={color} />
             ),
           }}
         />
@@ -63,7 +64,7 @@ export default function TabLayout() {
           options={{
             title: 'Library',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="library" size={size} color={color} />
+              <Ionicons name="musical-notes" size={size} color={color} />
             ),
           }}
         />
