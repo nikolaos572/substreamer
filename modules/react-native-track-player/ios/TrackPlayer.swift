@@ -254,11 +254,14 @@ public class NativeTrackPlayerImpl: NSObject, AudioSessionControllerDelegate {
         hasInitialized = true
 
         // Enable remote control event reception before any playback starts.
-        // This was previously dispatched lazily in handleAudioPlayerCurrentItemChange,
-        // but the async dispatch could execute after play() had already returned,
-        // leaving remote controls greyed out on the first track.
-        DispatchQueue.main.async {
+        // Must be synchronous to avoid a timing gap where play() executes
+        // before remote events are registered.
+        if Thread.isMainThread {
             UIApplication.shared.beginReceivingRemoteControlEvents()
+        } else {
+            DispatchQueue.main.async {
+                UIApplication.shared.beginReceivingRemoteControlEvents()
+            }
         }
 
         resolve(NSNull())
@@ -267,9 +270,11 @@ public class NativeTrackPlayerImpl: NSObject, AudioSessionControllerDelegate {
 
     private func configureAudioSession() {
 
-        // deactivate the session when there is no current item to be played
+        // When there is no current item, just return. Do NOT deactivate
+        // the session — the .playback category was set in setupPlayer()
+        // and must persist. Deactivating here would leave the session
+        // inactive during the critical add() → play() window.
         if (player.currentItem == nil) {
-            try? audioSessionController.deactivateSession()
             return
         }
 
@@ -510,17 +515,15 @@ public class NativeTrackPlayerImpl: NSObject, AudioSessionControllerDelegate {
 
         player.play()
 
-        // Synchronously publish core now-playing info so lock screen controls
-        // appear immediately, even before the async NowPlayingInfoController
-        // dispatch completes. The controller will overwrite with full metadata.
-        if let item = player.currentItem {
-            var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-            nowPlayingInfo[MPMediaItemPropertyTitle] = item.getTitle()
-            nowPlayingInfo[MPMediaItemPropertyArtist] = item.getArtist()
-            nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = item.getAlbumTitle()
-            nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
-            nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = (item as? Track)?.duration
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+        // Update playback values through the NowPlayingInfoController so its
+        // internal info dictionary stays consistent. Any subsequent update()
+        // calls (artwork callback, state changes) will propagate the correct
+        // rate instead of overwriting with a stale value.
+        if player.currentItem != nil {
+            player.nowPlayingInfoController.set(keyValues: [
+                NowPlayingInfoProperty.playbackRate(Double(player.rate)),
+                NowPlayingInfoProperty.elapsedPlaybackTime(player.currentTime)
+            ])
         }
 
         resolve(NSNull())

@@ -38,6 +38,8 @@ public class AudioPlayer: AVPlayerWrapperDelegate {
         didSet {
             if let item = currentItem {
                 self.enableRemoteCommands(forItem: item)
+            } else {
+                self.enableRemoteCommands(remoteCommands)
             }
         }
     }
@@ -209,7 +211,6 @@ public class AudioPlayer: AVPlayerWrapperDelegate {
                 // AVPlayer resolves the asset duration.
                 nowPlayingInfoController.setWithoutUpdate(keyValues: [
                     MediaItemProperty.duration(item.getDuration()),
-                    NowPlayingInfoProperty.playbackRate(0),
                     NowPlayingInfoProperty.elapsedPlaybackTime(0)
                 ])
                 loadNowPlayingMetaValues()
