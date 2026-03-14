@@ -1,5 +1,15 @@
 # Changelog
 
+## [8.0.26] - 2026-03-14
+
+- tests: add tests for new functions and module
+- RNTP: further testing for playback controls not available if phone locked on first track
+- ci: update coverage badge [skip ci]
+- android: add option to request exemption from battery optimization (some android devices have very aggressive background suspension even when audio is actively playing) android: back button handling. Don't kill the app, just send it to the back and go to the home screen.
+- ci: update coverage badge [skip ci]
+- fix: auto-offline home WiFi SSID detection broken after permission grant
+- ui fixes: android vs ios quirks for various spacing, ensure lists are populated if empty on start, ensure playlist list is fresh before trying to add to a playlist
+- build: simple terminal monitoring for claude code
 ## [8.0.25] - 2026-03-13
 
 - build: update to address deprecation warning
