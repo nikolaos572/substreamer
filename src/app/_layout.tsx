@@ -46,13 +46,16 @@ import { initSslTrustStore } from '../services/sslTrustService';
 import { runAutoBackupIfNeeded } from '../services/backupService';
 import { startAutoOffline, stopAutoOffline } from '../services/autoOfflineService';
 import { excludeFromBackup } from 'expo-backup-exclusions';
+import { albumLibraryStore } from '../store/albumLibraryStore';
 import { albumListsStore } from '../store/albumListsStore';
+import { artistLibraryStore } from '../store/artistLibraryStore';
 import { imageCacheStore } from '../store/imageCacheStore';
 import { musicCacheStore } from '../store/musicCacheStore';
 import { authStore } from '../store/authStore';
 import { favoritesStore } from '../store/favoritesStore';
 import { autoOfflineStore } from '../store/autoOfflineStore';
 import { offlineModeStore } from '../store/offlineModeStore';
+import { playlistLibraryStore } from '../store/playlistLibraryStore';
 import { fetchServerInfo } from '../services/subsonicService';
 import { serverInfoStore } from '../store/serverInfoStore';
 
@@ -142,6 +145,17 @@ export default function RootLayout() {
       fetchScanStatus();
       albumListsStore.getState().refreshAll();
       favoritesStore.getState().fetchStarred();
+
+      // Pre-fetch library data on first launch or when stores are empty
+      if (albumLibraryStore.getState().albums.length === 0) {
+        albumLibraryStore.getState().fetchAllAlbums();
+      }
+      if (artistLibraryStore.getState().artists.length === 0) {
+        artistLibraryStore.getState().fetchAllArtists();
+      }
+      if (playlistLibraryStore.getState().playlists.length === 0) {
+        playlistLibraryStore.getState().fetchAllPlaylists();
+      }
     }
 
     const unsubAutoOffline = autoOfflineStore.subscribe((state, prev) => {
@@ -163,6 +177,16 @@ export default function RootLayout() {
         fetchScanStatus();
         albumListsStore.getState().refreshAll();
         favoritesStore.getState().fetchStarred();
+
+        if (albumLibraryStore.getState().albums.length === 0) {
+          albumLibraryStore.getState().fetchAllAlbums();
+        }
+        if (artistLibraryStore.getState().artists.length === 0) {
+          artistLibraryStore.getState().fetchAllArtists();
+        }
+        if (playlistLibraryStore.getState().playlists.length === 0) {
+          playlistLibraryStore.getState().fetchAllPlaylists();
+        }
       } else if (!prev.offlineMode && state.offlineMode) {
         stopMonitoring();
       }

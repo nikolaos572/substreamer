@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../hooks/useTheme';
 import { stopPolling } from '../services/scanService';
@@ -18,6 +19,7 @@ const SCAN_STATUS_PERSIST_KEY = 'substreamer-scan-status';
 export function SettingsAccountScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const username = authStore((s) => s.username);
   const password = authStore((s) => s.password);
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -51,7 +53,7 @@ export function SettingsAccountScreen() {
   return (
     <ScrollView
       style={[styles.container, dynamicStyles.container]}
-      contentContainerStyle={[styles.content, styles.contentGrow]}
+      contentContainerStyle={[styles.content, styles.contentGrow, { paddingBottom: Math.max(insets.bottom, 32) }]}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.section}>
@@ -107,7 +109,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 32,
   },
   contentGrow: {
     flexGrow: 1,

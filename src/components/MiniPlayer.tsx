@@ -269,13 +269,16 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 10,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   title: {
     fontSize: 14,
     fontWeight: '600',
+    lineHeight: 18,
   },
   artist: {
     fontSize: 12,
+    lineHeight: 16,
     marginTop: 1,
   },
   coverPlaceholder: {

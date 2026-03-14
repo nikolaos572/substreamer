@@ -522,7 +522,7 @@ export function PlaylistDetailScreen() {
                 refreshing={refreshing}
                 onRefresh={onRefresh}
                 tintColor={colors.primary}
-                progressViewOffset={insets.top + HEADER_BAR_HEIGHT}
+                progressViewOffset={Platform.OS === 'android' ? insets.top + HEADER_BAR_HEIGHT : 0}
               />
             )
           }

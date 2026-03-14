@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -65,9 +65,18 @@ export function AddToPlaylistSheet() {
   const target = addToPlaylistStore((s) => s.target);
   const hide = addToPlaylistStore((s) => s.hide);
   const playlists = playlistLibraryStore((s) => s.playlists);
+  const playlistsLoading = playlistLibraryStore((s) => s.loading);
+  const playlistsFetchError = playlistLibraryStore((s) => s.error);
 
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+
+  // Fetch fresh playlists every time the sheet opens
+  useEffect(() => {
+    if (visible) {
+      playlistLibraryStore.getState().fetchAllPlaylists();
+    }
+  }, [visible]);
 
   const [mode, setMode] = useState<'pick' | 'create'>('pick');
   const [name, setName] = useState('');
@@ -245,10 +254,24 @@ export function AddToPlaylistSheet() {
               </Pressable>
             ))}
 
-            {playlists.length === 0 && (
+            {playlists.length === 0 && playlistsLoading && (
+              <ActivityIndicator style={styles.loadingIndicator} color={colors.textSecondary} />
+            )}
+
+            {playlists.length === 0 && !playlistsLoading && !playlistsFetchError && (
               <Text style={[styles.emptyText, dynamicStyles.playlistCount]}>
                 No playlists yet
               </Text>
+            )}
+
+            {playlistsFetchError && playlists.length === 0 && !playlistsLoading && (
+              <Text style={[styles.emptyText, dynamicStyles.errorText]}>
+                Failed to load playlists
+              </Text>
+            )}
+
+            {playlists.length > 0 && playlistsLoading && (
+              <ActivityIndicator style={styles.loadingIndicator} size="small" color={colors.textSecondary} />
             )}
           </ScrollView>
         ) : (
@@ -373,6 +396,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     paddingVertical: 20,
+  },
+  loadingIndicator: {
+    paddingVertical: 16,
   },
   formSection: {
     paddingHorizontal: 4,
