@@ -1,10 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../hooks/useTheme';
+import { devOptionsStore } from '../store/devOptionsStore';
+import { processingOverlayStore } from '../store/processingOverlayStore';
+import { selectionAsync, notificationAsync } from '../utils/haptics';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '?';
 const BUILD_NUMBER =
@@ -26,13 +29,60 @@ const SETTINGS_LINKS: {
   { route: '/settings-storage', label: 'Storage & Data', subtitle: 'Image cache, metadata cache, scrobbles', icon: 'folder-outline' },
   { route: '/settings-shares', label: 'Shares', subtitle: 'Manage shared links, alternate URL', icon: 'share-social-outline' },
   { route: '/settings-account', label: 'Account', subtitle: 'Username, password, log out', icon: 'person-outline' },
+];
+
+const DEV_SETTINGS_LINKS: typeof SETTINGS_LINKS = [
   { route: '/file-explorer', label: 'File Explorer', subtitle: 'Browse app directories on disk', icon: 'document-text-outline' },
   { route: '/migration-log', label: 'Migration Log', subtitle: 'View results of data migration tasks', icon: 'list-outline' },
 ];
 
+const TAP_WINDOW_MS = 3000;
+const TAP_COUNT_TO_ACTIVATE = 5;
+
 export function SettingsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const devEnabled = devOptionsStore((s) => s.enabled);
+
+  const tapTimestamps = useRef<number[]>([]);
+  const countdownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [countdownText, setCountdownText] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (countdownTimer.current) clearTimeout(countdownTimer.current);
+    };
+  }, []);
+
+  const handleVersionTap = useCallback(() => {
+    if (devEnabled) return;
+
+    const now = Date.now();
+    tapTimestamps.current.push(now);
+    tapTimestamps.current = tapTimestamps.current.filter((t) => now - t < TAP_WINDOW_MS);
+
+    const count = tapTimestamps.current.length;
+    const remaining = TAP_COUNT_TO_ACTIVATE - count;
+
+    if (countdownTimer.current) clearTimeout(countdownTimer.current);
+
+    if (remaining <= 0) {
+      tapTimestamps.current = [];
+      setCountdownText(null);
+      devOptionsStore.getState().enable();
+      notificationAsync();
+      processingOverlayStore.getState().showSuccess('Developer options activated');
+    } else if (count >= 2) {
+      selectionAsync();
+      setCountdownText(`${remaining} more tap${remaining === 1 ? '' : 's'} for developer options`);
+      countdownTimer.current = setTimeout(() => setCountdownText(null), TAP_WINDOW_MS);
+    }
+  }, [devEnabled]);
+
+  const visibleLinks = useMemo(
+    () => (devEnabled ? [...SETTINGS_LINKS, ...DEV_SETTINGS_LINKS] : SETTINGS_LINKS),
+    [devEnabled]
+  );
 
   const dynamicStyles = useMemo(
     () =>
@@ -49,13 +99,13 @@ export function SettingsScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={[styles.navCard, { backgroundColor: colors.card }]}>
-        {SETTINGS_LINKS.map((link, index) => (
+        {visibleLinks.map((link, index) => (
           <Pressable
             key={link.route}
             onPress={() => router.push(link.route as never)}
             style={({ pressed }) => [
               styles.navRow,
-              index < SETTINGS_LINKS.length - 1 && {
+              index < visibleLinks.length - 1 && {
                 borderBottomWidth: StyleSheet.hairlineWidth,
                 borderBottomColor: colors.border,
               },
@@ -77,9 +127,11 @@ export function SettingsScreen() {
           </Pressable>
         ))}
       </View>
-      <Text style={[styles.versionText, { color: colors.textSecondary }]}>
-        Version {APP_VERSION} ({BUILD_NUMBER})
-      </Text>
+      <Pressable onPress={handleVersionTap}>
+        <Text style={[styles.versionText, { color: colors.textSecondary }]}>
+          {countdownText ?? `Version ${APP_VERSION} (${BUILD_NUMBER})`}
+        </Text>
+      </Pressable>
     </ScrollView>
   );
 }
