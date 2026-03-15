@@ -8,6 +8,8 @@
 import { albumDetailStore } from '../store/albumDetailStore';
 import { artistDetailStore } from '../store/artistDetailStore';
 import { favoritesStore } from '../store/favoritesStore';
+import { musicCacheStore } from '../store/musicCacheStore';
+import { offlineModeStore } from '../store/offlineModeStore';
 import { playlistDetailStore } from '../store/playlistDetailStore';
 import { playlistLibraryStore } from '../store/playlistLibraryStore';
 import { processingOverlayStore } from '../store/processingOverlayStore';
@@ -226,6 +228,103 @@ export async function saveArtistTopSongsPlaylist(artist: ArtistID3): Promise<voi
     processingOverlayStore.getState().showSuccess('Playlist Created');
   } catch {
     processingOverlayStore.getState().showError('Failed to create playlist');
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Play more by this artist                                           */
+/* ------------------------------------------------------------------ */
+
+const MORE_BY_ARTIST_COUNT = 20;
+const MORE_BY_ARTIST_MIN = 5;
+
+/** Fisher-Yates (Knuth) in-place shuffle. */
+function shuffleArray<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/**
+ * Build a shuffled queue of songs by a specific artist and start playback.
+ * Online: fetches all albums by the artist, collects songs, shuffles.
+ * Offline: scans cached music items for matching tracks.
+ */
+export async function playMoreByArtist(artistId: string, artistName: string): Promise<void> {
+  const offline = offlineModeStore.getState().offlineMode;
+  processingOverlayStore.getState().show('Loading…');
+
+  try {
+    let songs: Child[];
+
+    if (offline) {
+      const items = Object.values(musicCacheStore.getState().cachedItems);
+      songs = items.flatMap((item) =>
+        item.tracks
+          .filter((t) => t.artist === artistName)
+          .map((t) => ({
+            id: t.id,
+            title: t.title,
+            artist: t.artist,
+            album: item.name,
+            coverArt: item.coverArtId,
+            duration: t.duration,
+            isDir: false,
+          } as Child)),
+      );
+
+      if (songs.length === 0) {
+        processingOverlayStore.getState().showError(`No offline songs by ${artistName}`);
+        return;
+      }
+      if (songs.length < MORE_BY_ARTIST_MIN) {
+        processingOverlayStore.getState().showError(`Not enough offline songs by ${artistName}`);
+        return;
+      }
+    } else {
+      // Get artist detail (cached or fetched)
+      const cached = artistDetailStore.getState().artists[artistId];
+      const artistDetail = cached ?? (await artistDetailStore.getState().fetchArtist(artistId));
+      const albums = artistDetail?.artist?.album;
+      if (!albums?.length) {
+        processingOverlayStore.getState().showError(`No songs found by ${artistName}`);
+        return;
+      }
+
+      // Fetch songs from each album (use cache where available)
+      const cachedAlbums = albumDetailStore.getState().albums;
+      const albumSongs = await Promise.all(
+        albums.map(async (album) => {
+          const cached = cachedAlbums[album.id]?.album?.song;
+          if (cached?.length) return cached;
+          const fetched = await getAlbum(album.id);
+          return fetched?.song ?? [];
+        }),
+      );
+
+      // Flatten and filter to only this artist's songs (handles compilations)
+      songs = albumSongs.flat().filter(
+        (s) => s.artistId === artistId || s.artist === artistName,
+      );
+
+      if (songs.length === 0) {
+        processingOverlayStore.getState().showError(`No songs found by ${artistName}`);
+        return;
+      }
+      if (songs.length < MORE_BY_ARTIST_MIN) {
+        processingOverlayStore.getState().showError(`Not enough songs by ${artistName}`);
+        return;
+      }
+    }
+
+    shuffleArray(songs);
+    const queue = songs.slice(0, MORE_BY_ARTIST_COUNT);
+    await playTrack(queue[0], queue);
+    processingOverlayStore.getState().showSuccess(`Playing ${artistName} mix`);
+  } catch {
+    processingOverlayStore.getState().showError(`Failed to load ${artistName} songs`);
   }
 }
 

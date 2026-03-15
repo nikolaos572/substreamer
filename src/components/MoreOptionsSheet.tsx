@@ -38,6 +38,7 @@ import {
   cancelDownload,
   enqueueAlbumDownload,
   enqueuePlaylistDownload,
+  playMoreByArtist,
   playMoreLikeThis,
   playSimilarArtistsMix,
   removeDownload,
@@ -151,6 +152,13 @@ function canPlaySimilarArtistsMix(entity: MoreOptionsEntity): boolean {
   return entity.type === 'artist';
 }
 
+function canPlayMoreByArtist(entity: MoreOptionsEntity): boolean {
+  if (entity.type === 'song') return Boolean(entity.item.artistId);
+  if (entity.type === 'album') return Boolean(entity.item.artistId);
+  if (entity.type === 'artist') return true;
+  return false;
+}
+
 function isRatable(entity: MoreOptionsEntity): boolean {
   return entity.type === 'song' || entity.type === 'album' || entity.type === 'artist';
 }
@@ -241,6 +249,15 @@ export function MoreOptionsSheet() {
     if (!entity || entity.type !== 'artist') return;
     handleClose();
     playSimilarArtistsMix(entity.item);
+  }, [entity, handleClose]);
+
+  const handlePlayMoreByArtist = useCallback(() => {
+    if (!entity) return;
+    const artistId = entity.type === 'artist' ? entity.item.id : (entity.item as Child | AlbumID3).artistId;
+    const artistName = entity.type === 'artist' ? entity.item.name : (entity.item as Child | AlbumID3).artist;
+    if (!artistId || !artistName) return;
+    handleClose();
+    playMoreByArtist(artistId, artistName);
   }, [entity, handleClose]);
 
   const handleSetMbid = useCallback(() => {
@@ -447,11 +464,13 @@ export function MoreOptionsSheet() {
   const isVA = entity?.type === 'artist' && isVariousArtists(entity.item.name);
   const showSaveTopSongsPlaylist = !offline && entity?.type === 'artist' && !isVA;
   const showPlaySimilarArtistsMix = !offline && canPlaySimilarArtistsMix(entity) && !isVA;
+  const showPlayMoreByArtist = canPlayMoreByArtist(entity) && !isVA;
   const showSetMbid = entity?.type === 'artist' && !isVA;
 
   const hasAnyOption =
     starrable || showRating || showAddToPlaylist || showAddQueueToPlaylist ||
-    showAddToQueue || showPlayMoreLikeThis || showPlaySimilarArtistsMix || showDownload ||
+    showAddToQueue || showPlayMoreLikeThis || showPlaySimilarArtistsMix ||
+    showPlayMoreByArtist || showDownload ||
     showAlbumLink || showArtistLink || showShare || showDetails || showDelete ||
     showSaveTopSongsPlaylist || showSetMbid;
 
@@ -685,6 +704,27 @@ export function MoreOptionsSheet() {
                   />
                   <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
                     Play More Like This
+                  </Text>
+                </Pressable>
+              )}
+
+              {/* Play More by This Artist */}
+              {showPlayMoreByArtist && (
+                <Pressable
+                  onPress={handlePlayMoreByArtist}
+                  style={({ pressed }) => [
+                    styles.option,
+                    pressed && styles.optionPressed,
+                  ]}
+                >
+                  <Ionicons
+                    name="radio-outline"
+                    size={22}
+                    color={colors.textPrimary}
+                    style={styles.optionIcon}
+                  />
+                  <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
+                    Play More by This Artist
                   </Text>
                 </Pressable>
               )}
@@ -1054,6 +1094,27 @@ export function MoreOptionsSheet() {
                   />
                   <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
                     Play More Like This
+                  </Text>
+                </Pressable>
+              )}
+
+              {/* Play More by This Artist */}
+              {showPlayMoreByArtist && (
+                <Pressable
+                  onPress={handlePlayMoreByArtist}
+                  style={({ pressed }) => [
+                    styles.option,
+                    pressed && styles.optionPressed,
+                  ]}
+                >
+                  <Ionicons
+                    name="radio-outline"
+                    size={22}
+                    color={colors.textPrimary}
+                    style={styles.optionIcon}
+                  />
+                  <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
+                    Play More by This Artist
                   </Text>
                 </Pressable>
               )}
