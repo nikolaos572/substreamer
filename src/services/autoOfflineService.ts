@@ -1,12 +1,13 @@
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
 import * as Location from 'expo-location';
-import { Linking, Platform } from 'react-native';
+import { AppState, Linking, Platform, type NativeEventSubscription } from 'react-native';
 
 import { autoOfflineStore } from '../store/autoOfflineStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 
 let unsubscribeNetInfo: (() => void) | null = null;
 let unsubscribeStore: (() => void) | null = null;
+let appStateSubscription: NativeEventSubscription | null = null;
 
 function handleNetworkChange(state: NetInfoState): void {
   const { mode, homeSSIDs } = autoOfflineStore.getState();
@@ -43,6 +44,12 @@ function subscribe(): void {
   if (unsubscribeNetInfo) return;
 
   unsubscribeNetInfo = NetInfo.addEventListener(handleNetworkChange);
+
+  appStateSubscription = AppState.addEventListener('change', (nextState) => {
+    if (nextState === 'active') {
+      NetInfo.refresh().then(handleNetworkChange);
+    }
+  });
 }
 
 function unsubscribe(): void {
@@ -50,11 +57,18 @@ function unsubscribe(): void {
     unsubscribeNetInfo();
     unsubscribeNetInfo = null;
   }
+  if (appStateSubscription) {
+    appStateSubscription.remove();
+    appStateSubscription = null;
+  }
 }
 
 export function startAutoOffline(): void {
   if (!autoOfflineStore.getState().enabled) return;
   subscribe();
+
+  // Fresh evaluation on cold start — bypass cached NetInfo state
+  NetInfo.refresh().then(handleNetworkChange);
 
   // Re-subscribe when store settings change
   unsubscribeStore = autoOfflineStore.subscribe((state, prev) => {

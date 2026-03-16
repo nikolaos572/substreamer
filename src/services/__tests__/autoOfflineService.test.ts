@@ -17,7 +17,16 @@ jest.mock('expo-location', () => ({
   getForegroundPermissionsAsync: jest.fn(),
 }));
 
+let mockAppStateCallback: ((state: string) => void) | null = null;
+const mockAppStateRemove = jest.fn();
+
 jest.mock('react-native', () => ({
+  AppState: {
+    addEventListener: jest.fn((event: string, cb: (state: string) => void) => {
+      if (event === 'change') mockAppStateCallback = cb;
+      return { remove: mockAppStateRemove };
+    }),
+  },
   Linking: {
     openURL: jest.fn(),
     openSettings: jest.fn(),
@@ -69,6 +78,8 @@ beforeEach(() => {
   mockSetOffline.mockClear();
   mockFetch.mockReset();
   mockRefresh.mockReset();
+  // Default: resolve with a neutral state so startAutoOffline() doesn't throw
+  mockRefresh.mockResolvedValue({ type: 'wifi', details: {} });
   mockAddEventListener.mockClear();
   mockAddEventListener.mockImplementation((cb: (state: any) => void) => {
     mockNetInfoCallback = cb;
@@ -79,6 +90,8 @@ beforeEach(() => {
   mockOpenURL.mockClear();
   mockLinkingOpenSettings.mockClear();
   mockNetInfoCallback = null;
+  mockAppStateCallback = null;
+  mockAppStateRemove.mockClear();
 });
 
 afterEach(() => {
@@ -92,12 +105,14 @@ describe('startAutoOffline', () => {
     autoOfflineStore.setState({ enabled: false });
     startAutoOffline();
     expect(mockNetInfoCallback).toBeNull();
+    expect(mockAppStateCallback).toBeNull();
   });
 
-  it('subscribes to NetInfo when enabled', () => {
+  it('subscribes to NetInfo and AppState when enabled', () => {
     autoOfflineStore.setState({ enabled: true });
     startAutoOffline();
     expect(mockNetInfoCallback).not.toBeNull();
+    expect(mockAppStateCallback).not.toBeNull();
   });
 
   it('is idempotent on repeated calls', () => {
@@ -107,15 +122,27 @@ describe('startAutoOffline', () => {
     startAutoOffline();
     expect(mockAddEventListener).not.toHaveBeenCalled();
   });
+
+  it('calls NetInfo.refresh() immediately for cold start evaluation', async () => {
+    mockRefresh.mockResolvedValue({ type: 'wifi', details: {} });
+    autoOfflineStore.setState({ enabled: true, mode: 'wifi-only' });
+    startAutoOffline();
+
+    expect(mockRefresh).toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockSetOffline).toHaveBeenCalledWith(false);
+  });
 });
 
 describe('stopAutoOffline', () => {
-  it('unsubscribes NetInfo and store', () => {
+  it('unsubscribes NetInfo, AppState, and store', () => {
     autoOfflineStore.setState({ enabled: true });
     startAutoOffline();
     expect(mockNetInfoCallback).not.toBeNull();
+    expect(mockAppStateCallback).not.toBeNull();
     stopAutoOffline();
     expect(mockNetInfoCallback).toBeNull();
+    expect(mockAppStateRemove).toHaveBeenCalled();
   });
 
   it('is safe to call when not monitoring', () => {
@@ -259,6 +286,66 @@ describe('store subscription – settings changes', () => {
     autoOfflineStore.getState().addSSID('NewHome');
 
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('foreground re-evaluation', () => {
+  it('triggers NetInfo.refresh and re-evaluates in wifi-only mode on active', async () => {
+    autoOfflineStore.setState({ enabled: true, mode: 'wifi-only' });
+    startAutoOffline();
+    mockSetOffline.mockClear();
+    mockRefresh.mockResolvedValue({ type: 'cellular', details: {} });
+
+    mockAppStateCallback!('active');
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(mockRefresh).toHaveBeenCalled();
+    expect(mockSetOffline).toHaveBeenCalledWith(true);
+  });
+
+  it('triggers re-evaluation with SSID matching in home-wifi mode on active', async () => {
+    autoOfflineStore.setState({ enabled: true, mode: 'home-wifi', homeSSIDs: ['HomeNet'] });
+    startAutoOffline();
+    mockSetOffline.mockClear();
+    mockRefresh.mockResolvedValue({ type: 'wifi', details: { ssid: 'HomeNet' } });
+
+    mockAppStateCallback!('active');
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(mockSetOffline).toHaveBeenCalledWith(false);
+  });
+
+  it('sets offline when foreground SSID does not match home networks', async () => {
+    autoOfflineStore.setState({ enabled: true, mode: 'home-wifi', homeSSIDs: ['HomeNet'] });
+    startAutoOffline();
+    mockSetOffline.mockClear();
+    mockRefresh.mockResolvedValue({ type: 'wifi', details: { ssid: 'CoffeeShop' } });
+
+    mockAppStateCallback!('active');
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(mockSetOffline).toHaveBeenCalledWith(true);
+  });
+
+  it('does not trigger refresh on background state change', async () => {
+    autoOfflineStore.setState({ enabled: true, mode: 'wifi-only' });
+    startAutoOffline();
+    await new Promise((r) => setTimeout(r, 0));
+    mockRefresh.mockClear();
+
+    mockAppStateCallback!('background');
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(mockRefresh).not.toHaveBeenCalled();
+  });
+
+  it('cleans up AppState listener on stopAutoOffline', () => {
+    autoOfflineStore.setState({ enabled: true });
+    startAutoOffline();
+    expect(mockAppStateCallback).not.toBeNull();
+
+    stopAutoOffline();
+    expect(mockAppStateRemove).toHaveBeenCalled();
   });
 });
 
