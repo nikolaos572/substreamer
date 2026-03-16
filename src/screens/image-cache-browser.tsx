@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
+import { useNavigation } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,6 +18,7 @@ import { useTheme } from '../hooks/useTheme';
 import { ThemedAlert } from '../components/ThemedAlert';
 import { useThemedAlert } from '../hooks/useThemedAlert';
 import {
+  clearImageCache,
   deleteCachedImage,
   listCachedImagesAsync,
   refreshCachedImage,
@@ -119,11 +121,46 @@ const CacheRow = memo(function CacheRow({
 
 export function ImageCacheBrowserScreen() {
   const { colors } = useTheme();
+  const navigation = useNavigation();
   const { alert, alertProps } = useThemedAlert();
   const transitionComplete = useTransitionComplete();
   const [entries, setEntries] = useState<CachedImageEntry[]>([]);
   const [filter, setFilter] = useState('');
   const listRef = useRef<FlashListRef<CachedImageEntry>>(null);
+
+  const handleClearAll = useCallback(() => {
+    alert(
+      'Clear Image Cache',
+      'Delete all cached images? They will be re-downloaded as you browse.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            await clearImageCache();
+            setEntries([]);
+          },
+        },
+      ],
+    );
+  }, [alert]);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: entries.length > 0
+        ? () => (
+            <Pressable
+              onPress={handleClearAll}
+              hitSlop={8}
+              style={({ pressed }) => pressed && styles.pressed}
+            >
+              <Text style={[styles.clearButton, { color: colors.red }]}>Clear</Text>
+            </Pressable>
+          )
+        : undefined,
+    });
+  }, [navigation, entries.length, handleClearAll, colors.red]);
 
   const handleFilterChange = useCallback((text: string) => {
     setFilter(text);
@@ -366,5 +403,9 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.3,
+  },
+  clearButton: {
+    fontSize: 17,
+    fontWeight: '400',
   },
 });

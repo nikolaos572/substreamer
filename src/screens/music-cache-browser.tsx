@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { useNavigation } from 'expo-router';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,6 +13,7 @@ import {
 
 import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
+import { useTransitionComplete } from '../hooks/useTransitionComplete';
 import {
   SwipeableRow,
   closeOpenRow,
@@ -21,10 +23,13 @@ import { useTheme } from '../hooks/useTheme';
 import { ThemedAlert } from '../components/ThemedAlert';
 import { useThemedAlert } from '../hooks/useThemedAlert';
 import {
+  clearDownloadQueue,
+  clearMusicCache,
   deleteCachedItem,
   redownloadItem,
   redownloadTrack,
 } from '../services/musicCacheService';
+import { clearQueue } from '../services/playerService';
 import { offlineModeStore } from '../store/offlineModeStore';
 import {
   musicCacheStore,
@@ -109,6 +114,23 @@ const CacheRow = memo(function CacheRow({
     ? '1 track'
     : `${item.tracks.length} tracks`;
 
+  // Defer track list rendering by one frame so the chevron flip and row
+  // expansion feel instant before mounting potentially many TrackFileRows.
+  const [tracksReady, setTracksReady] = useState(false);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (expanded) {
+      rafRef.current = requestAnimationFrame(() => setTracksReady(true));
+    } else {
+      setTracksReady(false);
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    }
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [expanded]);
+
   const handleDelete = useCallback(() => {
     onDelete(item.itemId);
   }, [item.itemId, onDelete]);
@@ -164,14 +186,22 @@ const CacheRow = memo(function CacheRow({
 
         {expanded && (
           <View style={[styles.trackList, { backgroundColor: colors.background }]}>
-            {item.tracks.map((track) => (
-              <TrackFileRow
-                key={track.id}
-                track={track}
-                itemId={item.itemId}
-                colors={colors}
+            {tracksReady ? (
+              item.tracks.map((track) => (
+                <TrackFileRow
+                  key={track.id}
+                  track={track}
+                  itemId={item.itemId}
+                  colors={colors}
+                />
+              ))
+            ) : (
+              <ActivityIndicator
+                size="small"
+                color={colors.primary}
+                style={styles.trackLoading}
               />
-            ))}
+            )}
           </View>
         )}
       </View>
@@ -185,10 +215,50 @@ const CacheRow = memo(function CacheRow({
 
 export function MusicCacheBrowserScreen() {
   const { colors } = useTheme();
+  const navigation = useNavigation();
   const { alert, alertProps } = useThemedAlert();
+  const transitionComplete = useTransitionComplete();
   const cachedItems = musicCacheStore((s) => s.cachedItems);
   const [filter, setFilter] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const hasItems = Object.keys(cachedItems).length > 0;
+
+  const handleClearAll = useCallback(() => {
+    alert(
+      'Clear All Downloads',
+      'Delete all downloaded music? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            setExpandedId(null);
+            clearDownloadQueue();
+            await clearQueue();
+            await clearMusicCache();
+          },
+        },
+      ],
+    );
+  }, [alert]);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: hasItems
+        ? () => (
+            <Pressable
+              onPress={handleClearAll}
+              hitSlop={8}
+              style={({ pressed }) => pressed && styles.pressed}
+            >
+              <Text style={[styles.clearButton, { color: colors.red }]}>Clear</Text>
+            </Pressable>
+          )
+        : undefined,
+    });
+  }, [navigation, hasItems, handleClearAll, colors.red]);
 
   const entries = useMemo(() => {
     const all = Object.values(cachedItems);
@@ -269,10 +339,15 @@ export function MusicCacheBrowserScreen() {
   const emptySubtitle = isFiltered ? undefined : 'Download albums or playlists for offline listening';
 
   const listEmpty = useMemo(
-    () => (
-      <EmptyState icon="musical-notes-outline" title={emptyMessage} subtitle={emptySubtitle} />
-    ),
-    [emptyMessage, emptySubtitle],
+    () =>
+      !transitionComplete ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : (
+        <EmptyState icon="musical-notes-outline" title={emptyMessage} subtitle={emptySubtitle} />
+      ),
+    [transitionComplete, emptyMessage, emptySubtitle, colors.primary],
   );
 
   const listHeader = useMemo(
@@ -299,12 +374,14 @@ export function MusicCacheBrowserScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {listHeader}
       <FlashList
-        data={entries}
+        data={transitionComplete ? entries : []}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         extraData={expandedId}
         ListEmptyComponent={listEmpty}
-        contentContainerStyle={entries.length === 0 ? styles.emptyListContent : undefined}
+        contentContainerStyle={
+          (!transitionComplete || entries.length === 0) ? styles.emptyListContent : undefined
+        }
         onScrollBeginDrag={closeOpenRow}
       />
     </View>
@@ -333,6 +410,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     paddingVertical: 6,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyListContent: {
     flex: 1,
@@ -375,6 +457,9 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     paddingBottom: 8,
   },
+  trackLoading: {
+    paddingVertical: 12,
+  },
   trackRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -395,5 +480,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.6,
+  },
+  clearButton: {
+    fontSize: 17,
+    fontWeight: '400',
   },
 });
