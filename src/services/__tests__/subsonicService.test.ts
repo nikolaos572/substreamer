@@ -1448,6 +1448,98 @@ describe('fetchServerInfo (non-OpenSubsonic server)', () => {
   });
 });
 
+describe('getGenres', () => {
+  it('returns null when no API', async () => {
+    mockAuthStore.getState.mockReturnValue({ isLoggedIn: false } as any);
+    const { getGenres } = require('../subsonicService');
+    expect(await getGenres()).toBeNull();
+  });
+
+  it('returns genres on success', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getGenres = jest.fn().mockResolvedValue({
+      genres: { genre: [{ value: 'Rock', albumCount: 10, songCount: 100 }] },
+    });
+    const { getGenres, getApi } = require('../subsonicService');
+    getApi();
+    const result = await getGenres();
+    expect(result).toEqual([{ value: 'Rock', albumCount: 10, songCount: 100 }]);
+  });
+
+  it('returns empty array when genres is missing', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getGenres = jest.fn().mockResolvedValue({});
+    const { getGenres, getApi } = require('../subsonicService');
+    getApi();
+    const result = await getGenres();
+    expect(result).toEqual([]);
+  });
+
+  it('returns null on exception', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getGenres = jest.fn().mockRejectedValue(new Error('fail'));
+    const { getGenres, getApi } = require('../subsonicService');
+    getApi();
+    const result = await getGenres();
+    expect(result).toBeNull();
+  });
+});
+
+describe('getSongsByGenre', () => {
+  it('returns null when no API', async () => {
+    mockAuthStore.getState.mockReturnValue({ isLoggedIn: false } as any);
+    const { getSongsByGenre } = require('../subsonicService');
+    expect(await getSongsByGenre('Rock')).toBeNull();
+  });
+
+  it('returns songs on success', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getSongsByGenre = jest.fn().mockResolvedValue({
+      songsByGenre: { song: [{ id: 's1', title: 'Rock Song' }] },
+    });
+    const { getSongsByGenre, getApi } = require('../subsonicService');
+    getApi();
+    const result = await getSongsByGenre('Rock', 50, 0);
+    expect(result).toEqual([{ id: 's1', title: 'Rock Song' }]);
+    expect(SubsonicAPI.prototype.getSongsByGenre).toHaveBeenCalledWith({
+      genre: 'Rock',
+      count: 50,
+      offset: 0,
+    });
+  });
+
+  it('omits optional params when not provided', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getSongsByGenre = jest.fn().mockResolvedValue({
+      songsByGenre: { song: [] },
+    });
+    const { getSongsByGenre, getApi } = require('../subsonicService');
+    getApi();
+    await getSongsByGenre('Jazz');
+    expect(SubsonicAPI.prototype.getSongsByGenre).toHaveBeenCalledWith({
+      genre: 'Jazz',
+    });
+  });
+
+  it('returns empty array when songsByGenre is missing', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getSongsByGenre = jest.fn().mockResolvedValue({});
+    const { getSongsByGenre, getApi } = require('../subsonicService');
+    getApi();
+    const result = await getSongsByGenre('Rock');
+    expect(result).toEqual([]);
+  });
+
+  it('returns null on exception', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getSongsByGenre = jest.fn().mockRejectedValue(new Error('fail'));
+    const { getSongsByGenre, getApi } = require('../subsonicService');
+    getApi();
+    const result = await getSongsByGenre('Rock');
+    expect(result).toBeNull();
+  });
+});
+
 describe('login (edge cases)', () => {
   it('falls back to response.version when serverVersion is falsy', async () => {
     const { default: SubsonicAPI } = require('subsonic-api');

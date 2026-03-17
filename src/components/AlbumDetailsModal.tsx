@@ -10,6 +10,7 @@ import { BottomSheet } from './BottomSheet';
 import { useTheme } from '../hooks/useTheme';
 import type { AlbumID3, AlbumWithSongsID3, Child } from '../services/subsonicService';
 import { formatCompactDuration } from '../utils/formatters';
+import { getGenreNames } from '../utils/genreHelpers';
 
 export interface AlbumDetailsModalProps {
   album: AlbumID3 | AlbumWithSongsID3;
@@ -98,7 +99,8 @@ export function AlbumDetailsModal({ album, visible, onClose }: AlbumDetailsModal
       result.push({ label: 'Year', value: String(album.year) });
     }
 
-    const genre = album.genre ?? (album.genres?.length ? album.genres.join(', ') : null);
+    const genreNames = getGenreNames(album);
+    const genre = genreNames.length > 0 ? genreNames.join(', ') : null;
     if (genre) result.push({ label: 'Genre', value: genre });
 
     result.push({ label: 'Tracks', value: String(album.songCount) });

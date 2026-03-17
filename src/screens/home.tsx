@@ -22,6 +22,7 @@ import { AlbumCard } from '../components/AlbumCard';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import { DownloadedIcon } from '../components/DownloadedIcon';
 import { EmptyState } from '../components/EmptyState';
+import { GenreChipSection } from '../components/GenreChipSection';
 import { PlaylistCard } from '../components/PlaylistCard';
 import WaveformLogo from '../components/WaveformLogo';
 import { computeStreaks, dateKey } from '../hooks/usePlaybackAnalytics';
@@ -324,6 +325,7 @@ export function HomeScreen() {
   const frequentlyPlayed = albumListsStore((s) => s.frequentlyPlayed);
   const randomSelection = albumListsStore((s) => s.randomSelection);
 
+  const genreCounts = completedScrobbleStore((s) => s.aggregates.genreCounts);
   const totalPlays = completedScrobbleStore((s) => s.stats.totalPlays);
   const totalSeconds = completedScrobbleStore((s) => s.stats.totalListeningSeconds);
   const uniqueArtistCount = completedScrobbleStore(
@@ -521,6 +523,7 @@ export function HomeScreen() {
               )}
             </Pressable>
           </View>
+          <GenreChipSection genreCounts={genreCounts} colors={colors} />
           {downloadedOnly && (
             <>
               <DownloadedAlbumSection albums={downloadedAlbums} colors={colors} />

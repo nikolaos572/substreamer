@@ -165,6 +165,17 @@ describe('aggregates – incremental updates', () => {
     expect(aggregates.genreCounts['Jazz']).toBe(1);
   });
 
+  it('extracts genre from genres array with {name} objects', () => {
+    completedScrobbleStore.getState().addCompleted(validScrobble({
+      id: '1',
+      song: { id: 's1', title: 'A', artist: 'Art', genres: [{ name: 'Rock' }], duration: 100 } as any,
+    }));
+
+    const { aggregates } = completedScrobbleStore.getState();
+    expect(aggregates.genreCounts['Rock']).toBe(1);
+    expect(aggregates.genreCounts['[object Object]']).toBeUndefined();
+  });
+
   it('updates hourBuckets incrementally', () => {
     const time = new Date(2025, 0, 15, 14, 30).getTime();
     completedScrobbleStore.getState().addCompleted(validScrobble({ id: '1', time, song: { id: 's1', title: 'A', artist: 'Art', duration: 100 } as any }));
@@ -366,6 +377,30 @@ describe('onRehydrateStorage', () => {
     const statsAfter = completedScrobbleStore.getState().stats;
     expect(statsAfter.totalPlays).toBe(1);
     expect(statsAfter.totalListeningSeconds).toBe(100);
+  });
+
+  it('cleans up [object Object] keys in genreCounts on rehydration', () => {
+    const scrobble = validScrobble({
+      id: 'a',
+      song: { id: 's1', title: 'X', artist: 'A', duration: 100, genres: [{ name: 'Rock' }] } as any,
+      time: new Date(2025, 0, 15, 10).getTime(),
+    });
+    completedScrobbleStore.setState({
+      completedScrobbles: [scrobble],
+      stats: { totalPlays: 1, totalListeningSeconds: 100, uniqueArtists: { A: true } },
+      aggregates: {
+        artistCounts: { A: 1 },
+        albumCounts: {},
+        songCounts: { s1: { song: scrobble.song, count: 1 } },
+        genreCounts: { '[object Object]': 1 },
+        hourBuckets: new Array(24).fill(0),
+        dayCounts: { '2025-01-15': 1 },
+      },
+    });
+    completedScrobbleStore.persist.rehydrate();
+    const { aggregates } = completedScrobbleStore.getState();
+    expect(aggregates.genreCounts['[object Object]']).toBeUndefined();
+    expect(aggregates.genreCounts['Rock']).toBe(1);
   });
 
   it('rebuilds aggregates when dayCounts is missing (upgrade path)', () => {

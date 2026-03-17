@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { sqliteStorage } from './sqliteStorage';
 
 import { type Child } from '../services/subsonicService';
+import { getPrimaryGenre } from '../utils/genreHelpers';
 
 export interface CompletedScrobble {
   /** Unique identifier (carried over from the pending entry). */
@@ -100,10 +101,9 @@ function buildAggregates(scrobbles: CompletedScrobble[]): AnalyticsAggregates {
       songCounts[s.song.id] = { song: s.song, count: 1 };
     }
 
-    const genre = s.song.genre ?? (s.song.genres?.[0] ?? null);
+    const genre = getPrimaryGenre(s.song);
     if (genre) {
-      const genreKey = typeof genre === 'string' ? genre : String(genre);
-      genreCounts[genreKey] = (genreCounts[genreKey] ?? 0) + 1;
+      genreCounts[genre] = (genreCounts[genre] ?? 0) + 1;
     }
 
     hourBuckets[new Date(s.time).getHours()]++;
@@ -161,11 +161,10 @@ export const completedScrobbleStore = create<CompletedScrobbleState>()(
             [scrobble.song.id]: { song: scrobble.song, count: (existingSong?.count ?? 0) + 1 },
           };
 
-          const genre = scrobble.song.genre ?? (scrobble.song.genres?.[0] ?? null);
+          const genre = getPrimaryGenre(scrobble.song);
           let newGenreCounts = agg.genreCounts;
           if (genre) {
-            const genreKey = typeof genre === 'string' ? genre : String(genre);
-            newGenreCounts = { ...agg.genreCounts, [genreKey]: (agg.genreCounts[genreKey] ?? 0) + 1 };
+            newGenreCounts = { ...agg.genreCounts, [genre]: (agg.genreCounts[genre] ?? 0) + 1 };
           }
 
           const newHourBuckets = [...agg.hourBuckets];
@@ -232,6 +231,15 @@ export const completedScrobbleStore = create<CompletedScrobbleState>()(
           state.completedScrobbles.length > 0
         ) {
           state.rebuildStats();
+        }
+
+        // Clean up corrupted "[object Object]" keys in genreCounts from the
+        // genres type mismatch bug (genres elements were {name} objects, not strings)
+        if (state.aggregates?.genreCounts && '[object Object]' in state.aggregates.genreCounts) {
+          if (state.completedScrobbles.length > 0) {
+            state.rebuildAggregates();
+            return;
+          }
         }
 
         // Rebuild aggregates if missing (upgrade from older version)

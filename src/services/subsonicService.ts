@@ -6,6 +6,7 @@ import SubsonicAPI, {
   type ArtistInfo2,
   type ArtistWithAlbumsID3,
   type Child,
+  type Genre,
   type Playlist,
   type PlaylistWithSongs,
   type ScanStatus,
@@ -115,7 +116,7 @@ export function clearApiCache(): void {
   cachedCoverArtToken = null;
 }
 
-export type { AlbumID3, AlbumWithSongsID3, ArtistID3, ArtistInfo2, ArtistWithAlbumsID3, Child, Playlist, PlaylistWithSongs, ScanStatus, Share };
+export type { AlbumID3, AlbumWithSongsID3, ArtistID3, ArtistInfo2, ArtistWithAlbumsID3, Child, Genre, Playlist, PlaylistWithSongs, ScanStatus, Share };
 
 // ------------------------------------------------------------------ //
 //  Various Artists pseudo-artist                                      //
@@ -752,6 +753,56 @@ export async function startScan(fullScan?: boolean): Promise<ScanStatusResult | 
       lastScan: null,
       folderCount: null,
     };
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Genres                                                             */
+/* ------------------------------------------------------------------ */
+
+export async function getGenres(): Promise<Genre[] | null> {
+  const api = getApi();
+  if (!api) return null;
+  try {
+    const response = await api.getGenres();
+    return response.genres?.genre ?? [];
+  } catch {
+    return null;
+  }
+}
+
+export async function getSongsByGenre(
+  genre: string,
+  count?: number,
+  offset?: number,
+): Promise<Child[] | null> {
+  const api = getApi();
+  if (!api) return null;
+  try {
+    const args: { genre: string; count?: number; offset?: number } = { genre };
+    if (count != null) args.count = count;
+    if (offset != null) args.offset = offset;
+    const response = await api.getSongsByGenre(args);
+    return response.songsByGenre?.song ?? [];
+  } catch {
+    return null;
+  }
+}
+
+export async function getRandomSongs(
+  size?: number,
+  genre?: string,
+): Promise<Child[] | null> {
+  const api = getApi();
+  if (!api) return null;
+  try {
+    const args: { size?: number; genre?: string } = {};
+    if (size != null) args.size = size;
+    if (genre != null) args.genre = genre;
+    const response = await api.getRandomSongs(args);
+    return response.randomSongs?.song ?? [];
   } catch {
     return null;
   }

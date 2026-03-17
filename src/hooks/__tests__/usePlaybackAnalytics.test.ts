@@ -424,7 +424,7 @@ describe('usePlaybackAnalytics', () => {
     expect(result.current.topArtists[0].artist).toBe('Unknown');
   });
 
-  it('uses genres array fallback when genre is absent', () => {
+  it('uses genres array fallback when genre is absent ({name} objects)', () => {
     const withGenresArray: ScrobbleRecord[] = [
       {
         id: '1',
@@ -436,6 +436,22 @@ describe('usePlaybackAnalytics', () => {
       usePlaybackAnalytics(withGenresArray, 'all'),
     );
     expect(result.current.genreBreakdown).toHaveLength(1);
+    expect(result.current.genreBreakdown[0].genre).toBe('Rock');
+  });
+
+  it('handles genres as plain strings defensively', () => {
+    const withStringGenres: ScrobbleRecord[] = [
+      {
+        id: '1',
+        song: { id: 's1', artist: 'A', album: 'B', duration: 100, genres: ['Electronic'] } as any,
+        time: ts(2025, 1, 14),
+      },
+    ];
+    const { result } = renderHook(() =>
+      usePlaybackAnalytics(withStringGenres, 'all'),
+    );
+    expect(result.current.genreBreakdown).toHaveLength(1);
+    expect(result.current.genreBreakdown[0].genre).toBe('Electronic');
   });
 
   it('hourlyDistribution has 24 buckets', () => {

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { type Child } from '../services/subsonicService';
 import { type AnalyticsAggregates } from '../store/completedScrobbleStore';
+import { getPrimaryGenre } from '../utils/genreHelpers';
 
 export type TimePeriod = '7d' | '30d' | '90d' | 'all';
 
@@ -328,7 +329,7 @@ export function usePlaybackAnalytics(
         songCounts.set(s.song.id, { song: s.song, count: 1 });
       }
 
-      const genre = s.song.genre ?? (s.song.genres?.[0] ?? null);
+      const genre = getPrimaryGenre(s.song);
       if (genre) {
         genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + 1);
       }

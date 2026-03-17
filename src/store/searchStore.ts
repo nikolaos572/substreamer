@@ -1,111 +1,20 @@
 import { create } from 'zustand';
 
 import {
-  ensureCoverArtAuth,
-  search3,
-  type AlbumID3,
-  type ArtistID3,
-  type Child,
-} from '../services/subsonicService';
-import { albumDetailStore } from './albumDetailStore';
-import { albumLibraryStore } from './albumLibraryStore';
-import { ratingStore } from './ratingStore';
-import { favoritesStore } from './favoritesStore';
-import { musicCacheStore } from './musicCacheStore';
+  performOnlineSearch,
+  performOfflineSearch,
+  type SearchResults,
+} from '../services/searchService';
 import { offlineModeStore } from './offlineModeStore';
-import { playlistDetailStore } from './playlistDetailStore';
-import { playlistLibraryStore } from './playlistLibraryStore';
+import { ratingStore } from './ratingStore';
 
-export interface SearchResults {
-  albums: AlbumID3[];
-  artists: ArtistID3[];
-  songs: Child[];
-}
+export type { SearchResults };
 
 const EMPTY_RESULTS: SearchResults = {
   albums: [],
   artists: [],
   songs: [],
 };
-
-function performOfflineSearch(query: string): SearchResults {
-  const q = query.toLowerCase();
-  const { cachedItems } = musicCacheStore.getState();
-
-  const cachedIds = new Set(Object.keys(cachedItems));
-
-  const albums = albumLibraryStore
-    .getState()
-    .albums.filter(
-      (a) =>
-        cachedIds.has(a.id) &&
-        (a.name.toLowerCase().includes(q) ||
-          (a.artist?.toLowerCase().includes(q) ?? false))
-    );
-
-  const playlists = playlistLibraryStore
-    .getState()
-    .playlists.filter(
-      (p) => cachedIds.has(p.id) && p.name.toLowerCase().includes(q)
-    );
-
-  // Construct minimal Child objects for playlist results so they appear in
-  // the albums section (Subsonic search3 doesn't return playlists either,
-  // so we merge them as album-shaped results).
-  const playlistAlbums: AlbumID3[] = playlists.map((p) => ({
-    id: p.id,
-    name: p.name,
-    artist: p.owner,
-    coverArt: p.coverArt,
-    songCount: p.songCount,
-    duration: p.duration,
-    created: p.created,
-  }));
-
-  const trackCoverArt = new Map<string, string>();
-  for (const entry of Object.values(playlistDetailStore.getState().playlists)) {
-    for (const song of entry.playlist.entry ?? []) {
-      if (song.coverArt) trackCoverArt.set(song.id, song.coverArt);
-    }
-  }
-  for (const entry of Object.values(albumDetailStore.getState().albums)) {
-    for (const song of entry.album.song ?? []) {
-      if (song.coverArt) trackCoverArt.set(song.id, song.coverArt);
-    }
-  }
-  for (const song of favoritesStore.getState().songs) {
-    if (song.coverArt) trackCoverArt.set(song.id, song.coverArt);
-  }
-
-  const songs: Child[] = [];
-  const seenSongIds = new Set<string>();
-  for (const item of Object.values(cachedItems)) {
-    for (const track of item.tracks) {
-      if (seenSongIds.has(track.id)) continue;
-      if (
-        track.title.toLowerCase().includes(q) ||
-        track.artist.toLowerCase().includes(q)
-      ) {
-        seenSongIds.add(track.id);
-        songs.push({
-          id: track.id,
-          title: track.title,
-          artist: track.artist,
-          album: item.name,
-          duration: track.duration,
-          isDir: false,
-          coverArt: trackCoverArt.get(track.id) ?? item.coverArtId,
-        });
-      }
-    }
-  }
-
-  return {
-    albums: [...albums, ...playlistAlbums],
-    artists: [],
-    songs,
-  };
-}
 
 export interface SearchState {
   /** Current search query text */
@@ -160,8 +69,7 @@ export const searchStore = create<SearchState>()((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      await ensureCoverArtAuth();
-      const results = await search3(query);
+      const results = await performOnlineSearch(query);
       const ratingEntries: Array<{ id: string; serverRating: number }> = [
         ...results.albums.map((a) => ({ id: a.id, serverRating: a.userRating ?? 0 })),
         ...results.artists.map((a) => ({ id: a.id, serverRating: (a as { userRating?: number }).userRating ?? 0 })),
