@@ -533,6 +533,7 @@ export function HomeScreen() {
             </>
           )}
           {SECTION_ORDER.map((key) => {
+            if (offlineMode && key === 'randomSelection') return null;
             const sectionAlbums = filteredSections[key];
             if (hasAnyFilters && sectionAlbums.length === 0) return null;
             return (
