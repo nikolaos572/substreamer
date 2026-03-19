@@ -208,3 +208,26 @@ Existing patterns that embody this principle:
 
 - **`useTransitionComplete()`** – defer heavy rendering until a navigation transition finishes, preventing janky animations.
 - **`minDelay()`** – ensure loading spinners and refresh indicators remain visible long enough for the user to perceive them.
+
+## Native Theme Synchronization (iOS 26 Liquid Glass)
+
+On iOS 26, native UI elements (liquid glass header capsules, navigation bar materials) derive their appearance from the native UIKit layer, not from React. If the app's theme preference diverges from the system setting, native elements will flash with the wrong color scheme during navigation transitions unless all three synchronization layers are in place:
+
+### 1. ThemeProvider (critical)
+
+Expo Router's `NavigationContainer` defaults to React Navigation's `DefaultTheme`, which has a near-white background (`rgb(242, 242, 242)`). During native push/pop transitions, `react-native-screens` briefly exposes this background — on iOS 26 the liquid glass refracts it, causing a white flash.
+
+**Fix:** Wrap root layout content with `<ThemeProvider value={navigationTheme}>` from `@react-navigation/native`. Build `navigationTheme` via `useMemo`, spreading `DarkTheme` or `DefaultTheme` and overriding `colors` with the app's resolved theme colors.
+
+### 2. Root View Background Color
+
+`GestureHandlerRootView` must have `backgroundColor: colors.background` in its style. Without it, the native `RCTRootView` falls back to `UIColor.systemBackgroundColor` (white in system light mode), which the glass material can sample during transitions.
+
+### 3. Module-Scope Appearance Sync
+
+Call `Appearance.setColorScheme()` at module scope in `_layout.tsx` by reading the persisted theme from SQLite synchronously (`sqliteStorage.getItem('substreamer-theme')`). This sets `UIUserInterfaceStyle` before any React component renders. A companion `useEffect` watching `preference` from `useTheme()` handles runtime theme changes.
+
+### What Does NOT Work
+
+- **`headerBlurEffect: 'systemMaterial'`** conflicts with custom `BlurView` headerBackground — causes grey headers and permanent white button backgrounds.
+- **`Appearance.setColorScheme()` alone** is insufficient — it sets the window-level override but the navigation container's white default background still shows through during transitions.

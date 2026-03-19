@@ -1,3 +1,4 @@
+import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StatusBar } from 'expo-status-bar';
@@ -63,6 +64,7 @@ import { offlineModeStore } from '../store/offlineModeStore';
 import { playlistLibraryStore } from '../store/playlistLibraryStore';
 import { fetchServerInfo } from '../services/subsonicService';
 import { serverInfoStore } from '../store/serverInfoStore';
+import { sqliteStorage } from '../store/sqliteStorage';
 
 // react-native-bootsplash keeps the native splash visible by default
 // until BootSplash.hide() is called. AnimatedSplashScreen handles the
@@ -80,6 +82,22 @@ initMusicCache();
 // Initialise the SSL trust store so the custom TrustManager / URLSession
 // delegate is installed before any network requests are made.
 initSslTrustStore();
+
+// Sync the persisted theme preference to the native UIKit layer at module
+// scope — before any React component renders. This ensures liquid glass
+// containers on iOS 26 use the correct color scheme from the very first frame.
+// The sqliteStorage read is synchronous, so there is no async gap.
+(() => {
+  try {
+    const raw = sqliteStorage.getItem('substreamer-theme') as string | null;
+    if (raw) {
+      const { state } = JSON.parse(raw);
+      if (state?.themePreference && state.themePreference !== 'system') {
+        Appearance.setColorScheme(state.themePreference);
+      }
+    }
+  } catch { /* non-critical: falls back to system default */ }
+})();
 
 // Suppress ExpoKeepAwake errors that fire when the activity becomes
 // temporarily unavailable during backgrounding (moveTaskToBack).
@@ -276,6 +294,26 @@ export default function RootLayout() {
     setSplashVisible(false);
   }, []);
 
+  // Build a navigation theme that matches the app's resolved theme. This is
+  // critical: expo-router's NavigationContainer defaults to DefaultTheme (white
+  // background). During native push/pop transitions, react-native-screens
+  // briefly exposes this background — on iOS 26 the liquid glass header
+  // refracts it, causing a white flash in dark mode.
+  const navigationTheme = useMemo(() => {
+    const base = theme === 'dark' ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        background: colors.background,
+        card: colors.card,
+        text: colors.textPrimary,
+        border: colors.border,
+        primary: colors.primary,
+      },
+    };
+  }, [theme, colors]);
+
   const blurHeaderOptions = useMemo(() => ({
     headerTransparent: true as const,
     headerStyle: { backgroundColor: 'transparent' },
@@ -291,7 +329,8 @@ export default function RootLayout() {
   }), [theme]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
+      <ThemeProvider value={navigationTheme}>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
@@ -463,6 +502,7 @@ export default function RootLayout() {
       {splashVisible && (
         <AnimatedSplashScreen onFinish={handleSplashFinish} />
       )}
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 }
