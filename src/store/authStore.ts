@@ -39,6 +39,7 @@ export const authStore = create<AuthState>()(
           password,
           apiVersion,
           isLoggedIn: true,
+          rehydrated: true,
         }),
 
       clearSession: () =>
