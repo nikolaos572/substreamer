@@ -30,7 +30,6 @@ import { playbackSettingsStore } from '../store/playbackSettingsStore';
 import { playerStore } from '../store/playerStore';
 import { getProminentColor, type ExtractedColors } from '../utils/colors';
 
-const COVER_SIZE = 50;
 const MINI_PLAYER_HEIGHT = 56;
 /** Matches the placeholder cover art background (rgb 150,150,150). */
 const PLACEHOLDER_BG = '#969696';

@@ -7,7 +7,6 @@ import { EmptyState } from '../components/EmptyState';
 import { ArtistListView } from '../components/ArtistListView';
 import { SegmentControl } from '../components/SegmentControl';
 import { SongListView } from '../components/SongListView';
-import { useTheme } from '../hooks/useTheme';
 import {
   STARRED_SONGS_ITEM_ID,
   enqueueStarredSongsDownload,
@@ -38,7 +37,6 @@ const SEGMENTS = [
 /* ------------------------------------------------------------------ */
 
 export function FavoritesScreen() {
-  const { colors } = useTheme();
   const isFocused = useIsFocused();
   const headerHeight = searchStore((s) => s.headerHeight);
   const [activeSegment, setActiveSegment] = useState<FavoritesSegment>('songs');

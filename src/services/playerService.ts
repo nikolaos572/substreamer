@@ -137,12 +137,6 @@ let savedTrackForScrobble: Child | null = null;
  */
 let scrobbleHandledByEnded = false;
 /**
- * Set to true before user-initiated track changes (skip, play new queue)
- * so the PlaybackActiveTrackChanged handler can distinguish them from
- * natural auto-advance and avoid scrobbling partially-played tracks.
- */
-let isUserSkipping = false;
-/**
  * Seconds added to getProgress().position to compensate for transcoded
  * stream recovery.  When we reload a track with `timeOffset`, the native
  * player resets to position 0, but the real song position is `positionOffset`.
@@ -466,11 +460,6 @@ export async function initPlayer(): Promise<void> {
 
     previousActiveChild = resolvedChild;
 
-    // Only reset the skip flag outside of queue-setup operations, where
-    // multiple ActiveTrackChanged events fire for a single user action.
-    if (!isSettingQueue) {
-      isUserSkipping = false;
-    }
   });
 
   // --- AppState listener for background → foreground sync ---
@@ -560,7 +549,6 @@ export async function playTrack(
   sourcePlaylistId?: string | null,
 ): Promise<void> {
   resetScrobbleCoordination();
-  isUserSkipping = true;
   isSettingQueue = true;
   positionOffset = 0;
   playerStore.getState().setQueueLoading(true);
@@ -594,7 +582,6 @@ export async function playTrack(
     );
   } finally {
     isSettingQueue = false;
-    isUserSkipping = false;
     playerStore.getState().setQueueLoading(false);
   }
 }
@@ -611,13 +598,11 @@ export async function togglePlayPause(): Promise<void> {
 
 /** Skip to the next track in the queue. */
 export async function skipToNext(): Promise<void> {
-  isUserSkipping = true;
   await TrackPlayer.skipToNext();
 }
 
 /** Skip to the previous track in the queue. */
 export async function skipToPrevious(): Promise<void> {
-  isUserSkipping = true;
   await TrackPlayer.skipToPrevious();
 }
 
@@ -673,7 +658,6 @@ export async function seekTo(position: number): Promise<void> {
 
 /** Skip to a specific track in the queue by index. */
 export async function skipToTrack(index: number): Promise<void> {
-  isUserSkipping = true;
   await TrackPlayer.skip(index);
   await TrackPlayer.play();
 }
@@ -692,7 +676,6 @@ export async function retryPlayback(): Promise<void> {
  */
 export async function clearQueue(): Promise<void> {
   resetScrobbleCoordination();
-  isUserSkipping = true;
   positionOffset = 0;
   maxBufferedSeen = 0;
   isFullyBuffered = false;
@@ -846,7 +829,6 @@ export async function shuffleQueue(): Promise<void> {
   if (currentChildQueue.length < 2) return;
 
   resetScrobbleCoordination();
-  isUserSkipping = true;
   isSettingQueue = true;
   isShuffling = true;
   positionOffset = 0;
@@ -872,7 +854,6 @@ export async function shuffleQueue(): Promise<void> {
     await TrackPlayer.play();
   } finally {
     isSettingQueue = false;
-    isUserSkipping = false;
     isShuffling = false;
   }
 }

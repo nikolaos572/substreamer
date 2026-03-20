@@ -4,7 +4,6 @@ import { StyleSheet, View } from 'react-native';
 
 import { EmptyState } from '../components/EmptyState';
 import { SegmentControl } from '../components/SegmentControl';
-import { useTheme } from '../hooks/useTheme';
 import { filterBarStore } from '../store/filterBarStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { searchStore } from '../store/searchStore';
@@ -29,7 +28,6 @@ const SEGMENTS = [
 /* ------------------------------------------------------------------ */
 
 export function LibraryScreen() {
-  const { colors } = useTheme();
   const isFocused = useIsFocused();
   const headerHeight = searchStore((s) => s.headerHeight);
   const [activeSegment, setActiveSegment] = useState<LibrarySegment>('albums');

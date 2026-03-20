@@ -8,8 +8,6 @@ import {
   getTimeOfDayLabel,
   getTopDecade,
   getTopGenreForHour,
-  type FetchStrategy,
-  type MixDefinition,
 } from '../tunedInService';
 import { type Child } from '../subsonicService';
 

@@ -351,7 +351,6 @@ export function DownloadQueueScreen() {
     for (let i = 0; i < newQueued.length; i++) {
       const currentQueue = musicCacheStore.getState().downloadQueue;
       const fromIdx = currentQueue.findIndex((q) => q.queueId === newQueued[i].queueId);
-      const targetIdx = currentQueue.findIndex((q) => q.queueId === storeQueued[0]?.queueId);
 
       // Find the correct target position: after downloading items, in order
       const downloadingCount = currentQueue.filter((q) => q.status === 'downloading').length;

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { AlbumListView, type AlbumLayout } from '../components/AlbumListView';
-import { useTheme } from '../hooks/useTheme';
 import { albumLibraryStore } from '../store/albumLibraryStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { favoritesStore } from '../store/favoritesStore';
@@ -20,7 +19,6 @@ export function AlbumLibraryListScreen({
   favoritesOnly?: boolean;
   contentInsetTop?: number;
 }) {
-  const { colors } = useTheme();
   const offlineMode = offlineModeStore((s) => s.offlineMode);
   const albums = albumLibraryStore((s) => s.albums);
   const loading = albumLibraryStore((s) => s.loading);

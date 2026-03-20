@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomTabBar } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
 import { useCallback } from 'react';
-import { Keyboard, View } from 'react-native';
+import { Keyboard } from 'react-native';
 
 import WaveformLogo from '../../components/WaveformLogo';
 import { ConnectivityBanner } from '../../components/ConnectivityBanner';

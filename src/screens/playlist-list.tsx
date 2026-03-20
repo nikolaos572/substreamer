@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { PlaylistListView, type PlaylistLayout } from '../components/PlaylistListView';
-import { useTheme } from '../hooks/useTheme';
 import { musicCacheStore } from '../store/musicCacheStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { playlistLibraryStore } from '../store/playlistLibraryStore';
@@ -17,7 +16,6 @@ export function PlaylistListScreen({
   downloadedOnly?: boolean;
   contentInsetTop?: number;
 }) {
-  const { colors } = useTheme();
   const offlineMode = offlineModeStore((s) => s.offlineMode);
   const playlists = playlistLibraryStore((s) => s.playlists);
   const loading = playlistLibraryStore((s) => s.loading);

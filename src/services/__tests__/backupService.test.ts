@@ -561,7 +561,6 @@ describe('createBackup edge cases', () => {
     // We need to figure out the exact filename — it uses a timestamp.
     // Instead, let's set ALL scrobbles.gz files as existing
     const origGet = mockFileInstances.get.bind(mockFileInstances);
-    const origHas = mockFileInstances.has.bind(mockFileInstances);
 
     // Make any .scrobbles.gz file appear to exist
     jest.spyOn(mockFileInstances, 'get').mockImplementation((key: string) => {

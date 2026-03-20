@@ -5,7 +5,6 @@ import {
   dateKey,
   usePlaybackAnalytics,
   type ScrobbleRecord,
-  type TimePeriod,
 } from '../usePlaybackAnalytics';
 
 import { type AnalyticsAggregates } from '../../store/completedScrobbleStore';

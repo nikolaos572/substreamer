@@ -24,8 +24,6 @@ import AnimatedWaveformLogo from './AnimatedWaveformLogo';
 import { getPendingTasks, runMigrations } from '../services/migrationService';
 import { migrationStore } from '../store/migrationStore';
 
-const PRIMARY = '#1D9BF0';
-
 /**
  * Max time (ms) before we force-finish, even if an animation or
  * migration task stalls. Increased from 5 s to accommodate migrations.

@@ -23,9 +23,6 @@ import type { ThemeColors } from '../constants/theme';
 
 const COVER_SIZE = 40;
 
-/** Total row height (paddingVertical 20*2 + cover 40 = 80). */
-const QUEUE_ROW_HEIGHT = 80;
-
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
 /* ------------------------------------------------------------------ */

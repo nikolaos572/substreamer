@@ -35,7 +35,7 @@ import {
 } from '../services/tunedInService';
 import { getOfflineSongsByGenre } from '../services/searchService';
 import { playTrack } from '../services/playerService';
-import { getAlbum, type Child } from '../services/subsonicService';
+import { getAlbum } from '../services/subsonicService';
 import { albumListsStore } from '../store/albumListsStore';
 import { completedScrobbleStore } from '../store/completedScrobbleStore';
 import { connectivityStore } from '../store/connectivityStore';

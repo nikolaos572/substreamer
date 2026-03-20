@@ -15,7 +15,6 @@ import { getApi } from '../subsonicService';
 import {
   addCompletedScrobble,
   sendNowPlaying,
-  initScrobbleService,
 } from '../scrobbleService';
 
 const mockGetApi = getApi as jest.Mock;

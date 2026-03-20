@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ArtistListView, type ArtistLayout } from '../components/ArtistListView';
-import { useTheme } from '../hooks/useTheme';
 import { albumLibraryStore } from '../store/albumLibraryStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { artistLibraryStore } from '../store/artistLibraryStore';
@@ -21,7 +20,6 @@ export function ArtistListScreen({
   favoritesOnly?: boolean;
   contentInsetTop?: number;
 }) {
-  const { colors } = useTheme();
   const offlineMode = offlineModeStore((s) => s.offlineMode);
   const artists = artistLibraryStore((s) => s.artists);
   const loading = artistLibraryStore((s) => s.loading);

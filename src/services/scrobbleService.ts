@@ -20,8 +20,6 @@ import { getApi, type Child } from './subsonicService';
 
 let isInitialised = false;
 let isProcessing = false;
-let timerHandle: ReturnType<typeof setInterval> | null = null;
-
 const PROCESS_INTERVAL_MS = 60_000; // 1 minute
 
 /* ------------------------------------------------------------------ */
@@ -56,7 +54,7 @@ export function initScrobbleService(): void {
   processScrobbles();
 
   // Periodically retry pending scrobbles.
-  timerHandle = setInterval(processScrobbles, PROCESS_INTERVAL_MS);
+  setInterval(processScrobbles, PROCESS_INTERVAL_MS);
 
   // Flush the pending queue when the user leaves offline mode.
   offlineModeStore.subscribe((state, prev) => {
