@@ -42,7 +42,7 @@ export function useDownloadBackgroundNotification() {
             body: 'Return to Substreamer within a few minutes to avoid download interruption.',
             ...(Platform.OS === 'android' && { channelId: CHANNEL_ID }),
           },
-          trigger: null,
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1 },
         });
       } else if (next === 'active' && notificationId.current) {
         await Notifications.dismissNotificationAsync(notificationId.current);
