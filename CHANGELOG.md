@@ -1,5 +1,23 @@
 # Changelog
 
+## [8.0.34] - 2026-03-21
+
+- RNTP: resume after long background further adjustments
+- notifications: local notifications not firing when backgrounded with downloads running
+- favorites: if offline and not downloaded show the appropriate empty placeholder
+- auto offline: check connection type before trying to check SSID
+- list browsers: swipe left to trigger refresh on items
+- layout: warning banner positioning
+- update readme
+- ci: update coverage badge [skip ci]
+- metadata: release prep
+- logout: refresh all data when logout and then login in same session
+- tablets: add some sensible max sizes for tablet layouts
+- ios: fix favorite icon in header auto adapting colour
+- ci: update coverage badge [skip ci]
+- clean up: unused imports and variables after recent changes
+- tuned in: jump back in should play the album directly
+- ci: update coverage badge [skip ci]
 ## [8.0.33] - 2026-03-20
 
 - chore: rename discovery to tunedin for consistency
