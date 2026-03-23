@@ -31,6 +31,7 @@ import { CertificatePromptModal } from '../components/CertificatePromptModal';
 import { CreateShareSheet } from '../components/CreateShareSheet';
 import { MbidSearchSheet } from '../components/MbidSearchSheet';
 import { MoreOptionsSheet } from '../components/MoreOptionsSheet';
+import { OnboardingGuide } from '../components/OnboardingGuide';
 import { SetRatingSheet } from '../components/SetRatingSheet';
 import { PlaybackToast } from '../components/PlaybackToast';
 import { ProcessingOverlay } from '../components/ProcessingOverlay';
@@ -496,6 +497,9 @@ export default function RootLayout() {
 
       {/* Playback toast for detail screens without a MiniPlayer */}
       <PlaybackToast />
+
+      {/* Onboarding welcome guide shown once after first login */}
+      <OnboardingGuide />
 
       {/* Animated splash renders as an overlay on top of the Stack so the
           navigator is always mounted and ready for auth-based navigation. */}

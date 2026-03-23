@@ -7,6 +7,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 
 import { useTheme } from '../hooks/useTheme';
 import { audioDiagnosticsStore } from '../store/audioDiagnosticsStore';
 import { devOptionsStore } from '../store/devOptionsStore';
+import { onboardingStore } from '../store/onboardingStore';
 import { searchStore } from '../store/searchStore';
 import { processingOverlayStore } from '../store/processingOverlayStore';
 import { formatBytes } from '../utils/formatters';
@@ -97,6 +98,11 @@ export function SettingsScreen() {
     }
   }, [devEnabled]);
 
+  const handleShowOnboarding = useCallback(() => {
+    onboardingStore.getState().reset();
+    onboardingStore.getState().show();
+  }, []);
+
   const visibleLinks = useMemo(
     () => (devEnabled ? [...SETTINGS_LINKS, ...DEV_SETTINGS_LINKS] : SETTINGS_LINKS),
     [devEnabled]
@@ -132,6 +138,27 @@ export function SettingsScreen() {
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         </Pressable>
       ))}
+      <Pressable
+        onPress={handleShowOnboarding}
+        style={({ pressed }) => [
+          styles.navRow,
+          { backgroundColor: colors.card },
+          pressed && styles.pressed,
+        ]}
+      >
+        <View style={styles.navRowLeft}>
+          <Ionicons name="help-circle-outline" size={20} color={colors.primary} style={styles.navRowIcon} />
+          <View style={styles.navRowText}>
+            <Text style={[styles.navRowLabel, { color: colors.textPrimary }]}>
+              Help & Welcome Guide
+            </Text>
+            <Text style={[styles.navRowSubtitle, { color: colors.textSecondary }]}>
+              Learn about gestures, offline mode, and settings
+            </Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+      </Pressable>
       {devEnabled && (
         <View style={styles.diagSection}>
           <Text style={[styles.diagSectionTitle, { color: colors.label }]}>Audio Diagnostics</Text>

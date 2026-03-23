@@ -16,6 +16,7 @@ import WaveformLogo from '../components/WaveformLogo';
 import { fetchServerInfo, login as subsonicLogin } from '../services/subsonicService';
 import { trustCertificateForHost } from '../services/sslTrustService';
 import { authStore } from '../store/authStore';
+import { onboardingStore } from '../store/onboardingStore';
 import { serverInfoStore } from '../store/serverInfoStore';
 
 import {
@@ -120,6 +121,9 @@ export function LoginScreen() {
       setSession(url, user, pass, result.version);
       const info = await fetchServerInfo();
       if (info) serverInfoStore.getState().setServerInfo(info);
+      if (!onboardingStore.getState().hasCompleted) {
+        onboardingStore.getState().show();
+      }
       router.replace('/');
       return;
     }
