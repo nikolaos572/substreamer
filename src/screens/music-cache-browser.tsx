@@ -256,12 +256,12 @@ export function MusicCacheBrowserScreen() {
               hitSlop={8}
               style={({ pressed }) => pressed && styles.pressed}
             >
-              <Text style={[styles.clearButton, { color: colors.red }]}>Clear</Text>
+              <Text style={[styles.clearButton, { color: colors.primary }]}>Clear</Text>
             </Pressable>
           )
         : undefined,
     });
-  }, [navigation, hasItems, handleClearAll, colors.red]);
+  }, [navigation, hasItems, handleClearAll, colors.primary]);
 
   const entries = useMemo(() => {
     const all = Object.values(cachedItems);

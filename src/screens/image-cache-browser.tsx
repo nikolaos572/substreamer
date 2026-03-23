@@ -160,12 +160,12 @@ export function ImageCacheBrowserScreen() {
               hitSlop={8}
               style={({ pressed }) => pressed && styles.pressed}
             >
-              <Text style={[styles.clearButton, { color: colors.red }]}>Clear</Text>
+              <Text style={[styles.clearButton, { color: colors.primary }]}>Clear</Text>
             </Pressable>
           )
         : undefined,
     });
-  }, [navigation, entries.length, handleClearAll, colors.red]);
+  }, [navigation, entries.length, handleClearAll, colors.primary]);
 
   const handleFilterChange = useCallback((text: string) => {
     setFilter(text);
