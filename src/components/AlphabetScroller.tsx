@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 
 import { useTheme } from '../hooks/useTheme';
+import { selectionAsync } from '../utils/haptics';
 
 const ALPHABET = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -56,6 +57,7 @@ export const AlphabetScroller = memo(function AlphabetScroller({
       const letter = resolveLetterFromY(pageY);
       if (letter && letter !== lastLetter.current) {
         lastLetter.current = letter;
+        selectionAsync();
         onLetterChange(letter);
       }
     },
