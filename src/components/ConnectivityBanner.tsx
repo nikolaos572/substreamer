@@ -104,7 +104,7 @@ export const ConnectivityBanner = memo(function ConnectivityBanner() {
   }));
 
   return (
-    <Animated.View style={[{ backgroundColor: colors.background }, wrapperStyle]}>
+    <Animated.View style={wrapperStyle}>
       <Pressable
         style={({ pressed }) => [styles.pill, { backgroundColor: colors.inputBg }, tappable && pressed && styles.pressed]}
         onPress={handlePress}

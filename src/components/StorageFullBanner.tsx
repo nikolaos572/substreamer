@@ -63,7 +63,7 @@ export const StorageFullBanner = memo(function StorageFullBanner() {
   }, [router]);
 
   return (
-    <Animated.View style={[{ backgroundColor: colors.background }, wrapperStyle]}>
+    <Animated.View style={wrapperStyle}>
       <Pressable
         onPress={handlePress}
         style={({ pressed }) => [styles.pill, { backgroundColor: colors.inputBg }, pressed && styles.pressed]}

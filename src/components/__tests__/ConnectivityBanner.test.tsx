@@ -109,7 +109,7 @@ describe('ConnectivityBanner', () => {
     const root = toJSON();
     // Wrapper height should be 0 — banner is suppressed in offline mode
     expect(root!.props.style).toEqual(
-      expect.arrayContaining([expect.objectContaining({ height: 0 })]),
+      expect.objectContaining({ height: 0 }),
     );
   });
 });
