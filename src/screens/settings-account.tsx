@@ -9,6 +9,7 @@ import { GradientBackground } from '../components/GradientBackground';
 import { useTheme } from '../hooks/useTheme';
 import { clearImageCache } from '../services/imageCacheService';
 import { clearMusicCache } from '../services/musicCacheService';
+import { clearQueue } from '../services/playerService';
 import { stopPolling } from '../services/scanService';
 import { clearApiCache } from '../services/subsonicService';
 import { authStore } from '../store/authStore';
@@ -24,6 +25,7 @@ export function SettingsAccountScreen() {
   const [passwordVisible, setPasswordVisible] = useState(false);
 
   const handleLogout = () => {
+    clearQueue();
     stopPolling();
     clearApiCache();
     resetAllStores();
