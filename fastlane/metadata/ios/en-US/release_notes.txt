@@ -1,0 +1,5 @@
+Empty state placeholder when offline with no downloaded content
+Can't manage shares when offline as requires API access
+Onboarding centered on larger screens and tablets
+Navidrome, subsonic, airsonic-advanced, gonic all properly supported now
+Stop playback and clear playback state on logout
