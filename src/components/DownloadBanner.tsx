@@ -9,10 +9,9 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
 import Animated, {
-  Easing,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -22,12 +21,18 @@ import Animated, {
 import { useTheme } from '../hooks/useTheme';
 import { musicCacheStore } from '../store/musicCacheStore';
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 const BANNER_HEIGHT = 44;
-const EASING = Easing.out(Easing.cubic);
 const EXPAND_MS = 300;
 const COLLAPSE_MS = 280;
 const CONTENT_FADE_IN_MS = 200;
 const CONTENT_FADE_OUT_MS = 150;
+
+const LAYOUT_ANIM_EXPAND = LayoutAnimation.create(EXPAND_MS, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity);
+const LAYOUT_ANIM_COLLAPSE = LayoutAnimation.create(COLLAPSE_MS, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity);
 
 export function DownloadBanner() {
   const { colors } = useTheme();
@@ -39,22 +44,33 @@ export function DownloadBanner() {
   const queueCount = musicCacheStore((s) => s.downloadQueue.length);
   const visible = queueCount > 0;
 
-  const height = useSharedValue(visible ? BANNER_HEIGHT : 0);
+  const [expanded, setExpanded] = useState(visible);
+  const prevVisible = useRef(visible);
+  const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contentOpacity = useSharedValue(visible ? 1 : 0);
 
   useEffect(() => {
-    if (visible) {
-      height.value = withTiming(BANNER_HEIGHT, { duration: EXPAND_MS, easing: EASING });
-      contentOpacity.value = withDelay(80, withTiming(1, { duration: CONTENT_FADE_IN_MS }));
-    } else {
-      contentOpacity.value = withTiming(0, { duration: CONTENT_FADE_OUT_MS });
-      height.value = withDelay(60, withTiming(0, { duration: COLLAPSE_MS, easing: EASING }));
-    }
-  }, [visible, height, contentOpacity]);
+    return () => {
+      if (collapseTimer.current) clearTimeout(collapseTimer.current);
+    };
+  }, []);
 
-  const containerStyle = useAnimatedStyle(() => ({
-    height: height.value,
-  }));
+  useEffect(() => {
+    if (visible && !prevVisible.current) {
+      if (collapseTimer.current) { clearTimeout(collapseTimer.current); collapseTimer.current = null; }
+      LayoutAnimation.configureNext(LAYOUT_ANIM_EXPAND);
+      setExpanded(true);
+      contentOpacity.value = withDelay(80, withTiming(1, { duration: CONTENT_FADE_IN_MS }));
+    } else if (!visible && prevVisible.current) {
+      contentOpacity.value = withTiming(0, { duration: CONTENT_FADE_OUT_MS });
+      collapseTimer.current = setTimeout(() => {
+        collapseTimer.current = null;
+        LayoutAnimation.configureNext(LAYOUT_ANIM_COLLAPSE);
+        setExpanded(false);
+      }, 60);
+    }
+    prevVisible.current = visible;
+  }, [visible, contentOpacity]);
 
   const contentAnimStyle = useAnimatedStyle(() => ({
     opacity: contentOpacity.value,
@@ -78,7 +94,7 @@ export function DownloadBanner() {
     : '';
 
   return (
-    <Animated.View style={[styles.container, { backgroundColor: colors.card }, containerStyle]}>
+    <View style={[styles.container, { backgroundColor: colors.card, height: expanded ? BANNER_HEIGHT : 0 }]}>
       <Animated.View style={[styles.inner, contentAnimStyle]}>
         <Pressable
           onPress={handlePress}
@@ -109,7 +125,7 @@ export function DownloadBanner() {
           />
         </View>
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 }
 
