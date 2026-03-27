@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AnimatedWaveformLogo from './AnimatedWaveformLogo';
 import { getPendingTasks, runMigrations } from '../services/migrationService';
 import { migrationStore } from '../store/migrationStore';
+import { sqliteStorage } from '../store/sqliteStorage';
 
 /**
  * Max time (ms) before we force-finish, even if an animation or
@@ -154,7 +155,18 @@ export default function AnimatedSplashScreen({ onFinish }: Props) {
   }, [migrationPhase, dot0Scale, dot1Scale, dot2Scale, dotsOpacity, dotsScale, checkOpacity, checkScale, validatingOpacity, completeOpacity, fadeOut]);
 
   const handleRippleComplete = useCallback(() => {
-    const completedVersion = migrationStore.getState().completedVersion;
+    // Read completedVersion directly from SQLite (synchronous) rather than
+    // from the Zustand store, which may not have rehydrated from persistence
+    // yet. Without this, completedVersion reads as 0 and all migrations
+    // appear pending on every launch.
+    let completedVersion = 0;
+    try {
+      const raw = sqliteStorage.getItem('substreamer-migration') as string | null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        completedVersion = parsed?.state?.completedVersion ?? 0;
+      }
+    } catch { /* fall back to 0 — migrations will re-run safely */ }
     const pending = getPendingTasks(completedVersion);
 
     if (pending.length === 0) {
