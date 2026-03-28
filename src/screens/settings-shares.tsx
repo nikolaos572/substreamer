@@ -92,9 +92,10 @@ export function SettingsSharesScreen() {
   const serverUrl = authStore((s) => s.serverUrl);
   const shareBaseUrl = shareSettingsStore((s) => s.shareBaseUrl);
 
-  const shares = sharesStore((s) => s.shares);
+  const shares = sharesStore((s) => s.shares ?? []);
   const loading = sharesStore((s) => s.loading);
   const error = sharesStore((s) => s.error);
+  const notAvailable = sharesStore((s) => s.notAvailable);
 
   const [urlInput, setUrlInput] = useState(shareBaseUrl ?? '');
   const [urlSaved, setUrlSaved] = useState(false);
@@ -279,6 +280,12 @@ export function SettingsSharesScreen() {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
             </View>
+          ) : notAvailable ? (
+            <EmptyState
+              icon="close-circle-outline"
+              title="Sharing not available"
+              subtitle={error ?? 'Sharing may be disabled on this server or not supported by your account.'}
+            />
           ) : error && shares.length === 0 ? (
             <View style={[styles.card, dynamicStyles.card]}>
               <View style={styles.cardContent}>

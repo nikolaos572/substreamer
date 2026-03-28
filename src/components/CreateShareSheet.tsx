@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { BottomSheet } from './BottomSheet';
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
 import { createShare } from '../services/subsonicService';
 import { createShareStore } from '../store/createShareStore';
@@ -39,6 +40,7 @@ export function CreateShareSheet() {
   const itemId = createShareStore((s) => s.itemId);
   const songIds = createShareStore((s) => s.songIds);
   const itemName = createShareStore((s) => s.itemName);
+  const coverArtId = createShareStore((s) => s.coverArtId);
   const hide = createShareStore((s) => s.hide);
 
   const { colors } = useTheme();
@@ -131,12 +133,19 @@ export function CreateShareSheet() {
 
   return (
     <BottomSheet visible={visible} onClose={handleClose}>
-      <Text style={[styles.title, dynamicStyles.title]} numberOfLines={1}>
-        Share {typeLabel}
-      </Text>
-      <Text style={[styles.subtitle, dynamicStyles.subtitle]} numberOfLines={1}>
-        {itemName}
-      </Text>
+      <View style={styles.header}>
+        {coverArtId && (
+          <CachedImage coverArtId={coverArtId} size={150} style={styles.coverArt} resizeMode="cover" />
+        )}
+        <View style={styles.headerText}>
+          <Text style={[styles.title, dynamicStyles.title]} numberOfLines={1}>
+            Share {typeLabel}
+          </Text>
+          <Text style={[styles.subtitle, dynamicStyles.subtitle]} numberOfLines={1}>
+            {itemName}
+          </Text>
+        </View>
+      </View>
 
         {shareUrl ? (
           <View style={styles.successSection}>
@@ -244,17 +253,31 @@ export function CreateShareSheet() {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginBottom: 16,
+  },
+  coverArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+    marginRight: 12,
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
   title: {
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 2,
-    paddingHorizontal: 4,
   },
   subtitle: {
     fontSize: 14,
     fontWeight: '400',
-    marginBottom: 16,
-    paddingHorizontal: 4,
   },
   formSection: {
     paddingHorizontal: 4,

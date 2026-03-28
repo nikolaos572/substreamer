@@ -23,6 +23,7 @@ import {
 
 import { AlbumDetailsModal } from './AlbumDetailsModal';
 import { BottomSheet } from './BottomSheet';
+import { CachedImage } from './CachedImage';
 import { ThemedAlert } from './ThemedAlert';
 import { useThemedAlert } from '../hooks/useThemedAlert';
 import { StarRatingDisplay } from './StarRating';
@@ -103,6 +104,10 @@ function getSubtitle(entity: MoreOptionsEntity): string {
       return sc === 1 ? '1 track' : `${sc ?? 0} tracks`;
     }
   }
+}
+
+function getCoverArtId(entity: MoreOptionsEntity): string | undefined {
+  return entity.item.coverArt;
 }
 
 function isStarrable(entity: MoreOptionsEntity): boolean {
@@ -282,7 +287,7 @@ export function MoreOptionsSheet() {
     const currentMbid = override?.mbid ?? resolvedMbid ?? null;
     handleClose();
     setTimeout(() => {
-      mbidSearchStore.getState().show(artistId, artistName, currentMbid);
+      mbidSearchStore.getState().show(artistId, artistName, currentMbid, entity.item.coverArt);
     }, 300);
   }, [entity, handleClose]);
 
@@ -373,9 +378,9 @@ export function MoreOptionsSheet() {
     handleClose();
     setTimeout(() => {
       if (entity.type === 'album') {
-        createShareStore.getState().showAlbum(entity.item.id, entity.item.name);
+        createShareStore.getState().showAlbum(entity.item.id, entity.item.name, entity.item.coverArt);
       } else if (entity.type === 'playlist') {
-        createShareStore.getState().showPlaylist(entity.item.id, entity.item.name);
+        createShareStore.getState().showPlaylist(entity.item.id, entity.item.name, entity.item.coverArt);
       }
     }, 300);
   }, [entity, handleClose]);
@@ -532,18 +537,25 @@ export function MoreOptionsSheet() {
               <View style={styles.sectionDivider} />
 
               {/* Section 2: Song header and options */}
-              <Text
-                style={[styles.sheetTitle, { color: colors.textPrimary }]}
-                numberOfLines={1}
-              >
-                {getTitle(entity)}
-              </Text>
-              <Text
-                style={[styles.sheetSubtitle, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {getSubtitle(entity)}
-              </Text>
+              <View style={styles.sheetHeader}>
+                {getCoverArtId(entity) && (
+                  <CachedImage coverArtId={getCoverArtId(entity)!} size={150} style={styles.sheetCoverArt} resizeMode="cover" />
+                )}
+                <View style={styles.sheetHeaderText}>
+                  <Text
+                    style={[styles.sheetTitle, { color: colors.textPrimary }]}
+                    numberOfLines={1}
+                  >
+                    {getTitle(entity)}
+                  </Text>
+                  <Text
+                    style={[styles.sheetSubtitle, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {getSubtitle(entity)}
+                  </Text>
+                </View>
+              </View>
 
               {/* Favorite / Unfavorite */}
               {starrable && (
@@ -933,18 +945,25 @@ export function MoreOptionsSheet() {
           ) : (
             <>
               {/* Title / Subtitle */}
-              <Text
-                style={[styles.sheetTitle, { color: colors.textPrimary }]}
-                numberOfLines={1}
-              >
-                {getTitle(entity)}
-              </Text>
-              <Text
-                style={[styles.sheetSubtitle, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {getSubtitle(entity)}
-              </Text>
+              <View style={styles.sheetHeader}>
+                {getCoverArtId(entity) && (
+                  <CachedImage coverArtId={getCoverArtId(entity)!} size={150} style={styles.sheetCoverArt} resizeMode="cover" />
+                )}
+                <View style={styles.sheetHeaderText}>
+                  <Text
+                    style={[styles.sheetTitle, { color: colors.textPrimary }]}
+                    numberOfLines={1}
+                  >
+                    {getTitle(entity)}
+                  </Text>
+                  <Text
+                    style={[styles.sheetSubtitle, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                  >
+                    {getSubtitle(entity)}
+                  </Text>
+                </View>
+              </View>
 
               {/* Empty state when no options are available */}
               {!hasAnyOption && (
@@ -1364,17 +1383,31 @@ export function MoreOptionsSheet() {
 /* ------------------------------------------------------------------ */
 
 const styles = StyleSheet.create({
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  sheetCoverArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+    marginRight: 12,
+  },
+  sheetHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
   sheetTitle: {
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 2,
-    paddingHorizontal: 4,
   },
   sheetSubtitle: {
     fontSize: 14,
     fontWeight: '400',
-    marginBottom: 12,
-    paddingHorizontal: 4,
   },
   emptyOptions: {
     alignItems: 'center',

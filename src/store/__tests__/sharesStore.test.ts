@@ -9,7 +9,7 @@ const mockDeleteShare = deleteShare as jest.MockedFunction<typeof deleteShare>;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  sharesStore.setState({ shares: [], loading: false, error: null });
+  sharesStore.setState({ shares: [], loading: false, error: null, notAvailable: false });
 });
 
 const makeShare = (id: string) => ({ id, url: `https://example.com/${id}` } as any);
@@ -17,29 +17,44 @@ const makeShare = (id: string) => ({ id, url: `https://example.com/${id}` } as a
 describe('sharesStore', () => {
   describe('fetchShares', () => {
     it('fetches and stores shares', async () => {
-      mockGetShares.mockResolvedValue([makeShare('s1')]);
+      mockGetShares.mockResolvedValue({ ok: true, shares: [makeShare('s1')] });
       await sharesStore.getState().fetchShares();
       expect(sharesStore.getState().shares).toEqual([makeShare('s1')]);
       expect(sharesStore.getState().loading).toBe(false);
+      expect(sharesStore.getState().notAvailable).toBe(false);
     });
 
-    it('sets error when API returns null', async () => {
-      mockGetShares.mockResolvedValue(null);
+    it('sets notAvailable when sharing is not available', async () => {
+      mockGetShares.mockResolvedValue({
+        ok: false,
+        reason: 'not-available',
+        message: 'Sharing is not enabled.',
+      });
       await sharesStore.getState().fetchShares();
-      expect(sharesStore.getState().error).toBe('Failed to load shares.');
+      expect(sharesStore.getState().notAvailable).toBe(true);
+      expect(sharesStore.getState().error).toBe('Sharing is not enabled.');
+      expect(sharesStore.getState().shares).toEqual([]);
       expect(sharesStore.getState().loading).toBe(false);
     });
 
-    it('sets error on exception', async () => {
-      mockGetShares.mockRejectedValue(new Error('Network'));
+    it('sets error on connection failure', async () => {
+      mockGetShares.mockResolvedValue({
+        ok: false,
+        reason: 'error',
+        message: 'Could not connect to the server.',
+      });
       await sharesStore.getState().fetchShares();
-      expect(sharesStore.getState().error).toBe('Network');
+      expect(sharesStore.getState().error).toBe('Could not connect to the server.');
+      expect(sharesStore.getState().notAvailable).toBe(false);
+      expect(sharesStore.getState().loading).toBe(false);
     });
 
-    it('sets generic error for non-Error throws', async () => {
-      mockGetShares.mockRejectedValue('string');
+    it('clears previous notAvailable on successful fetch', async () => {
+      sharesStore.setState({ notAvailable: true, error: 'old' });
+      mockGetShares.mockResolvedValue({ ok: true, shares: [] });
       await sharesStore.getState().fetchShares();
-      expect(sharesStore.getState().error).toBe('Failed to load shares.');
+      expect(sharesStore.getState().notAvailable).toBe(false);
+      expect(sharesStore.getState().error).toBeNull();
     });
   });
 
@@ -67,12 +82,18 @@ describe('sharesStore', () => {
 
   describe('clear', () => {
     it('resets all state', () => {
-      sharesStore.setState({ shares: [makeShare('s1')], loading: true, error: 'err' });
+      sharesStore.setState({
+        shares: [makeShare('s1')],
+        loading: true,
+        error: 'err',
+        notAvailable: true,
+      });
       sharesStore.getState().clear();
       const state = sharesStore.getState();
       expect(state.shares).toEqual([]);
       expect(state.loading).toBe(false);
       expect(state.error).toBeNull();
+      expect(state.notAvailable).toBe(false);
     });
   });
 });

@@ -850,14 +850,28 @@ export async function getRandomSongsFiltered(args: {
 /*  Shares                                                             */
 /* ------------------------------------------------------------------ */
 
-export async function getShares(): Promise<Share[] | null> {
+export type GetSharesResult =
+  | { ok: true; shares: Share[] }
+  | { ok: false; reason: 'not-available' | 'error'; message: string };
+
+export async function getShares(): Promise<GetSharesResult> {
   const api = getApi();
-  if (!api) return null;
+  if (!api) return { ok: false, reason: 'error', message: 'Not connected to a server.' };
   try {
     const response = await api.getShares();
-    return response.shares?.share ?? [];
-  } catch {
-    return null;
+    if (response.status === 'failed' || response.status === 'fail') {
+      const err = (response as Record<string, unknown>).error as
+        | { code?: number; message?: string }
+        | undefined;
+      return { ok: false, reason: 'not-available', message: err?.message ?? 'Sharing is not available on this server.' };
+    }
+    return { ok: true, shares: response.shares?.share ?? [] };
+  } catch (e) {
+    /* The server rejected the request (HTTP error, auth failure, etc.)
+       rather than returning a Subsonic-level error response. Treat as
+       not-available since we know the server is otherwise reachable. */
+    const msg = e instanceof Error ? e.message : '';
+    return { ok: false, reason: 'not-available', message: msg || 'Sharing is not available on this server.' };
   }
 }
 

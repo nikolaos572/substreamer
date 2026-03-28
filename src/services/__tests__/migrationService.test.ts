@@ -43,6 +43,7 @@ jest.mock('react-native', () => ({
 import { Platform } from 'react-native';
 import { getPendingTasks, runMigrations } from '../migrationService';
 import { completedScrobbleStore } from '../../store/completedScrobbleStore';
+import { sqliteStorage } from '../../store/sqliteStorage';
 
 beforeEach(() => {
   mockFileWrite.mockClear();
@@ -195,5 +196,36 @@ describe('runMigrations', () => {
     const logContent = mockFileWrite.mock.calls[0][0] as string;
     expect(logContent).toContain('Checking directory:');
     expect(logContent).toContain('Not found:');
+  });
+
+  it('Task 4 skips when no persisted shares data', async () => {
+    sqliteStorage.removeItem('substreamer-shares');
+    await runMigrations(3);
+    const logContent = mockFileWrite.mock.calls[0][0] as string;
+    expect(logContent).toContain('No persisted shares data');
+  });
+
+  it('Task 4 skips when shares data is valid', async () => {
+    sqliteStorage.setItem('substreamer-shares', JSON.stringify({ state: { shares: [] } }));
+    await runMigrations(3);
+    const logContent = mockFileWrite.mock.calls[0][0] as string;
+    expect(logContent).toContain('Shares data is valid');
+  });
+
+  it('Task 4 fixes corrupted shares field', async () => {
+    sqliteStorage.setItem('substreamer-shares', JSON.stringify({ state: { shares: null } }));
+    await runMigrations(3);
+    const logContent = mockFileWrite.mock.calls[0][0] as string;
+    expect(logContent).toContain('Fixed corrupted shares field');
+    const restored = JSON.parse(sqliteStorage.getItem('substreamer-shares') as string);
+    expect(restored.state.shares).toEqual([]);
+  });
+
+  it('Task 4 removes unparseable JSON', async () => {
+    sqliteStorage.setItem('substreamer-shares', '{bad json');
+    await runMigrations(3);
+    const logContent = mockFileWrite.mock.calls[0][0] as string;
+    expect(logContent).toContain('Removed unparseable shares data');
+    expect(sqliteStorage.getItem('substreamer-shares')).toBeNull();
   });
 });

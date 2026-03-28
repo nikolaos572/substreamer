@@ -7,6 +7,7 @@ beforeEach(() => {
     itemId: null,
     songIds: [],
     itemName: '',
+    coverArtId: null,
   });
 });
 
@@ -19,6 +20,12 @@ describe('createShareStore', () => {
     expect(state.itemId).toBe('a1');
     expect(state.itemName).toBe('My Album');
     expect(state.songIds).toEqual([]);
+    expect(state.coverArtId).toBeNull();
+  });
+
+  it('showAlbum passes coverArtId', () => {
+    createShareStore.getState().showAlbum('a1', 'My Album', 'cover-1');
+    expect(createShareStore.getState().coverArtId).toBe('cover-1');
   });
 
   it('showPlaylist sets playlist share state', () => {
@@ -28,9 +35,15 @@ describe('createShareStore', () => {
     expect(state.shareType).toBe('playlist');
     expect(state.itemId).toBe('p1');
     expect(state.itemName).toBe('My Playlist');
+    expect(state.coverArtId).toBeNull();
   });
 
-  it('showQueue sets queue share state', () => {
+  it('showPlaylist passes coverArtId', () => {
+    createShareStore.getState().showPlaylist('p1', 'My Playlist', 'cover-2');
+    expect(createShareStore.getState().coverArtId).toBe('cover-2');
+  });
+
+  it('showQueue sets queue share state with no coverArtId', () => {
     createShareStore.getState().showQueue(['s1', 's2']);
     const state = createShareStore.getState();
     expect(state.visible).toBe(true);
@@ -38,15 +51,17 @@ describe('createShareStore', () => {
     expect(state.itemId).toBeNull();
     expect(state.songIds).toEqual(['s1', 's2']);
     expect(state.itemName).toBe('Current Queue');
+    expect(state.coverArtId).toBeNull();
   });
 
-  it('hide resets state', () => {
-    createShareStore.getState().showAlbum('a1', 'My Album');
+  it('hide resets state including coverArtId', () => {
+    createShareStore.getState().showAlbum('a1', 'My Album', 'cover-1');
     createShareStore.getState().hide();
     const state = createShareStore.getState();
     expect(state.visible).toBe(false);
     expect(state.itemId).toBeNull();
     expect(state.songIds).toEqual([]);
     expect(state.itemName).toBe('');
+    expect(state.coverArtId).toBeNull();
   });
 });

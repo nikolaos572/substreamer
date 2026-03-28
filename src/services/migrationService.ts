@@ -13,6 +13,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import { completedScrobbleStore } from '../store/completedScrobbleStore';
+import { sqliteStorage } from '../store/sqliteStorage';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -141,6 +142,33 @@ const MIGRATION_TASKS: MigrationTask[] = [
     },
   },
 
+  {
+    id: 4,
+    name: 'Fix corrupted shares data',
+    run: async (log) => {
+      const raw = await sqliteStorage.getItem('substreamer-shares');
+      if (!raw) {
+        log('No persisted shares data — skipping.');
+        return;
+      }
+      try {
+        const parsed = JSON.parse(raw);
+        const state = parsed?.state;
+        if (state && !Array.isArray(state.shares)) {
+          state.shares = [];
+          sqliteStorage.setItem('substreamer-shares', JSON.stringify(parsed));
+          log(`Fixed corrupted shares field (was ${typeof state.shares}).`);
+        } else {
+          log('Shares data is valid — no fix needed.');
+        }
+      } catch {
+        /* Corrupted JSON — remove it entirely so the store starts fresh */
+        sqliteStorage.removeItem('substreamer-shares');
+        log('Removed unparseable shares data.');
+      }
+    },
+  },
+
   // -------------------------------------------------------------------
   // TEMPLATE – How to add a new migration task:
   //
@@ -153,7 +181,7 @@ const MIGRATION_TASKS: MigrationTask[] = [
   // Example:
   //
   // {
-  //   id: 4,
+  //   id: 5,
   //   name: 'Reset playback settings',
   //   run: async () => {
   //     // your migration logic here

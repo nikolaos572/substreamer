@@ -19,6 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { BottomSheet } from './BottomSheet';
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
 import { syncCachedItemTracks } from '../services/musicCacheService';
 import {
@@ -54,6 +55,12 @@ async function resolveSongIds(target: AddToPlaylistTarget): Promise<string[] | n
   const full = await getAlbum(target.item.id);
   if (!full?.song?.length) return null;
   return full.song.map((s) => s.id);
+}
+
+function getTargetCoverArt(target: AddToPlaylistTarget): string | undefined {
+  if (target.type === 'song') return target.item.coverArt;
+  if (target.type === 'album') return target.item.coverArt;
+  return target.songs[0]?.coverArt;
 }
 
 function getSubtitleText(target: AddToPlaylistTarget): string {
@@ -244,15 +251,23 @@ export function AddToPlaylistSheet() {
   );
 
   const subtitle = target ? getSubtitleText(target) : '';
+  const coverArtId = target ? getTargetCoverArt(target) : undefined;
 
   return (
     <BottomSheet visible={visible} onClose={handleClose} maxHeight="70%">
-      <Text style={[styles.title, dynamicStyles.title]} numberOfLines={1}>
-        Add to Playlist
-      </Text>
-      <Text style={[styles.subtitle, dynamicStyles.subtitle]} numberOfLines={1}>
-        {subtitle}
-      </Text>
+      <View style={styles.header}>
+        {coverArtId && (
+          <CachedImage coverArtId={coverArtId} size={150} style={styles.coverArt} resizeMode="cover" />
+        )}
+        <View style={styles.headerText}>
+          <Text style={[styles.title, dynamicStyles.title]} numberOfLines={1}>
+            Add to Playlist
+          </Text>
+          <Text style={[styles.subtitle, dynamicStyles.subtitle]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        </View>
+      </View>
 
       <Animated.View style={[styles.flexContainer, phase !== 'ready' && containerAnimatedStyle]}>
         {phase === 'loading' ? (
@@ -390,17 +405,31 @@ export function AddToPlaylistSheet() {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginBottom: 16,
+  },
+  coverArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+    marginRight: 12,
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
   title: {
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 2,
-    paddingHorizontal: 4,
   },
   subtitle: {
     fontSize: 14,
     fontWeight: '400',
-    marginBottom: 16,
-    paddingHorizontal: 4,
   },
   flexContainer: {
     flexShrink: 1,

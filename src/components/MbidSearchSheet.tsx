@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { BottomSheet } from './BottomSheet';
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
 import {
   searchArtists,
@@ -103,6 +104,7 @@ export function MbidSearchSheet() {
   const artistId = mbidSearchStore((s) => s.artistId);
   const artistName = mbidSearchStore((s) => s.artistName);
   const currentMbid = mbidSearchStore((s) => s.currentMbid);
+  const coverArtId = mbidSearchStore((s) => s.coverArtId);
   const hide = mbidSearchStore((s) => s.hide);
 
   const { colors } = useTheme();
@@ -208,12 +210,19 @@ export function MbidSearchSheet() {
 
   return (
     <BottomSheet visible={visible} onClose={handleClose} maxHeight="80%">
-      <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
-        Set MusicBrainz ID
-      </Text>
-      <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-        {artistName ?? 'Search for an artist'}
-      </Text>
+      <View style={styles.header}>
+        {coverArtId && (
+          <CachedImage coverArtId={coverArtId} size={150} style={styles.coverArt} resizeMode="cover" />
+        )}
+        <View style={styles.headerText}>
+          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
+            Set MusicBrainz ID
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            {artistName ?? 'Search for an artist'}
+          </Text>
+        </View>
+      </View>
 
         <View style={styles.searchRow}>
           <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
@@ -263,17 +272,31 @@ export function MbidSearchSheet() {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  coverArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+    marginRight: 12,
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
   title: {
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 2,
-    paddingHorizontal: 4,
   },
   subtitle: {
     fontSize: 14,
     fontWeight: '400',
-    marginBottom: 12,
-    paddingHorizontal: 4,
   },
   searchRow: {
     flexDirection: 'row',

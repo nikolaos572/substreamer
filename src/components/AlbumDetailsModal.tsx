@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 
 import { BottomSheet } from './BottomSheet';
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
 import type { AlbumID3, AlbumWithSongsID3, Child } from '../services/subsonicService';
 import { formatCompactDuration } from '../utils/formatters';
@@ -142,9 +143,19 @@ export function AlbumDetailsModal({ album, visible, onClose }: AlbumDetailsModal
 
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeight="60%">
-      <Text style={[styles.title, { color: colors.textPrimary }]}>
-        Album Details
-      </Text>
+      <View style={styles.header}>
+        {album.coverArt && (
+          <CachedImage coverArtId={album.coverArt} size={150} style={styles.coverArt} resizeMode="cover" />
+        )}
+        <View style={styles.headerText}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            Album Details
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            {album.name}
+          </Text>
+        </View>
+      </View>
 
       <ScrollView style={styles.scrollArea} bounces={false}>
         {rows.map((row) => (
@@ -166,10 +177,30 @@ export function AlbumDetailsModal({ album, visible, onClose }: AlbumDetailsModal
 }
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  coverArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+    marginRight: 12,
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 16,
+    marginBottom: 2,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontWeight: '400',
   },
   scrollArea: {
     flexGrow: 0,

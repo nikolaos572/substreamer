@@ -8,9 +8,10 @@ interface CreateShareState {
   itemId: string | null;
   songIds: string[];
   itemName: string;
+  coverArtId: string | null;
 
-  showAlbum: (albumId: string, albumName: string) => void;
-  showPlaylist: (playlistId: string, playlistName: string) => void;
+  showAlbum: (albumId: string, albumName: string, coverArtId?: string) => void;
+  showPlaylist: (playlistId: string, playlistName: string, coverArtId?: string) => void;
   showQueue: (songIds: string[]) => void;
   hide: () => void;
 }
@@ -21,23 +22,26 @@ export const createShareStore = create<CreateShareState>()((set) => ({
   itemId: null,
   songIds: [],
   itemName: '',
+  coverArtId: null,
 
-  showAlbum: (albumId, albumName) =>
+  showAlbum: (albumId, albumName, coverArtId) =>
     set({
       visible: true,
       shareType: 'album',
       itemId: albumId,
       songIds: [],
       itemName: albumName,
+      coverArtId: coverArtId ?? null,
     }),
 
-  showPlaylist: (playlistId, playlistName) =>
+  showPlaylist: (playlistId, playlistName, coverArtId) =>
     set({
       visible: true,
       shareType: 'playlist',
       itemId: playlistId,
       songIds: [],
       itemName: playlistName,
+      coverArtId: coverArtId ?? null,
     }),
 
   showQueue: (songIds) =>
@@ -47,6 +51,7 @@ export const createShareStore = create<CreateShareState>()((set) => ({
       itemId: null,
       songIds,
       itemName: 'Current Queue',
+      coverArtId: null,
     }),
 
   hide: () =>
@@ -55,5 +60,6 @@ export const createShareStore = create<CreateShareState>()((set) => ({
       itemId: null,
       songIds: [],
       itemName: '',
+      coverArtId: null,
     }),
 }));

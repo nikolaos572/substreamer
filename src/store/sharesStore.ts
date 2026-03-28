@@ -12,6 +12,8 @@ interface SharesState {
   shares: Share[];
   loading: boolean;
   error: string | null;
+  /** True when the server reports sharing is not available/authorized */
+  notAvailable: boolean;
 
   fetchShares: () => Promise<void>;
   removeShare: (id: string) => Promise<boolean>;
@@ -24,21 +26,17 @@ export const sharesStore = create<SharesState>()(
       shares: [],
       loading: false,
       error: null,
+      notAvailable: false,
 
       fetchShares: async () => {
-        set({ loading: true, error: null });
-        try {
-          const result = await getShares();
-          if (result) {
-            set({ shares: result, loading: false });
-          } else {
-            set({ loading: false, error: 'Failed to load shares.' });
-          }
-        } catch (e) {
-          set({
-            loading: false,
-            error: e instanceof Error ? e.message : 'Failed to load shares.',
-          });
+        set({ loading: true, error: null, notAvailable: false });
+        const result = await getShares();
+        if (result.ok) {
+          set({ shares: result.shares ?? [], loading: false });
+        } else if (result.reason === 'not-available') {
+          set({ shares: [], loading: false, notAvailable: true, error: result.message });
+        } else {
+          set({ loading: false, error: result.message });
         }
       },
 
@@ -50,12 +48,20 @@ export const sharesStore = create<SharesState>()(
         return success;
       },
 
-      clear: () => set({ shares: [], loading: false, error: null }),
+      clear: () => set({ shares: [], loading: false, error: null, notAvailable: false }),
     }),
     {
       name: 'substreamer-shares',
       storage: createJSONStorage(() => sqliteStorage),
       partialize: (state) => ({ shares: state.shares }),
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<SharesState>),
+        /* Guard against corrupted persisted data where shares is not an array */
+        shares: Array.isArray((persisted as Partial<SharesState>)?.shares)
+          ? (persisted as Partial<SharesState>).shares!
+          : [],
+      }),
     },
   ),
 );

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { BottomSheet } from './BottomSheet';
+import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
 import { updateShare } from '../services/subsonicService';
 import { editShareStore } from '../store/editShareStore';
@@ -127,14 +128,23 @@ export function EditShareSheet() {
     return 'Share';
   }, [share]);
 
+  const coverArtId = share?.entry?.[0]?.coverArt;
+
   return (
     <BottomSheet visible={visible} onClose={handleClose}>
-      <Text style={[styles.title, dynamicStyles.title]} numberOfLines={1}>
-        Edit Share
-      </Text>
-      <Text style={[styles.subtitle, dynamicStyles.subtitle]} numberOfLines={1}>
-        {shareTitle}
-      </Text>
+      <View style={styles.header}>
+        {coverArtId && (
+          <CachedImage coverArtId={coverArtId} size={150} style={styles.coverArt} resizeMode="cover" />
+        )}
+        <View style={styles.headerText}>
+          <Text style={[styles.title, dynamicStyles.title]} numberOfLines={1}>
+            Edit Share
+          </Text>
+          <Text style={[styles.subtitle, dynamicStyles.subtitle]} numberOfLines={1}>
+            {shareTitle}
+          </Text>
+        </View>
+      </View>
 
         <View style={styles.formSection}>
           <Text style={[styles.label, dynamicStyles.label]}>Description</Text>
@@ -211,17 +221,31 @@ export function EditShareSheet() {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  coverArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: 'rgba(128,128,128,0.12)',
+    marginRight: 12,
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
   title: {
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 2,
-    paddingHorizontal: 4,
   },
   subtitle: {
     fontSize: 14,
     fontWeight: '400',
-    marginBottom: 16,
-    paddingHorizontal: 4,
   },
   formSection: {
     paddingHorizontal: 4,

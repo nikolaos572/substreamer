@@ -1068,18 +1068,44 @@ describe('getShares', () => {
   it('returns shares on success', async () => {
     const { default: SubsonicAPI } = require('subsonic-api');
     SubsonicAPI.prototype.getShares = jest.fn().mockResolvedValue({
+      status: 'ok',
       shares: { share: [{ id: 'sh1', url: 'https://example.com/share/sh1' }] },
     });
     const { getShares, getApi } = require('../subsonicService');
     getApi();
     const result = await getShares();
-    expect(result).toEqual([{ id: 'sh1', url: 'https://example.com/share/sh1' }]);
+    expect(result).toEqual({ ok: true, shares: [{ id: 'sh1', url: 'https://example.com/share/sh1' }] });
   });
 
-  it('returns null when no API', async () => {
+  it('returns error result when no API', async () => {
     mockAuthStore.getState.mockReturnValue({ isLoggedIn: false } as any);
     const { getShares } = require('../subsonicService');
-    expect(await getShares()).toBeNull();
+    const result = await getShares();
+    expect(result).toEqual({ ok: false, reason: 'error', message: 'Not connected to a server.' });
+  });
+
+  it('returns not-available when server responds with fail status', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getShares = jest.fn().mockResolvedValue({
+      status: 'failed',
+      error: { code: 50, message: 'Permission denied.' },
+    });
+    const { getShares, getApi } = require('../subsonicService');
+    getApi();
+    const result = await getShares();
+    expect(result).toEqual({ ok: false, reason: 'not-available', message: 'Permission denied.' });
+  });
+
+  it('returns empty shares when server has none', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getShares = jest.fn().mockResolvedValue({
+      status: 'ok',
+      shares: {},
+    });
+    const { getShares, getApi } = require('../subsonicService');
+    getApi();
+    const result = await getShares();
+    expect(result).toEqual({ ok: true, shares: [] });
   });
 });
 
@@ -1400,13 +1426,22 @@ describe('getScanStatus (success path)', () => {
 });
 
 describe('getShares (catch path)', () => {
-  it('returns null on exception', async () => {
+  it('returns not-available with error message on exception', async () => {
     const { default: SubsonicAPI } = require('subsonic-api');
-    SubsonicAPI.prototype.getShares = jest.fn().mockRejectedValue(new Error('fail'));
+    SubsonicAPI.prototype.getShares = jest.fn().mockRejectedValue(new Error('Forbidden'));
     const { getShares, getApi } = require('../subsonicService');
     getApi();
     const result = await getShares();
-    expect(result).toBeNull();
+    expect(result).toEqual({ ok: false, reason: 'not-available', message: 'Forbidden' });
+  });
+
+  it('returns not-available with default message on non-Error throw', async () => {
+    const { default: SubsonicAPI } = require('subsonic-api');
+    SubsonicAPI.prototype.getShares = jest.fn().mockRejectedValue('unknown');
+    const { getShares, getApi } = require('../subsonicService');
+    getApi();
+    const result = await getShares();
+    expect(result).toEqual({ ok: false, reason: 'not-available', message: 'Sharing is not available on this server.' });
   });
 });
 
