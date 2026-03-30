@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Appearance, BackHandler, Dimensions, LogBox, Platform, StyleSheet, View } from 'react-native';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Easing, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
@@ -109,6 +110,18 @@ initSslTrustStore();
     }
   } catch { /* non-critical: falls back to system default */ }
 })();
+
+// Detect phone vs tablet at module scope using Android 16's large-screen
+// threshold (smallest screen dimension >= 600dp).
+const screenDims = Dimensions.get('screen');
+const IS_TABLET = Math.min(screenDims.width, screenDims.height) >= 600;
+
+// Lock orientation to portrait on phones. Tablets are left free to rotate
+// (controlled at runtime by the orientation lock setting in layoutPreferencesStore).
+if (!IS_TABLET) {
+  ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
+    .catch(() => { /* non-critical: orientation lock unavailable */ });
+}
 
 // Suppress ExpoKeepAwake errors that fire when the activity becomes
 // temporarily unavailable during backgrounding (moveTaskToBack).

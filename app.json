@@ -8,7 +8,7 @@
       "android",
       "ios"
     ],
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./src/assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -75,6 +75,7 @@
           }
         }
       ],
+      "expo-screen-orientation",
       "expo-font",
       [
         "expo-location",
