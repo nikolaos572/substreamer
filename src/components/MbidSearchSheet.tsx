@@ -15,8 +15,11 @@ import { CachedImage } from './CachedImage';
 import { useTheme } from '../hooks/useTheme';
 import {
   searchArtists,
+  searchReleaseGroups,
   type MusicBrainzArtist,
+  type MusicBrainzReleaseGroup,
 } from '../services/musicbrainzService';
+import { albumInfoStore } from '../store/albumInfoStore';
 import { artistDetailStore } from '../store/artistDetailStore';
 import { mbidOverrideStore } from '../store/mbidOverrideStore';
 import { mbidSearchStore } from '../store/mbidSearchStore';
@@ -26,26 +29,52 @@ const ROW_HEIGHT = 80;
 const DEBOUNCE_MS = 400;
 
 /* ------------------------------------------------------------------ */
+/*  Unified result type                                                */
+/* ------------------------------------------------------------------ */
+
+interface SearchResult {
+  id: string;
+  name: string;
+  meta: string[];
+  disambiguation?: string;
+}
+
+function artistToResult(a: MusicBrainzArtist): SearchResult {
+  const meta: string[] = [];
+  if (a.type) meta.push(a.type);
+  if (a.country) meta.push(a.country);
+  if (a.score != null) meta.push(`${a.score}%`);
+  return { id: a.id, name: a.name, meta, disambiguation: a.disambiguation };
+}
+
+function releaseGroupToResult(rg: MusicBrainzReleaseGroup): SearchResult {
+  const meta: string[] = [];
+  if (rg['primary-type']) meta.push(rg['primary-type']);
+  if (rg['first-release-date']) meta.push(rg['first-release-date'].slice(0, 4));
+  const artistCredit = rg['artist-credit'];
+  if (artistCredit && artistCredit.length > 0) {
+    meta.push(artistCredit.map((ac) => ac.name).join(', '));
+  }
+  if (rg.score != null) meta.push(`${rg.score}%`);
+  return { id: rg.id, name: rg.title, meta };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Result row                                                         */
 /* ------------------------------------------------------------------ */
 
 const ResultRow = memo(function ResultRow({
-  artist,
+  result,
   isCurrentMbid,
   onSelect,
   colors,
 }: {
-  artist: MusicBrainzArtist;
+  result: SearchResult;
   isCurrentMbid: boolean;
-  onSelect: (artist: MusicBrainzArtist) => void;
+  onSelect: (result: SearchResult) => void;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
-  const handlePress = useCallback(() => onSelect(artist), [artist, onSelect]);
-
-  const meta: string[] = [];
-  if (artist.type) meta.push(artist.type);
-  if (artist.country) meta.push(artist.country);
-  if (artist.score != null) meta.push(`${artist.score}%`);
+  const handlePress = useCallback(() => onSelect(result), [result, onSelect]);
 
   return (
     <Pressable
@@ -61,13 +90,13 @@ const ResultRow = memo(function ResultRow({
         <View style={styles.rowHeader}>
           <Text
             style={[
-              styles.artistName,
+              styles.entityName,
               { color: colors.textPrimary },
               isCurrentMbid && { color: colors.primary },
             ]}
             numberOfLines={1}
           >
-            {artist.name}
+            {result.name}
           </Text>
           {isCurrentMbid && (
             <View style={[styles.currentBadge, { backgroundColor: colors.primary }]}>
@@ -75,18 +104,18 @@ const ResultRow = memo(function ResultRow({
             </View>
           )}
         </View>
-        {artist.disambiguation ? (
+        {result.disambiguation ? (
           <Text style={[styles.disambiguation, { color: colors.textSecondary }]} numberOfLines={1}>
-            {artist.disambiguation}
+            {result.disambiguation}
           </Text>
         ) : null}
         <View style={styles.rowMeta}>
           <Text style={[styles.mbid, { color: colors.textSecondary }]} numberOfLines={1}>
-            {artist.id}
+            {result.id}
           </Text>
-          {meta.length > 0 && (
+          {result.meta.length > 0 && (
             <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-              {meta.join(' · ')}
+              {result.meta.join(' \u00b7 ')}
             </Text>
           )}
         </View>
@@ -101,7 +130,9 @@ const ResultRow = memo(function ResultRow({
 
 export function MbidSearchSheet() {
   const visible = mbidSearchStore((s) => s.visible);
-  const artistId = mbidSearchStore((s) => s.artistId);
+  const entityType = mbidSearchStore((s) => s.entityType);
+  const entityId = mbidSearchStore((s) => s.entityId);
+  const entityName = mbidSearchStore((s) => s.entityName);
   const artistName = mbidSearchStore((s) => s.artistName);
   const currentMbid = mbidSearchStore((s) => s.currentMbid);
   const coverArtId = mbidSearchStore((s) => s.coverArtId);
@@ -110,29 +141,36 @@ export function MbidSearchSheet() {
   const { colors } = useTheme();
 
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<MusicBrainzArtist[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const isArtist = entityType === 'artist';
+
+  // Auto-search on open
   useEffect(() => {
-    if (visible && artistName) {
-      setQuery(artistName);
-      setSearched(false);
-      setResults([]);
-      setLoading(true);
+    if (!visible || !entityName) return undefined;
 
-      const timer = setTimeout(async () => {
-        const data = await searchArtists(artistName);
-        setResults(data);
-        setLoading(false);
-        setSearched(true);
-      }, 100);
+    setQuery(entityName);
+    setSearched(false);
+    setResults([]);
+    setLoading(true);
 
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [visible, artistName]);
+    const timer = setTimeout(async () => {
+      if (isArtist) {
+        const data = await searchArtists(entityName);
+        setResults(data.map(artistToResult));
+      } else {
+        const data = await searchReleaseGroups(entityName, artistName ?? undefined);
+        setResults(data.map(releaseGroupToResult));
+      }
+      setLoading(false);
+      setSearched(true);
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [visible, entityName, artistName, isArtist]);
 
   const handleQueryChange = useCallback((text: string) => {
     setQuery(text);
@@ -149,28 +187,47 @@ export function MbidSearchSheet() {
 
     setLoading(true);
     timerRef.current = setTimeout(async () => {
-      const data = await searchArtists(trimmed);
-      setResults(data);
+      const storeState = mbidSearchStore.getState();
+      if (storeState.entityType === 'artist') {
+        const data = await searchArtists(trimmed);
+        setResults(data.map(artistToResult));
+      } else {
+        const data = await searchReleaseGroups(trimmed, storeState.artistName ?? undefined);
+        setResults(data.map(releaseGroupToResult));
+      }
       setLoading(false);
       setSearched(true);
     }, DEBOUNCE_MS);
   }, []);
 
   const handleSelect = useCallback(
-    async (artist: MusicBrainzArtist) => {
-      if (!artistId) return;
-      const name = mbidSearchStore.getState().artistName ?? artist.name;
-      mbidOverrideStore.getState().setOverride(artistId, name, artist.id);
+    async (result: SearchResult) => {
+      if (!entityId) return;
+      const storeState = mbidSearchStore.getState();
+      const type = storeState.entityType;
+      const name = storeState.entityName ?? result.name;
+      mbidOverrideStore.getState().setOverride(type, entityId, name, result.id);
       hide();
-      processingOverlayStore.getState().show('Updating Artist…');
-      try {
-        await artistDetailStore.getState().fetchArtist(artistId);
-        processingOverlayStore.getState().showSuccess('MBID Override Saved');
-      } catch {
-        processingOverlayStore.getState().showError('Failed to update artist');
+
+      if (type === 'artist') {
+        processingOverlayStore.getState().show('Updating Artist\u2026');
+        try {
+          await artistDetailStore.getState().fetchArtist(entityId);
+          processingOverlayStore.getState().showSuccess('MBID Override Saved');
+        } catch {
+          processingOverlayStore.getState().showError('Failed to update artist');
+        }
+      } else {
+        processingOverlayStore.getState().show('Updating Album\u2026');
+        try {
+          await albumInfoStore.getState().fetchAlbumInfo(entityId);
+          processingOverlayStore.getState().showSuccess('MBID Override Saved');
+        } catch {
+          processingOverlayStore.getState().showError('Failed to update album');
+        }
       }
     },
-    [artistId, hide],
+    [entityId, hide],
   );
 
   const handleClose = useCallback(() => {
@@ -183,9 +240,9 @@ export function MbidSearchSheet() {
   }, [hide]);
 
   const renderItem = useCallback(
-    ({ item }: { item: MusicBrainzArtist }) => (
+    ({ item }: { item: SearchResult }) => (
       <ResultRow
-        artist={item}
+        result={item}
         isCurrentMbid={item.id === currentMbid}
         onSelect={handleSelect}
         colors={colors}
@@ -194,7 +251,7 @@ export function MbidSearchSheet() {
     [currentMbid, handleSelect, colors],
   );
 
-  const keyExtractor = useCallback((item: MusicBrainzArtist) => item.id, []);
+  const keyExtractor = useCallback((item: SearchResult) => item.id, []);
 
   const dynamicStyles = useMemo(
     () =>
@@ -208,6 +265,9 @@ export function MbidSearchSheet() {
     [colors],
   );
 
+  const entityLabel = isArtist ? 'artist' : 'album';
+  const emptyLabel = isArtist ? 'No artists found' : 'No albums found';
+
   return (
     <BottomSheet visible={visible} onClose={handleClose} maxHeight="80%">
       <View style={styles.header}>
@@ -219,7 +279,7 @@ export function MbidSearchSheet() {
             Set MusicBrainz ID
           </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            {artistName ?? 'Search for an artist'}
+            {entityName ?? `Search for an ${entityLabel}`}
           </Text>
         </View>
       </View>
@@ -230,7 +290,7 @@ export function MbidSearchSheet() {
             style={[styles.input, dynamicStyles.input]}
             value={query}
             onChangeText={handleQueryChange}
-            placeholder="Search MusicBrainz…"
+            placeholder={`Search MusicBrainz ${isArtist ? 'artists' : 'albums'}\u2026`}
             placeholderTextColor={colors.textSecondary}
             returnKeyType="search"
             autoCorrect={false}
@@ -248,14 +308,14 @@ export function MbidSearchSheet() {
             <View style={styles.centered}>
               <ActivityIndicator size="small" color={colors.primary} />
               <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-                Searching MusicBrainz…
+                Searching MusicBrainz{'\u2026'}
               </Text>
             </View>
           ) : results.length === 0 && searched ? (
             <View style={styles.centered}>
               <Ionicons name="search-outline" size={32} color={colors.textSecondary} />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                No artists found
+                {emptyLabel}
               </Text>
             </View>
           ) : results.length > 0 ? (
@@ -335,7 +395,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  artistName: {
+  entityName: {
     fontSize: 16,
     fontWeight: '600',
     flexShrink: 1,

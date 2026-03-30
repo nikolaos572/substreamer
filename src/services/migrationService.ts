@@ -13,6 +13,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import { completedScrobbleStore } from '../store/completedScrobbleStore';
+import { mbidOverrideStore } from '../store/mbidOverrideStore';
 import { sqliteStorage } from '../store/sqliteStorage';
 
 /* ------------------------------------------------------------------ */
@@ -169,6 +170,44 @@ const MIGRATION_TASKS: MigrationTask[] = [
     },
   },
 
+  {
+    id: 5,
+    name: 'Migrate MBID overrides to new shape',
+    run: async (log) => {
+      const overrides = mbidOverrideStore.getState().overrides;
+      const keys = Object.keys(overrides);
+      if (keys.length === 0) {
+        log('No MBID overrides — skipping.');
+        return;
+      }
+
+      // Check if already migrated (new keys use "artist:" or "album:" prefix)
+      const alreadyMigrated = keys.some((k) => k.startsWith('artist:') || k.startsWith('album:'));
+      if (alreadyMigrated) {
+        log('MBID overrides already in new format — skipping.');
+        return;
+      }
+
+      // Old format: keyed by artistId with { artistId, artistName, mbid }
+      // New format: keyed by "artist:{artistId}" with { type, entityId, entityName, mbid }
+      const migrated: Record<string, { type: 'artist'; entityId: string; entityName: string; mbid: string }> = {};
+      for (const key of keys) {
+        const entry = overrides[key] as any;
+        const entityId = entry.artistId ?? entry.entityId ?? key;
+        const entityName = entry.artistName ?? entry.entityName ?? '';
+        migrated[`artist:${entityId}`] = {
+          type: 'artist',
+          entityId,
+          entityName,
+          mbid: entry.mbid,
+        };
+      }
+
+      mbidOverrideStore.setState({ overrides: migrated });
+      log(`Migrated ${keys.length} MBID override(s) to new format.`);
+    },
+  },
+
   // -------------------------------------------------------------------
   // TEMPLATE – How to add a new migration task:
   //
@@ -181,7 +220,7 @@ const MIGRATION_TASKS: MigrationTask[] = [
   // Example:
   //
   // {
-  //   id: 5,
+  //   id: 6,
   //   name: 'Reset playback settings',
   //   run: async () => {
   //     // your migration logic here

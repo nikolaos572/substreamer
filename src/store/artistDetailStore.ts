@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { mbidOverrideStore } from './mbidOverrideStore';
+import { getOverride, mbidOverrideStore } from './mbidOverrideStore';
 import { sqliteStorage } from './sqliteStorage';
 
 import {
@@ -85,12 +85,12 @@ export const artistDetailStore = create<ArtistDetailState>()(
         const subsonicBio = infoData?.biography ? sanitizeBiographyText(infoData.biography) : null;
         if (subsonicBio && subsonicBio.length > 0) {
           biography = subsonicBio;
-          resolvedMbid = mbidOverrideStore.getState().overrides[id]?.mbid
+          resolvedMbid = getOverride(mbidOverrideStore.getState().overrides, 'artist', id)?.mbid
             ?? infoData?.musicBrainzId
             ?? null;
         } else {
           try {
-            const override = mbidOverrideStore.getState().overrides[id];
+            const override = getOverride(mbidOverrideStore.getState().overrides, 'artist', id);
             const mbid = override?.mbid
               ?? infoData?.musicBrainzId
               ?? (await searchArtistMBID(artistData.name));

@@ -159,7 +159,7 @@ describe('fetchArtist — MusicBrainz biography fallback', () => {
     setupArtist();
     mockGetArtistInfo2.mockResolvedValue({ biography: '' } as any);
     mbidOverrideStore.setState({
-      overrides: { 'ar-1': { artistId: 'ar-1', artistName: 'Radiohead', mbid: 'override-mbid' } },
+      overrides: { 'artist:ar-1': { type: 'artist', entityId: 'ar-1', entityName: 'Radiohead', mbid: 'override-mbid' } },
     });
     mockGetBio.mockResolvedValue('MusicBrainz bio from override.');
 
@@ -244,7 +244,7 @@ describe('fetchArtist — MusicBrainz biography fallback', () => {
       musicBrainzId: 'server-mbid',
     } as any);
     mbidOverrideStore.setState({
-      overrides: { 'ar-1': { artistId: 'ar-1', artistName: 'Radiohead', mbid: 'override-mbid' } },
+      overrides: { 'artist:ar-1': { type: 'artist', entityId: 'ar-1', entityName: 'Radiohead', mbid: 'override-mbid' } },
     });
 
     const entry = await artistDetailStore.getState().fetchArtist('ar-1');

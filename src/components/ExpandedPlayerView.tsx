@@ -11,10 +11,13 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
+  RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -61,7 +64,11 @@ import {
   skipToTrack,
   togglePlayPause,
 } from '../services/playerService';
+import { sanitizeBiographyText } from '../utils/formatters';
+import { getGenreNames } from '../utils/genreHelpers';
+import { minDelay } from '../utils/stringHelpers';
 import { type Child } from '../services/subsonicService';
+import { albumInfoStore } from '../store/albumInfoStore';
 import { playbackSettingsStore } from '../store/playbackSettingsStore';
 import { createShareStore } from '../store/createShareStore';
 import { moreOptionsStore } from '../store/moreOptionsStore';
@@ -110,8 +117,61 @@ export function ExpandedPlayerView({
     : colors.background;
   const gradientEnd = mixHexColors(colors.background, '#000000', 0.15);
 
-  // Right panel mode: queue (default) or lyrics placeholder
-  const [rightPanelMode, setRightPanelMode] = useState<'queue' | 'lyrics'>('queue');
+  // Right panel mode: queue (default), lyrics placeholder, or album info
+  const [rightPanelMode, setRightPanelMode] = useState<'queue' | 'lyrics' | 'info'>('queue');
+
+  // Album info state
+  const albumId = currentTrack?.albumId ?? null;
+  const albumInfoEntry = albumInfoStore((s) => albumId ? s.entries[albumId] : undefined);
+  const albumInfoLoading = albumInfoStore((s) => albumId ? (s.loading[albumId] ?? false) : false);
+  const fetchAttemptedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (rightPanelMode !== 'info' || !albumId || albumInfoEntry || albumInfoLoading) return;
+    if (fetchAttemptedRef.current === albumId) return;
+    fetchAttemptedRef.current = albumId;
+    albumInfoStore.getState().fetchAlbumInfo(
+      albumId,
+      currentTrack?.artist ?? undefined,
+      currentTrack?.album ?? undefined,
+    );
+  }, [rightPanelMode, albumId, albumInfoEntry, albumInfoLoading, currentTrack?.artist, currentTrack?.album]);
+
+  // Reset fetch guard when album changes
+  useEffect(() => {
+    fetchAttemptedRef.current = null;
+  }, [albumId]);
+
+  const sanitizedNotes = useMemo(() => {
+    // Prefer server notes, fall back to Wikipedia-enriched notes
+    const serverNotes = albumInfoEntry?.albumInfo.notes;
+    if (serverNotes) {
+      const sanitized = sanitizeBiographyText(serverNotes);
+      if (sanitized) return sanitized;
+    }
+    return albumInfoEntry?.enrichedNotes ?? null;
+  }, [albumInfoEntry?.albumInfo.notes, albumInfoEntry?.enrichedNotes]);
+
+  const notesAttributionUrl = albumInfoEntry?.enrichedNotesUrl ?? null;
+
+  // Pull-to-refresh for album info panel
+  const [albumInfoRefreshing, setAlbumInfoRefreshing] = useState(false);
+  const handleRefreshAlbumInfo = useCallback(async () => {
+    if (!albumId) return;
+    setAlbumInfoRefreshing(true);
+    const delay = minDelay();
+    // Clear existing entry so a fresh fetch is triggered
+    const { [albumId]: _, ...rest } = albumInfoStore.getState().entries;
+    albumInfoStore.setState({ entries: rest });
+    fetchAttemptedRef.current = null;
+    await albumInfoStore.getState().fetchAlbumInfo(
+      albumId,
+      currentTrack?.artist ?? undefined,
+      currentTrack?.album ?? undefined,
+    );
+    await delay;
+    setAlbumInfoRefreshing(false);
+  }, [albumId, currentTrack?.artist, currentTrack?.album]);
 
   // Measure the art area so cover art fills available height
   const [artMaxSize, setArtMaxSize] = useState(0);
@@ -504,17 +564,30 @@ export function ExpandedPlayerView({
                     />
                   </View>
                 </>
+              ) : rightPanelMode === 'info' ? (
+                /* Album info panel — always shows track metadata; enriched with API data when available */
+                <AlbumInfoContent
+                  track={currentTrack}
+                  albumInfo={albumInfoEntry?.albumInfo ?? null}
+                  overrideMbid={albumInfoEntry?.overrideMbid ?? null}
+                  sanitizedNotes={sanitizedNotes}
+                  notesAttributionUrl={notesAttributionUrl}
+                  albumInfoLoading={albumInfoLoading}
+                  refreshing={albumInfoRefreshing}
+                  onRefresh={handleRefreshAlbumInfo}
+                  colors={colors}
+                />
               ) : (
                 /* Lyrics placeholder */
                 <View style={styles.lyricsPlaceholder}>
-                  <Ionicons name="musical-notes-outline" size={48} color={colors.textSecondary} />
+                  <MaterialCommunityIcons name="comment-quote-outline" size={48} color={colors.textSecondary} />
                   <Text style={[styles.lyricsPlaceholderText, { color: colors.textSecondary }]}>
                     Lyrics coming soon
                   </Text>
                 </View>
               )}
 
-              {/* Bottom toggle: lyrics / queue */}
+              {/* Bottom toggle: lyrics / info / queue */}
               <View style={styles.toggleRow}>
                 <View style={styles.toggleButtons}>
                   <Pressable
@@ -525,9 +598,22 @@ export function ExpandedPlayerView({
                     style={({ pressed }) => [styles.toggleButton, pressed && styles.pressed]}
                   >
                     <MaterialCommunityIcons
-                      name="microphone-outline"
+                      name="comment-quote-outline"
                       size={22}
                       color={rightPanelMode === 'lyrics' ? colors.primary : colors.textSecondary}
+                    />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setRightPanelMode('info')}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Show album info"
+                    style={({ pressed }) => [styles.toggleButton, pressed && styles.pressed]}
+                  >
+                    <MaterialCommunityIcons
+                      name="information-outline"
+                      size={22}
+                      color={rightPanelMode === 'info' ? colors.primary : colors.textSecondary}
                     />
                   </Pressable>
                   <Pressable
@@ -608,6 +694,230 @@ const ExpandedFavoriteButton = memo(function ExpandedFavoriteButton({
         color={starred ? colors.red : colors.textSecondary}
       />
     </Pressable>
+  );
+});
+
+/* ------------------------------------------------------------------ */
+/*  Album info content                                                 */
+/* ------------------------------------------------------------------ */
+
+interface AlbumInfoContentProps {
+  track: Child;
+  albumInfo: { notes?: string; lastFmUrl?: string; musicBrainzId?: string } | null;
+  /** Release-group MBID from user override, or null. */
+  overrideMbid: string | null;
+  sanitizedNotes: string | null;
+  notesAttributionUrl: string | null;
+  albumInfoLoading: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+  colors: {
+    textPrimary: string;
+    textSecondary: string;
+    primary: string;
+    card: string;
+    label: string;
+    border: string;
+  };
+}
+
+const AlbumInfoContent = memo(function AlbumInfoContent({
+  track,
+  albumInfo,
+  overrideMbid,
+  sanitizedNotes,
+  notesAttributionUrl,
+  albumInfoLoading,
+  refreshing,
+  onRefresh,
+  colors,
+}: AlbumInfoContentProps) {
+  const [notesExpanded, setNotesExpanded] = useState(false);
+  const [needsTruncation, setNeedsTruncation] = useState(false);
+
+  // Reset expand/truncation state when notes change (different album)
+  const notesRef = useRef(sanitizedNotes);
+  if (notesRef.current !== sanitizedNotes) {
+    notesRef.current = sanitizedNotes;
+    if (notesExpanded) setNotesExpanded(false);
+    if (needsTruncation) setNeedsTruncation(false);
+  }
+
+  // Build detail rows from track metadata
+  const details = useMemo(() => {
+    const rows: { label: string; value: string }[] = [];
+    if (track.album) rows.push({ label: 'Album', value: track.album });
+    if (track.artist) rows.push({ label: 'Artist', value: track.artist });
+    if (track.displayAlbumArtist && track.displayAlbumArtist !== track.artist) {
+      rows.push({ label: 'Album Artist', value: track.displayAlbumArtist });
+    }
+    if (track.displayComposer) rows.push({ label: 'Composer', value: track.displayComposer });
+    if (track.year) rows.push({ label: 'Year', value: String(track.year) });
+    const genreNames = getGenreNames(track);
+    const genreText = genreNames.length > 0 ? genreNames.join(', ') : null;
+    if (genreText) rows.push({ label: genreNames.length > 1 ? 'Genres' : 'Genre', value: genreText });
+    if (track.bpm) rows.push({ label: 'BPM', value: String(track.bpm) });
+    if (track.suffix && track.bitRate) {
+      rows.push({ label: 'Format', value: `${track.suffix.toUpperCase()} · ${track.bitRate} kbps` });
+    } else if (track.suffix) {
+      rows.push({ label: 'Format', value: track.suffix.toUpperCase() });
+    }
+    if (track.playCount != null && track.playCount > 0) {
+      rows.push({ label: 'Play Count', value: String(track.playCount) });
+    }
+    return rows;
+  }, [track]);
+
+  const handleLastFm = useCallback(() => {
+    if (albumInfo?.lastFmUrl) Linking.openURL(albumInfo.lastFmUrl);
+  }, [albumInfo?.lastFmUrl]);
+
+  const handleMusicBrainz = useCallback(() => {
+    if (overrideMbid) {
+      // Override MBIDs are release-group IDs
+      Linking.openURL(`https://musicbrainz.org/release-group/${overrideMbid}`);
+    } else if (albumInfo?.musicBrainzId) {
+      Linking.openURL(`https://musicbrainz.org/release/${albumInfo.musicBrainzId}`);
+    }
+  }, [overrideMbid, albumInfo?.musicBrainzId]);
+
+  const handleWikipedia = useCallback(() => {
+    if (notesAttributionUrl) Linking.openURL(notesAttributionUrl);
+  }, [notesAttributionUrl]);
+
+  return (
+    <ScrollView
+      style={styles.infoScrollView}
+      contentContainerStyle={styles.infoContent}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
+        />
+      }
+    >
+      {(albumInfoLoading || refreshing) ? (
+        /* Skeleton placeholder */
+        <View>
+          {[0.4, 0.6, 0.5, 0.35, 0.55].map((w, i) => (
+            <View key={i} style={styles.skeletonRow}>
+              <View style={[styles.skeletonBar, styles.skeletonLabel]} />
+              <View style={[styles.skeletonBar, { width: `${w * 100}%` }]} />
+            </View>
+          ))}
+          <View style={styles.infoSection}>
+            {[1, 0.97, 1, 0.95, 0.98, 1, 0.93, 0.96, 1, 0.6].map((w, i) => (
+              <View
+                key={i}
+                style={[styles.skeletonBar, styles.skeletonTextLine, { width: `${w * 100}%` }]}
+              />
+            ))}
+          </View>
+          <View style={styles.skeletonLinksRow}>
+            {[75, 95, 80].map((w, i) => (
+              <View key={i} style={[styles.skeletonBar, styles.skeletonChip, { width: w }]} />
+            ))}
+          </View>
+        </View>
+      ) : (
+        <>
+          {/* Track & album details */}
+          {details.map((row) => (
+            <View key={row.label} style={[styles.infoDetailRow, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.infoDetailLabel, { color: colors.textSecondary }]}>{row.label}</Text>
+              <Text style={[styles.infoDetailValue, { color: colors.textPrimary }]} numberOfLines={2}>
+                {row.value}
+              </Text>
+            </View>
+          ))}
+
+          {/* Album description */}
+          {sanitizedNotes ? (
+            <View style={styles.infoSection}>
+              <Text
+                style={[styles.infoNotesText, { color: colors.textPrimary }]}
+                numberOfLines={notesExpanded || !needsTruncation ? undefined : 12}
+                onTextLayout={(e) => {
+                  if (!needsTruncation && !notesExpanded && e.nativeEvent.lines.length > 15) {
+                    setNeedsTruncation(true);
+                  }
+                }}
+              >
+                {sanitizedNotes}
+              </Text>
+              {needsTruncation && (
+                <Pressable
+                  onPress={() => setNotesExpanded((prev) => !prev)}
+                  style={({ pressed }) => pressed && styles.pressed}
+                >
+                  <Text style={[styles.infoReadMore, { color: colors.primary }]}>
+                    {notesExpanded ? 'Show less' : 'Show more'}
+                  </Text>
+                </Pressable>
+              )}
+              {notesAttributionUrl && (
+                <Pressable
+                  onPress={handleWikipedia}
+                  style={({ pressed }) => [styles.infoAttribution, pressed && styles.pressed]}
+                  accessibilityRole="link"
+                  accessibilityLabel="Source: Wikipedia"
+                >
+                  <Text style={[styles.infoAttributionText, { color: colors.textSecondary }]}>
+                    Source: Wikipedia
+                  </Text>
+                  <Ionicons name="open-outline" size={11} color={colors.textSecondary} style={styles.infoLinkArrow} />
+                </Pressable>
+              )}
+            </View>
+          ) : null}
+        </>
+      )}
+
+      {/* External links */}
+      {(albumInfo?.lastFmUrl || overrideMbid || albumInfo?.musicBrainzId || notesAttributionUrl) && (
+        <View style={styles.infoLinksRow}>
+          {albumInfo?.lastFmUrl && (
+            <Pressable
+              onPress={handleLastFm}
+              accessibilityRole="link"
+              accessibilityLabel="View on Last.fm"
+              style={({ pressed }) => [styles.infoLinkChip, pressed && styles.pressed]}
+            >
+              <Ionicons name="musical-notes" size={14} color={colors.textPrimary} />
+              <Text style={[styles.infoLinkText, { color: colors.textPrimary }]}>Last.fm</Text>
+              <Ionicons name="open-outline" size={12} color={colors.textPrimary} style={styles.infoLinkArrow} />
+            </Pressable>
+          )}
+          {(overrideMbid || albumInfo?.musicBrainzId) && (
+            <Pressable
+              onPress={handleMusicBrainz}
+              accessibilityRole="link"
+              accessibilityLabel="View on MusicBrainz"
+              style={({ pressed }) => [styles.infoLinkChip, pressed && styles.pressed]}
+            >
+              <Ionicons name="disc" size={14} color={colors.textPrimary} />
+              <Text style={[styles.infoLinkText, { color: colors.textPrimary }]}>MusicBrainz</Text>
+              <Ionicons name="open-outline" size={12} color={colors.textPrimary} style={styles.infoLinkArrow} />
+            </Pressable>
+          )}
+          {notesAttributionUrl && (
+            <Pressable
+              onPress={handleWikipedia}
+              accessibilityRole="link"
+              accessibilityLabel="View on Wikipedia"
+              style={({ pressed }) => [styles.infoLinkChip, pressed && styles.pressed]}
+            >
+              <Ionicons name="globe-outline" size={14} color={colors.textPrimary} />
+              <Text style={[styles.infoLinkText, { color: colors.textPrimary }]}>Wikipedia</Text>
+              <Ionicons name="open-outline" size={12} color={colors.textPrimary} style={styles.infoLinkArrow} />
+            </Pressable>
+          )}
+        </View>
+      )}
+    </ScrollView>
   );
 });
 
@@ -798,6 +1108,119 @@ const styles = StyleSheet.create({
   lyricsPlaceholderText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+
+  /* --- Skeleton loading --- */
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+  },
+  skeletonBar: {
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  skeletonLabel: {
+    width: 70,
+  },
+  skeletonTextLine: {
+    height: 14,
+    marginBottom: 10,
+  },
+  skeletonLinksRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 32,
+  },
+  skeletonChip: {
+    height: 28,
+    borderRadius: 8,
+  },
+
+  /* --- Right column: album info --- */
+  infoScrollView: {
+    flex: 1,
+  },
+  infoContent: {
+    paddingTop: 20,
+    paddingBottom: 24,
+  },
+  infoSection: {
+    marginTop: 32,
+  },
+  infoSectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+    marginLeft: 4,
+  },
+  infoDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  infoDetailLabel: {
+    fontSize: 17,
+    flex: 1,
+  },
+  infoDetailValue: {
+    fontSize: 17,
+    fontWeight: '500',
+    marginLeft: 16,
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  infoNotesText: {
+    fontSize: 17,
+    lineHeight: 26,
+  },
+  infoReadMore: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  infoAttribution: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 10,
+  },
+  infoAttributionText: {
+    fontSize: 14,
+    opacity: 0.6,
+  },
+  infoLoadingRow: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  infoLinksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 32,
+  },
+  infoLinkChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  infoLinkText: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  infoLinkArrow: {
+    opacity: 0.6,
   },
 
   /* --- Right column: toggle buttons --- */

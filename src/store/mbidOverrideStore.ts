@@ -3,18 +3,34 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { sqliteStorage } from './sqliteStorage';
 
+export type MbidOverrideType = 'artist' | 'album';
+
 export interface MbidOverride {
-  artistId: string;
-  artistName: string;
+  type: MbidOverrideType;
+  entityId: string;
+  entityName: string;
   mbid: string;
 }
 
 interface MbidOverrideState {
-  /** Map of Subsonic artist ID -> MBID override entry */
+  /** Map of entity key ("artist:id" or "album:id") -> MBID override entry */
   overrides: Record<string, MbidOverride>;
-  setOverride: (artistId: string, artistName: string, mbid: string) => void;
-  removeOverride: (artistId: string) => void;
+  setOverride: (type: MbidOverrideType, entityId: string, entityName: string, mbid: string) => void;
+  removeOverride: (type: MbidOverrideType, entityId: string) => void;
   clearOverrides: () => void;
+}
+
+function overrideKey(type: MbidOverrideType, entityId: string): string {
+  return `${type}:${entityId}`;
+}
+
+/** Look up an override by type and entity ID. */
+export function getOverride(
+  overrides: Record<string, MbidOverride>,
+  type: MbidOverrideType,
+  entityId: string,
+): MbidOverride | undefined {
+  return overrides[overrideKey(type, entityId)];
 }
 
 const PERSIST_KEY = 'substreamer-mbid-overrides';
@@ -24,17 +40,21 @@ export const mbidOverrideStore = create<MbidOverrideState>()(
     (set) => ({
       overrides: {},
 
-      setOverride: (artistId: string, artistName: string, mbid: string) =>
-        set((state) => ({
-          overrides: {
-            ...state.overrides,
-            [artistId]: { artistId, artistName, mbid },
-          },
-        })),
-
-      removeOverride: (artistId: string) =>
+      setOverride: (type: MbidOverrideType, entityId: string, entityName: string, mbid: string) =>
         set((state) => {
-          const { [artistId]: _, ...rest } = state.overrides;
+          const key = overrideKey(type, entityId);
+          return {
+            overrides: {
+              ...state.overrides,
+              [key]: { type, entityId, entityName, mbid },
+            },
+          };
+        }),
+
+      removeOverride: (type: MbidOverrideType, entityId: string) =>
+        set((state) => {
+          const key = overrideKey(type, entityId);
+          const { [key]: _, ...rest } = state.overrides;
           return { overrides: rest };
         }),
 

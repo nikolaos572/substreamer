@@ -1,20 +1,68 @@
 import { HeaderHeightContext } from '@react-navigation/elements';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { memo, useCallback, useContext, useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useContext, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '../components/EmptyState';
 import { GradientBackground } from '../components/GradientBackground';
 import { SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
 import { useTheme } from '../hooks/useTheme';
+import { albumInfoStore } from '../store/albumInfoStore';
 import { artistDetailStore } from '../store/artistDetailStore';
-import { mbidOverrideStore, type MbidOverride } from '../store/mbidOverrideStore';
+import { mbidOverrideStore, type MbidOverride, type MbidOverrideType } from '../store/mbidOverrideStore';
 import { mbidSearchStore } from '../store/mbidSearchStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { processingOverlayStore } from '../store/processingOverlayStore';
 
 const ROW_HEIGHT = 72;
+
+/* ------------------------------------------------------------------ */
+/*  Segment control                                                    */
+/* ------------------------------------------------------------------ */
+
+const SEGMENTS: { key: MbidOverrideType; label: string }[] = [
+  { key: 'artist', label: 'Artists' },
+  { key: 'album', label: 'Albums' },
+];
+
+const SegmentControl = memo(function SegmentControl({
+  selected,
+  onSelect,
+  colors,
+}: {
+  selected: MbidOverrideType;
+  onSelect: (type: MbidOverrideType) => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  return (
+    <View style={[styles.segmentContainer, { backgroundColor: colors.inputBg }]}>
+      {SEGMENTS.map((seg) => {
+        const isActive = seg.key === selected;
+        return (
+          <Pressable
+            key={seg.key}
+            onPress={() => onSelect(seg.key)}
+            style={[
+              styles.segment,
+              isActive && [styles.segmentActive, { backgroundColor: colors.card }],
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                { color: isActive ? colors.textPrimary : colors.textSecondary },
+                isActive && styles.segmentTextActive,
+              ]}
+            >
+              {seg.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+});
 
 /* ------------------------------------------------------------------ */
 /*  Row                                                                */
@@ -31,21 +79,35 @@ const OverrideRow = memo(function OverrideRow({
 }) {
   const handlePress = useCallback(() => {
     if (offlineMode) return;
-    mbidSearchStore
-      .getState()
-      .show(override.artistId, override.artistName, override.mbid);
+    if (override.type === 'artist') {
+      mbidSearchStore
+        .getState()
+        .showArtist(override.entityId, override.entityName, override.mbid);
+    } else {
+      mbidSearchStore
+        .getState()
+        .showAlbum(override.entityId, override.entityName, null, override.mbid);
+    }
   }, [override, offlineMode]);
 
   const handleDelete = useCallback(async () => {
-    const { artistId } = override;
-    mbidOverrideStore.getState().removeOverride(artistId);
-    if (artistId in artistDetailStore.getState().artists) {
-      processingOverlayStore.getState().show('Updating Artist…');
+    const { type, entityId } = override;
+    mbidOverrideStore.getState().removeOverride(type, entityId);
+    if (type === 'artist' && entityId in artistDetailStore.getState().artists) {
+      processingOverlayStore.getState().show('Updating Artist\u2026');
       try {
-        await artistDetailStore.getState().fetchArtist(artistId);
+        await artistDetailStore.getState().fetchArtist(entityId);
         processingOverlayStore.getState().showSuccess('Artist Updated');
       } catch {
         processingOverlayStore.getState().showError('Failed to update artist');
+      }
+    } else if (type === 'album' && entityId in albumInfoStore.getState().entries) {
+      processingOverlayStore.getState().show('Updating Album\u2026');
+      try {
+        await albumInfoStore.getState().fetchAlbumInfo(entityId);
+        processingOverlayStore.getState().showSuccess('Album Updated');
+      } catch {
+        processingOverlayStore.getState().showError('Failed to update album');
       }
     }
   }, [override]);
@@ -73,8 +135,8 @@ const OverrideRow = memo(function OverrideRow({
       >
         <View style={styles.row}>
           <View style={styles.rowContent}>
-            <Text style={[styles.artistName, { color: colors.textPrimary }]} numberOfLines={1}>
-              {override.artistName}
+            <Text style={[styles.entityName, { color: colors.textPrimary }]} numberOfLines={1}>
+              {override.entityName}
             </Text>
             <View style={styles.mbidRow}>
               <Ionicons name="finger-print-outline" size={14} color={colors.primary} />
@@ -98,10 +160,16 @@ export function MbidOverrideBrowserScreen() {
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
   const overrides = mbidOverrideStore((s) => s.overrides);
   const offlineMode = offlineModeStore((s) => s.offlineMode);
+  const [selectedType, setSelectedType] = useState<MbidOverrideType>('artist');
+
+  const allEntries = useMemo(() => Object.values(overrides), [overrides]);
 
   const data = useMemo(
-    () => Object.values(overrides).sort((a, b) => a.artistName.localeCompare(b.artistName)),
-    [overrides],
+    () =>
+      allEntries
+        .filter((o) => o.type === selectedType)
+        .sort((a, b) => a.entityName.localeCompare(b.entityName)),
+    [allEntries, selectedType],
   );
 
   const renderItem = useCallback(
@@ -111,19 +179,7 @@ export function MbidOverrideBrowserScreen() {
     [colors, offlineMode],
   );
 
-  const keyExtractor = useCallback((item: MbidOverride) => item.artistId, []);
-
-  if (data.length === 0) {
-    return (
-      <GradientBackground style={styles.container}>
-        <EmptyState
-          icon="finger-print-outline"
-          title="No MBID Overrides"
-          subtitle="Overrides you set from an artist's menu will appear here."
-        />
-      </GradientBackground>
-    );
-  }
+  const keyExtractor = useCallback((item: MbidOverride) => `${item.type}:${item.entityId}`, []);
 
   return (
     <GradientBackground style={styles.container} scrollable>
@@ -131,6 +187,18 @@ export function MbidOverrideBrowserScreen() {
         data={data}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        ListHeaderComponent={
+          <View style={styles.segmentWrapper}>
+            <SegmentControl selected={selectedType} onSelect={setSelectedType} colors={colors} />
+          </View>
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon="finger-print-outline"
+            title={`No ${selectedType === 'artist' ? 'Artist' : 'Album'} Overrides`}
+            subtitle={`Overrides for ${selectedType === 'artist' ? 'artists' : 'albums'} will appear here.`}
+          />
+        }
         contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: 32 }}
       />
     </GradientBackground>
@@ -140,6 +208,36 @@ export function MbidOverrideBrowserScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  segmentWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  segmentContainer: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    padding: 3,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  segmentActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  segmentText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  segmentTextActive: {
+    fontWeight: '600',
   },
   rowWrapper: {
     marginHorizontal: 16,
@@ -155,7 +253,7 @@ const styles = StyleSheet.create({
   rowContent: {
     gap: 4,
   },
-  artistName: {
+  entityName: {
     fontSize: 16,
     fontWeight: '600',
   },

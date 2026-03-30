@@ -101,6 +101,12 @@ export function SettingsStorageScreen() {
   const pendingScrobbleCount = pendingScrobbleStore((s) => s.pendingScrobbles.length);
   const completedScrobbleCount = completedScrobbleStore((s) => s.completedScrobbles.length);
   const mbidOverrideCount = mbidOverrideStore((s) => Object.keys(s.overrides).length);
+  const mbidArtistOverrideCount = mbidOverrideStore((s) =>
+    Object.values(s.overrides).filter((o) => o.type === 'artist').length,
+  );
+  const mbidAlbumOverrideCount = mbidOverrideStore((s) =>
+    Object.values(s.overrides).filter((o) => o.type === 'album').length,
+  );
   const scrobbleExclusionCount = scrobbleExclusionStore((s) =>
     Object.keys(s.excludedAlbums).length +
     Object.keys(s.excludedArtists).length +
@@ -472,7 +478,7 @@ export function SettingsStorageScreen() {
           </View>
         </View>
         <Text style={[styles.backupDescription, { color: colors.textSecondary }]}>
-          Your listening history, artist MBID overrides, and scrobble exclusions are backed up to {Platform.OS === 'ios' ? 'iCloud' : 'Google Backup'}, as this data is only available locally.
+          Your listening history, MBID overrides, and scrobble exclusions are backed up to {Platform.OS === 'ios' ? 'iCloud' : 'Google Backup'}, as this data is only available locally.
         </Text>
       </View>
 
@@ -552,9 +558,15 @@ export function SettingsStorageScreen() {
         <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>MBID Overrides</Text>
         <View style={[styles.card, dynamicStyles.card]}>
           <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.infoLabel, { color: colors.textPrimary }]}>Active overrides</Text>
+            <Text style={[styles.infoLabel, { color: colors.textPrimary }]}>Artist overrides</Text>
             <Text style={[styles.infoValue, { color: colors.textSecondary }]}>
-              {mbidOverrideCount}
+              {mbidArtistOverrideCount}
+            </Text>
+          </View>
+          <View style={[styles.infoRow, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.infoLabel, { color: colors.textPrimary }]}>Album overrides</Text>
+            <Text style={[styles.infoValue, { color: colors.textSecondary }]}>
+              {mbidAlbumOverrideCount}
             </Text>
           </View>
           <Pressable

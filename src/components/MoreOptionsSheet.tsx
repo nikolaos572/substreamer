@@ -58,7 +58,7 @@ import { addToPlaylistStore } from '../store/addToPlaylistStore';
 import { artistDetailStore } from '../store/artistDetailStore';
 import { scrobbleExclusionStore, type ScrobbleExclusionType } from '../store/scrobbleExclusionStore';
 import { createShareStore } from '../store/createShareStore';
-import { mbidOverrideStore } from '../store/mbidOverrideStore';
+import { getOverride, mbidOverrideStore } from '../store/mbidOverrideStore';
 import { mbidSearchStore } from '../store/mbidSearchStore';
 import { musicCacheStore } from '../store/musicCacheStore';
 import {
@@ -281,16 +281,26 @@ export function MoreOptionsSheet() {
   }, [entity, handleClose]);
 
   const handleSetMbid = useCallback(() => {
-    if (!entity || entity.type !== 'artist') return;
-    const artistId = entity.item.id;
-    const artistName = entity.item.name;
-    const override = mbidOverrideStore.getState().overrides[artistId];
-    const resolvedMbid = artistDetailStore.getState().artists[artistId]?.resolvedMbid;
-    const currentMbid = override?.mbid ?? resolvedMbid ?? null;
-    handleClose();
-    setTimeout(() => {
-      mbidSearchStore.getState().show(artistId, artistName, currentMbid, entity.item.coverArt);
-    }, 300);
+    if (!entity) return;
+    if (entity.type === 'artist') {
+      const artistId = entity.item.id;
+      const artistName = entity.item.name;
+      const override = getOverride(mbidOverrideStore.getState().overrides, 'artist', artistId);
+      const resolvedMbid = artistDetailStore.getState().artists[artistId]?.resolvedMbid;
+      const currentMbid = override?.mbid ?? resolvedMbid ?? null;
+      handleClose();
+      setTimeout(() => {
+        mbidSearchStore.getState().showArtist(artistId, artistName, currentMbid, entity.item.coverArt);
+      }, 300);
+    } else if (entity.type === 'album') {
+      const album = entity.item as AlbumID3;
+      const override = getOverride(mbidOverrideStore.getState().overrides, 'album', album.id);
+      const currentMbid = override?.mbid ?? null;
+      handleClose();
+      setTimeout(() => {
+        mbidSearchStore.getState().showAlbum(album.id, album.name, album.artist ?? null, currentMbid, album.coverArt);
+      }, 300);
+    }
   }, [entity, handleClose]);
 
   const handleAddQueueToPlaylist = useCallback(() => {
@@ -501,7 +511,7 @@ export function MoreOptionsSheet() {
   const showSaveTopSongsPlaylist = !offline && entity?.type === 'artist' && !isVA;
   const showPlaySimilarArtistsMix = !offline && canPlaySimilarArtistsMix(entity) && !isVA;
   const showPlayMoreByArtist = canPlayMoreByArtist(entity) && !isVA;
-  const showSetMbid = entity?.type === 'artist' && !isVA;
+  const showSetMbid = (entity?.type === 'artist' || entity?.type === 'album') && !isVA;
   const showScrobbleExclusion = canExcludeFromScrobbling(entity);
 
   const hasAnyOption =
@@ -664,27 +674,6 @@ export function MoreOptionsSheet() {
                   />
                   <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
                     Play Similar Artists
-                  </Text>
-                </Pressable>
-              )}
-
-              {/* Set MusicBrainz ID (artist only) */}
-              {showSetMbid && (
-                <Pressable
-                  onPress={handleSetMbid}
-                  style={({ pressed }) => [
-                    styles.option,
-                    pressed && styles.optionPressed,
-                  ]}
-                >
-                  <Ionicons
-                    name="finger-print-outline"
-                    size={22}
-                    color={colors.textPrimary}
-                    style={styles.optionIcon}
-                  />
-                  <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
-                    Set MusicBrainz ID
                   </Text>
                 </Pressable>
               )}
@@ -853,6 +842,27 @@ export function MoreOptionsSheet() {
                   />
                   <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
                     Album Details
+                  </Text>
+                </Pressable>
+              )}
+
+              {/* Set MusicBrainz ID (artist/album) */}
+              {showSetMbid && (
+                <Pressable
+                  onPress={handleSetMbid}
+                  style={({ pressed }) => [
+                    styles.option,
+                    pressed && styles.optionPressed,
+                  ]}
+                >
+                  <Ionicons
+                    name="finger-print-outline"
+                    size={22}
+                    color={colors.textPrimary}
+                    style={styles.optionIcon}
+                  />
+                  <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
+                    Set MusicBrainz ID
                   </Text>
                 </Pressable>
               )}
@@ -1086,27 +1096,6 @@ export function MoreOptionsSheet() {
                 </Pressable>
               )}
 
-              {/* Set MusicBrainz ID (artist only) */}
-              {showSetMbid && (
-                <Pressable
-                  onPress={handleSetMbid}
-                  style={({ pressed }) => [
-                    styles.option,
-                    pressed && styles.optionPressed,
-                  ]}
-                >
-                  <Ionicons
-                    name="finger-print-outline"
-                    size={22}
-                    color={colors.textPrimary}
-                    style={styles.optionIcon}
-                  />
-                  <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
-                    Set MusicBrainz ID
-                  </Text>
-                </Pressable>
-              )}
-
               {/* Add to Playlist */}
               {showAddToPlaylist && (
                 <Pressable
@@ -1271,6 +1260,27 @@ export function MoreOptionsSheet() {
                   />
                   <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
                     Album Details
+                  </Text>
+                </Pressable>
+              )}
+
+              {/* Set MusicBrainz ID (artist/album) */}
+              {showSetMbid && (
+                <Pressable
+                  onPress={handleSetMbid}
+                  style={({ pressed }) => [
+                    styles.option,
+                    pressed && styles.optionPressed,
+                  ]}
+                >
+                  <Ionicons
+                    name="finger-print-outline"
+                    size={22}
+                    color={colors.textPrimary}
+                    style={styles.optionIcon}
+                  />
+                  <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>
+                    Set MusicBrainz ID
                   </Text>
                 </Pressable>
               )}

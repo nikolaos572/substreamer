@@ -5,6 +5,12 @@ import {
   searchArtistMBID,
   searchArtists,
   getArtistBiography,
+  searchReleaseGroupMBID,
+  searchReleaseGroups,
+  getReleaseGroupIdForRelease,
+  getWikidataIdForReleaseGroup,
+  getWikipediaExtractForAlbum,
+  getAlbumDescription,
 } from '../musicbrainzService';
 
 beforeEach(() => {
@@ -146,5 +152,493 @@ describe('getArtistBiography', () => {
     const url = mockFetch.mock.calls[0][0] as string;
     expect(url).toContain('abc-def-123');
     expect(url).toContain('wikipedia-extract');
+  });
+});
+
+// ── Album description enrichment ──────────────────────────────────────
+
+describe('searchReleaseGroupMBID', () => {
+  it('returns the MBID of the first matching release-group', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        'release-groups': [{ id: 'rg-123', title: 'OK Computer', score: 100 }],
+      }),
+    });
+    const result = await searchReleaseGroupMBID('Radiohead', 'OK Computer');
+    expect(result).toBe('rg-123');
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('release-group');
+    expect(url).toContain('limit=1');
+  });
+
+  it('returns null when no release-groups match', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ 'release-groups': [] }),
+    });
+    expect(await searchReleaseGroupMBID('Nobody', 'Nothing')).toBeNull();
+  });
+
+  it('returns null when release-groups field is missing', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+    expect(await searchReleaseGroupMBID('A', 'B')).toBeNull();
+  });
+
+  it('returns null on non-ok response', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 503 });
+    expect(await searchReleaseGroupMBID('A', 'B')).toBeNull();
+  });
+
+  it('returns null on fetch error', async () => {
+    mockFetch.mockRejectedValue(new Error('network'));
+    expect(await searchReleaseGroupMBID('A', 'B')).toBeNull();
+  });
+});
+
+describe('searchReleaseGroups', () => {
+  it('returns multiple release-group results', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        'release-groups': [
+          { id: 'rg-1', title: 'OK Computer', score: 100, 'primary-type': 'Album' },
+          { id: 'rg-2', title: 'OK Computer OKNOTOK', score: 80, 'primary-type': 'Album' },
+        ],
+      }),
+    });
+    const results = await searchReleaseGroups('OK Computer', 'Radiohead');
+    expect(results).toHaveLength(2);
+    expect(results[0].id).toBe('rg-1');
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('release-group');
+    expect(url).toContain('artist%3ARadiohead');
+  });
+
+  it('searches without artist when not provided', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ 'release-groups': [{ id: 'rg-1', title: 'Test' }] }),
+    });
+    const results = await searchReleaseGroups('Test');
+    expect(results).toHaveLength(1);
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).not.toContain('artist%3A');
+  });
+
+  it('respects custom limit', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ 'release-groups': [] }),
+    });
+    await searchReleaseGroups('Test', undefined, 5);
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('limit=5');
+  });
+
+  it('returns empty array on non-ok response', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 503 });
+    expect(await searchReleaseGroups('Test')).toEqual([]);
+  });
+
+  it('returns empty array on fetch error', async () => {
+    mockFetch.mockRejectedValue(new Error('network'));
+    expect(await searchReleaseGroups('Test')).toEqual([]);
+  });
+
+  it('returns empty array when release-groups field is missing', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+    expect(await searchReleaseGroups('Test')).toEqual([]);
+  });
+});
+
+describe('getReleaseGroupIdForRelease', () => {
+  it('returns the release-group ID from a release lookup', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 'release-123',
+        'release-group': { id: 'rg-456', title: 'Album' },
+      }),
+    });
+    expect(await getReleaseGroupIdForRelease('release-123')).toBe('rg-456');
+    const url = mockFetch.mock.calls[0][0] as string;
+    expect(url).toContain('release/release-123');
+    expect(url).toContain('inc=release-groups');
+  });
+
+  it('returns null when release-group field is missing', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'release-123' }),
+    });
+    expect(await getReleaseGroupIdForRelease('release-123')).toBeNull();
+  });
+
+  it('returns null on non-ok response', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
+    expect(await getReleaseGroupIdForRelease('bad-id')).toBeNull();
+  });
+
+  it('returns null on fetch error', async () => {
+    mockFetch.mockRejectedValue(new Error('network'));
+    expect(await getReleaseGroupIdForRelease('release-123')).toBeNull();
+  });
+});
+
+describe('getWikidataIdForReleaseGroup', () => {
+  it('extracts Q-number from wikidata url relation', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 'rg-123',
+        relations: [
+          { type: 'wikidata', url: { resource: 'https://www.wikidata.org/wiki/Q202996' } },
+          { type: 'discogs', url: { resource: 'https://discogs.com/123' } },
+        ],
+      }),
+    });
+    expect(await getWikidataIdForReleaseGroup('rg-123')).toBe('Q202996');
+  });
+
+  it('returns null when no wikidata relation exists', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 'rg-123',
+        relations: [{ type: 'discogs', url: { resource: 'https://discogs.com/123' } }],
+      }),
+    });
+    expect(await getWikidataIdForReleaseGroup('rg-123')).toBeNull();
+  });
+
+  it('returns null when relations array is empty', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'rg-123', relations: [] }),
+    });
+    expect(await getWikidataIdForReleaseGroup('rg-123')).toBeNull();
+  });
+
+  it('returns null when relations field is missing', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'rg-123' }),
+    });
+    expect(await getWikidataIdForReleaseGroup('rg-123')).toBeNull();
+  });
+
+  it('returns null on non-ok response', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404 });
+    expect(await getWikidataIdForReleaseGroup('rg-123')).toBeNull();
+  });
+
+  it('returns null on fetch error', async () => {
+    mockFetch.mockRejectedValue(new Error('network'));
+    expect(await getWikidataIdForReleaseGroup('rg-123')).toBeNull();
+  });
+
+  it('returns null when wikidata URL has no Q-number', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 'rg-123',
+        relations: [{ type: 'wikidata', url: { resource: 'https://www.wikidata.org/wiki/Property:P1234' } }],
+      }),
+    });
+    expect(await getWikidataIdForReleaseGroup('rg-123')).toBeNull();
+  });
+});
+
+describe('getWikipediaExtractForAlbum', () => {
+  it('resolves Wikidata → Wikipedia article extract', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          entities: {
+            Q202996: {
+              sitelinks: {
+                enwiki: { title: 'OK Computer', url: 'https://en.wikipedia.org/wiki/OK_Computer' },
+              },
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          extract: 'OK Computer is the third studio album by Radiohead.',
+          content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/OK_Computer' } },
+        }),
+      });
+
+    const result = await getWikipediaExtractForAlbum('Q202996');
+    expect(result).toEqual({
+      extract: 'OK Computer is the third studio album by Radiohead.',
+      url: 'https://en.wikipedia.org/wiki/OK_Computer',
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns null when no enwiki sitelink exists', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        entities: { Q999: { sitelinks: {} } },
+      }),
+    });
+    expect(await getWikipediaExtractForAlbum('Q999')).toBeNull();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns null when Wikipedia extract is empty', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          entities: {
+            Q123: { sitelinks: { enwiki: { title: 'Something' } } },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ extract: '' }),
+      });
+    expect(await getWikipediaExtractForAlbum('Q123')).toBeNull();
+  });
+
+  it('returns null when Wikidata fetch fails', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+    expect(await getWikipediaExtractForAlbum('Q123')).toBeNull();
+  });
+
+  it('returns null when Wikipedia fetch fails', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          entities: {
+            Q123: { sitelinks: { enwiki: { title: 'Something' } } },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({ ok: false, status: 404 });
+    expect(await getWikipediaExtractForAlbum('Q123')).toBeNull();
+  });
+
+  it('returns null on fetch error', async () => {
+    mockFetch.mockRejectedValue(new Error('network'));
+    expect(await getWikipediaExtractForAlbum('Q123')).toBeNull();
+  });
+
+  it('constructs fallback URL when content_urls is missing', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          entities: {
+            Q123: { sitelinks: { enwiki: { title: 'My Album' } } },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          extract: 'Album description.',
+        }),
+      });
+    const result = await getWikipediaExtractForAlbum('Q123');
+    expect(result?.url).toBe('https://en.wikipedia.org/wiki/My%20Album');
+  });
+});
+
+describe('getAlbumDescription', () => {
+  it('resolves release MBID → release-group → Wikipedia', async () => {
+    // getReleaseGroupIdForRelease
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 'release-1',
+        'release-group': { id: 'rg-1' },
+      }),
+    });
+    // getWikidataIdForReleaseGroup
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 'rg-1',
+        relations: [{ type: 'wikidata', url: { resource: 'https://www.wikidata.org/wiki/Q100' } }],
+      }),
+    });
+    // Wikidata sitelinks
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        entities: { Q100: { sitelinks: { enwiki: { title: 'Album' } } } },
+      }),
+    });
+    // Wikipedia extract
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        extract: 'Great album.',
+        content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Album' } },
+      }),
+    });
+
+    const result = await getAlbumDescription('Artist', 'Album', 'release-1');
+    expect(result).toEqual({
+      description: 'Great album.',
+      url: 'https://en.wikipedia.org/wiki/Album',
+    });
+    // release lookup + release-group rels + wikidata + wikipedia = 4 calls
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('searches MusicBrainz when no MBID is provided', async () => {
+    // searchReleaseGroupMBID
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ 'release-groups': [{ id: 'rg-2' }] }),
+    });
+    // getWikidataIdForReleaseGroup
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 'rg-2',
+        relations: [{ type: 'wikidata', url: { resource: 'https://www.wikidata.org/wiki/Q200' } }],
+      }),
+    });
+    // Wikidata sitelinks
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        entities: { Q200: { sitelinks: { enwiki: { title: 'Found Album' } } } },
+      }),
+    });
+    // Wikipedia extract
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        extract: 'Found description.',
+        content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Found_Album' } },
+      }),
+    });
+
+    const result = await getAlbumDescription('Artist', 'Album');
+    expect(result).toEqual({
+      description: 'Found description.',
+      url: 'https://en.wikipedia.org/wiki/Found_Album',
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('falls back to search when release lookup fails', async () => {
+    // getReleaseGroupIdForRelease — fails
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+    // searchReleaseGroupMBID fallback
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ 'release-groups': [{ id: 'rg-found' }] }),
+    });
+    // getWikidataIdForReleaseGroup
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 'rg-found',
+        relations: [{ type: 'wikidata', url: { resource: 'https://www.wikidata.org/wiki/Q300' } }],
+      }),
+    });
+    // Wikidata sitelinks
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        entities: { Q300: { sitelinks: { enwiki: { title: 'Fallback Album' } } } },
+      }),
+    });
+    // Wikipedia extract
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        extract: 'Fallback description.',
+        content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Fallback_Album' } },
+      }),
+    });
+
+    const result = await getAlbumDescription('Artist', 'Album', 'bad-release-id');
+    expect(result).toEqual({
+      description: 'Fallback description.',
+      url: 'https://en.wikipedia.org/wiki/Fallback_Album',
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(5);
+  });
+
+  it('returns null when both release lookup and search fail', async () => {
+    // getReleaseGroupIdForRelease — no release-group field
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'release-1' }),
+    });
+    // searchReleaseGroupMBID — no results
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ 'release-groups': [] }),
+    });
+    expect(await getAlbumDescription('A', 'B', 'release-1')).toBeNull();
+  });
+
+  it('returns null when MusicBrainz search finds nothing', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ 'release-groups': [] }),
+    });
+    expect(await getAlbumDescription('Nobody', 'Nothing')).toBeNull();
+  });
+
+  it('uses MBID directly as release-group when isReleaseGroupId is true', async () => {
+    // getWikidataIdForReleaseGroup — no release lookup needed
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: 'rg-override',
+        relations: [{ type: 'wikidata', url: { resource: 'https://www.wikidata.org/wiki/Q999' } }],
+      }),
+    });
+    // Wikidata sitelinks
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        entities: { Q999: { sitelinks: { enwiki: { title: 'Override Album' } } } },
+      }),
+    });
+    // Wikipedia extract
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        extract: 'Override description.',
+        content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Override_Album' } },
+      }),
+    });
+
+    const result = await getAlbumDescription('Artist', 'Album', 'rg-override', true);
+    expect(result).toEqual({
+      description: 'Override description.',
+      url: 'https://en.wikipedia.org/wiki/Override_Album',
+    });
+    // Only 3 calls (no release lookup): release-group rels + wikidata + wikipedia
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('returns null on fetch error', async () => {
+    mockFetch.mockRejectedValue(new Error('network'));
+    expect(await getAlbumDescription('A', 'B')).toBeNull();
   });
 });

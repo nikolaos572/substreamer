@@ -34,6 +34,7 @@ export const getRecentlyPlayedAlbums = jest.fn().mockResolvedValue([]);
 export const getFrequentlyPlayedAlbums = jest.fn().mockResolvedValue([]);
 export const getRandomAlbums = jest.fn().mockResolvedValue([]);
 export const getAlbum = jest.fn().mockResolvedValue(null);
+export const getAlbumInfo2 = jest.fn().mockResolvedValue(null);
 export const searchAllAlbums = jest.fn().mockResolvedValue([]);
 export const getAlbumListAlphabetical = jest.fn().mockResolvedValue([]);
 export const getAllAlbumsAlphabetical = jest.fn().mockResolvedValue([]);

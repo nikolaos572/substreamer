@@ -289,8 +289,10 @@ describe('restoreBackup', () => {
     expect(completedScrobbleStore.getState().completedScrobbles).toHaveLength(1);
   });
 
-  it('restores MBID overrides from backup', async () => {
-    const overrides = { 'artist-1': { mbid: 'mbid-1', name: 'Test' } };
+  it('restores MBID overrides from backup (new format)', async () => {
+    const overrides = {
+      'artist:ar1': { type: 'artist', entityId: 'ar1', entityName: 'Test', mbid: 'mbid-1' },
+    };
     mockDecompressFromFile.mockResolvedValue(JSON.stringify(overrides));
 
     mockFileInstances.set('backup-x.mbid.gz', { exists: true, content: '', deleted: false });
@@ -307,7 +309,35 @@ describe('restoreBackup', () => {
     });
 
     expect(result.mbidOverrideCount).toBe(1);
-    expect(mbidOverrideStore.getState().overrides).toHaveProperty('artist-1');
+    expect(mbidOverrideStore.getState().overrides).toHaveProperty('artist:ar1');
+  });
+
+  it('migrates old-format MBID overrides on restore', async () => {
+    const overrides = { 'artist-1': { artistId: 'artist-1', artistName: 'Old Artist', mbid: 'mbid-1' } };
+    mockDecompressFromFile.mockResolvedValue(JSON.stringify(overrides));
+
+    mockFileInstances.set('backup-y.mbid.gz', { exists: true, content: '', deleted: false });
+
+    const result = await restoreBackup({
+      stem: 'backup-y',
+      createdAt: '2025-01-01',
+      scrobbleCount: 0,
+      scrobbleSizeBytes: 0,
+      mbidOverrideCount: 1,
+      mbidOverrideSizeBytes: 30,
+      scrobbleExclusionCount: 0,
+      scrobbleExclusionSizeBytes: 0,
+    });
+
+    expect(result.mbidOverrideCount).toBe(1);
+    const restored = mbidOverrideStore.getState().overrides;
+    expect(restored).toHaveProperty('artist:artist-1');
+    expect(restored['artist:artist-1']).toEqual({
+      type: 'artist',
+      entityId: 'artist-1',
+      entityName: 'Old Artist',
+      mbid: 'mbid-1',
+    });
   });
 
   it('throws when scrobble data file is missing', async () => {

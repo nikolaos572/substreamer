@@ -260,7 +260,21 @@ export async function restoreBackup(
       throw new Error('MBID override backup data file not found');
     }
     const json = await decompressFromFile(dataFile.uri);
-    const overrides: Record<string, MbidOverride> = JSON.parse(json);
+    const raw: Record<string, any> = JSON.parse(json);
+    // Normalize old-format overrides (keyed by artistId, no type field) to new format
+    const needsMigration = Object.keys(raw).length > 0 &&
+      !Object.keys(raw).some((k) => k.startsWith('artist:') || k.startsWith('album:'));
+    let overrides: Record<string, MbidOverride>;
+    if (needsMigration) {
+      overrides = {};
+      for (const [key, entry] of Object.entries(raw)) {
+        const entityId = entry.artistId ?? entry.entityId ?? key;
+        const entityName = entry.artistName ?? entry.entityName ?? '';
+        overrides[`artist:${entityId}`] = { type: 'artist', entityId, entityName, mbid: entry.mbid };
+      }
+    } else {
+      overrides = raw as Record<string, MbidOverride>;
+    }
     mbidOverrideStore.setState({ overrides });
     mbidOverrideCount = Object.keys(overrides).length;
   }

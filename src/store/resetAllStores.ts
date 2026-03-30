@@ -9,6 +9,7 @@ import { clearAllStorage } from './sqliteStorage';
 
 // Persisted stores
 import { albumDetailStore } from './albumDetailStore';
+import { albumInfoStore } from './albumInfoStore';
 import { albumLibraryStore } from './albumLibraryStore';
 import { albumListsStore } from './albumListsStore';
 import { artistDetailStore } from './artistDetailStore';
@@ -58,6 +59,7 @@ import { setRatingStore } from './setRatingStore';
 const allStores = [
   // Persisted
   albumDetailStore,
+  albumInfoStore,
   albumLibraryStore,
   albumListsStore,
   artistDetailStore,

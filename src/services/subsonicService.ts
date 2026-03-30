@@ -1,6 +1,7 @@
 import * as ExpoCrypto from 'expo-crypto';
 import SubsonicAPI, {
   type AlbumID3,
+  type AlbumInfo,
   type AlbumWithSongsID3,
   type ArtistID3,
   type ArtistInfo2,
@@ -123,7 +124,7 @@ export function clearApiCache(): void {
   cachedCoverArtToken = null;
 }
 
-export type { AlbumID3, AlbumWithSongsID3, ArtistID3, ArtistInfo2, ArtistWithAlbumsID3, Child, Genre, Playlist, PlaylistWithSongs, ScanStatus, Share };
+export type { AlbumID3, AlbumInfo, AlbumWithSongsID3, ArtistID3, ArtistInfo2, ArtistWithAlbumsID3, Child, Genre, Playlist, PlaylistWithSongs, ScanStatus, Share };
 
 // ------------------------------------------------------------------ //
 //  Various Artists pseudo-artist                                      //
@@ -317,6 +318,18 @@ export async function getAlbum(albumId: string): Promise<AlbumWithSongsID3 | nul
     const response = await api.getAlbum({ id: albumId });
     return response.album ?? null;
   } catch {
+    return null;
+  }
+}
+
+export async function getAlbumInfo2(albumId: string): Promise<AlbumInfo | null> {
+  const api = getApi();
+  if (!api) return null;
+  try {
+    const response = await api.getAlbumInfo2({ id: albumId });
+    return response.albumInfo ?? null;
+  } catch {
+    // Some servers don't support getAlbumInfo2
     return null;
   }
 }
