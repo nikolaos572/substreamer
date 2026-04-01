@@ -30,7 +30,7 @@ const SPRING_CONFIG = { damping: 14, stiffness: 200, mass: 0.8 };
 const SHRINK_MS = 300;
 const SHRINK_EASING = Easing.in(Easing.cubic);
 
-const DETAIL_SEGMENTS = new Set(['album', 'artist', 'playlist']);
+const DETAIL_SEGMENTS = new Set(['album', 'artist', 'playlist', 'tuned-in']);
 
 export function PlaybackToast() {
   const segments = useSegments();
