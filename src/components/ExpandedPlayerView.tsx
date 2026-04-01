@@ -450,7 +450,7 @@ export function ExpandedPlayerView({
                   <PlaybackRateButton />
                 </View>
 
-                <View style={[styles.transportControls, showSkipInterval && styles.transportControlsWide]}>
+                <View style={styles.transportControls}>
                   <Pressable
                     onPress={skipToPrevious}
                     hitSlop={12}
@@ -1037,10 +1037,8 @@ const styles = StyleSheet.create({
   transportControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 32,
-  },
-  transportControlsWide: {
-    gap: 20,
+    justifyContent: 'space-evenly',
+    width: 248,
   },
   playPauseButton: {
     width: 64,

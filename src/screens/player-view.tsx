@@ -493,7 +493,7 @@ const PlayerListHeader = memo(function PlayerListHeader({
             </View>
 
             {/* Transport controls */}
-            <View style={[styles.transportControls, showSkipInterval && styles.transportControlsWide]}>
+            <View style={styles.transportControls}>
               <Pressable
                 onPress={skipToPrevious}
                 hitSlop={12}
@@ -710,10 +710,8 @@ const styles = StyleSheet.create({
   transportControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 28,
-  },
-  transportControlsWide: {
-    gap: 20,
+    justifyContent: 'space-evenly',
+    width: 248,
   },
   playPauseButton: {
     width: 64,

@@ -11,7 +11,7 @@
 
 import { memo, useCallback } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
+import Svg, { G, Path, Text as SvgText } from 'react-native-svg';
 
 import { useTheme } from '../hooks/useTheme';
 import { skipByInterval } from '../services/playerService';
@@ -79,16 +79,16 @@ function describeArrow(
 
 // Pre-computed paths for the forward icon (24x24 viewBox).
 // Circle centered at (12, 13), radius 8.
-// Arc from 30° to 330° clockwise (300° sweep), gap at top.
-// Arrowhead at the start (30°) pointing clockwise.
+// Arc from 38° to 322° clockwise (284° sweep), wider gap at top for arrowhead clarity.
+// Larger arrowhead at the start (38°) pointing clockwise.
 const CX = 12;
 const CY = 13;
 const R = 8;
-const ARC_START = 30;
-const ARC_END = 330;
+const ARC_START = 38;
+const ARC_END = 322;
 
 const FORWARD_ARC = describeArc(CX, CY, R, ARC_START, ARC_END);
-const FORWARD_ARROW = describeArrow(CX, CY, R, ARC_START, 4.5, 2.2, true);
+const FORWARD_ARROW = describeArrow(CX, CY, R, ARC_END, 6, 3, true);
 
 export const SkipIntervalButton = memo(function SkipIntervalButton({
   direction,
@@ -129,7 +129,7 @@ export const SkipIntervalButton = memo(function SkipIntervalButton({
             d={FORWARD_ARC}
             fill="none"
             stroke={colors.textPrimary}
-            strokeWidth={2}
+            strokeWidth={1.5}
             strokeLinecap="round"
           />
           {/* Arrowhead */}

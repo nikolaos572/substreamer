@@ -426,7 +426,7 @@ const PanelHeader = memo(function PanelHeader({
               <PlaybackRateButton />
             </View>
 
-            <View style={[styles.transportControls, showSkipInterval && styles.transportControlsWide]}>
+            <View style={styles.transportControls}>
               <Pressable
                 onPress={skipToPrevious}
                 hitSlop={12}
@@ -579,10 +579,8 @@ const styles = StyleSheet.create({
   transportControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 20,
-  },
-  transportControlsWide: {
-    gap: 14,
+    justifyContent: 'space-evenly',
+    width: 190,
   },
   playPauseButton: {
     width: 48,
