@@ -3,14 +3,15 @@
  *
  * Slides up from the MiniPlayer and displays hero cover art with a
  * gradient background extracted from the artwork, playback controls,
- * a seekable progress bar, and the playback queue.
+ * a seekable progress bar, and tabbed access to queue, album info,
+ * and lyrics.
  */
 
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { Stack, useNavigation, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -32,12 +33,14 @@ import Animated, {
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AlbumInfoContent } from '../components/AlbumInfoContent';
 import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
 import { MarqueeText } from '../components/MarqueeText';
 import { MoreOptionsButton } from '../components/MoreOptionsButton';
 import { PlaybackRateButton } from '../components/PlaybackRateButton';
 import { PlayerProgressBar } from '../components/PlayerProgressBar';
+import { PlayerTabBar, type PlayerTab } from '../components/PlayerTabBar';
 import { RepeatButton } from '../components/RepeatButton';
 import { ShuffleButton } from '../components/ShuffleButton';
 import { SkipIntervalButton } from '../components/SkipIntervalButton';
@@ -62,7 +65,10 @@ import {
   skipToTrack,
   togglePlayPause,
 } from '../services/playerService';
+import { sanitizeBiographyText } from '../utils/formatters';
+import { minDelay } from '../utils/stringHelpers';
 import { type Child } from '../services/subsonicService';
+import { albumInfoStore } from '../store/albumInfoStore';
 import { playbackSettingsStore } from '../store/playbackSettingsStore';
 import { createShareStore } from '../store/createShareStore';
 import { moreOptionsStore } from '../store/moreOptionsStore';
@@ -73,6 +79,10 @@ import { mixHexColors } from '../utils/colors';
 const HERO_PADDING = 32;
 const HERO_COVER_SIZE = 600;
 const HEADER_BAR_HEIGHT = 44;
+
+const TAB_FADE_DURATION = 300;
+const TAB_FADE_EASING = Easing.out(Easing.cubic);
+const TAB_SLIDE_DISTANCE = 12;
 
 export function PlayerView() {
   const { colors } = useTheme();
@@ -105,6 +115,58 @@ export function PlayerView() {
 
   const gradientStart = coverBackgroundColor ?? colors.background;
   const gradientEnd = colors.background;
+
+  const offlineMode = offlineModeStore((s) => s.offlineMode);
+
+  /* ---- Tab state ---- */
+  const [activeTab, setActiveTab] = useState<PlayerTab>('player');
+  const [mountedTabs, setMountedTabs] = useState<Set<PlayerTab>>(() => new Set(['player']));
+
+
+
+  // Ensure tab is mounted when selected
+  useEffect(() => {
+    if (!mountedTabs.has(activeTab)) {
+      setMountedTabs((prev) => new Set(prev).add(activeTab));
+    }
+  }, [activeTab, mountedTabs]);
+
+  /* ---- Tab crossfade animation ---- */
+  const playerOpacity = useSharedValue(1);
+  const queueOpacity = useSharedValue(0);
+  const infoOpacity = useSharedValue(0);
+  const lyricsOpacity = useSharedValue(0);
+
+  const opacityMap = useMemo(() => ({
+    player: playerOpacity,
+    queue: queueOpacity,
+    info: infoOpacity,
+    lyrics: lyricsOpacity,
+  }), [playerOpacity, queueOpacity, infoOpacity, lyricsOpacity]);
+
+  useEffect(() => {
+    const config = { duration: TAB_FADE_DURATION, easing: TAB_FADE_EASING };
+    for (const [tab, opacity] of Object.entries(opacityMap)) {
+      opacity.value = withTiming(tab === activeTab ? 1 : 0, config);
+    }
+  }, [activeTab, opacityMap]);
+
+  const playerAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: playerOpacity.value,
+    transform: [{ translateY: interpolate(playerOpacity.value, [0, 1], [TAB_SLIDE_DISTANCE, 0]) }],
+  }));
+  const queueAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: queueOpacity.value,
+    transform: [{ translateY: interpolate(queueOpacity.value, [0, 1], [TAB_SLIDE_DISTANCE, 0]) }],
+  }));
+  const infoAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: infoOpacity.value,
+    transform: [{ translateY: interpolate(infoOpacity.value, [0, 1], [TAB_SLIDE_DISTANCE, 0]) }],
+  }));
+  const lyricsAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: lyricsOpacity.value,
+    transform: [{ translateY: interpolate(lyricsOpacity.value, [0, 1], [TAB_SLIDE_DISTANCE, 0]) }],
+  }));
 
   /* ---- Header: dismiss button + more options ---- */
   useEffect(() => {
@@ -235,13 +297,10 @@ export function PlayerView() {
     [],
   );
 
-  const listHeader = useMemo(
+  const queueListHeader = useMemo(
     () => (
-      <PlayerListHeader
-        currentTrack={currentTrack}
+      <QueueHeader
         colors={colors}
-        queueLoading={queueLoading}
-        handleSeek={handleSeek}
         handleClearQueue={handleClearQueue}
         handleShuffle={handleShuffle}
         handleShareQueue={handleShareQueue}
@@ -249,18 +308,12 @@ export function PlayerView() {
         queueLength={queue.length}
       />
     ),
-    [
-      currentTrack,
-      colors,
-      queueLoading,
-      handleSeek,
-      handleClearQueue,
-      handleShuffle,
-      handleShareQueue,
-      shuffling,
-      queue.length,
-    ],
+    [colors, handleClearQueue, handleShuffle, handleShareQueue, shuffling, queue.length],
   );
+
+  const headerTopPadding = Platform.OS === 'ios'
+    ? insets.top + HEADER_BAR_HEIGHT
+    : insets.top + HEADER_BAR_HEIGHT;
 
   if (!currentTrack) {
     return (
@@ -304,21 +357,70 @@ export function PlayerView() {
           />
         </Animated.View>
 
-        <FlashList
-          data={queue}
-          renderItem={renderQueueItem}
-          keyExtractor={keyExtractor}
-          ListHeaderComponent={listHeader}
-          onScrollBeginDrag={closeOpenRow}
-          drawDistance={200}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingBottom: insets.bottom + 24,
-            ...(Platform.OS !== 'ios' ? { paddingTop: insets.top + HEADER_BAR_HEIGHT } : undefined),
-          }}
-          contentInset={Platform.OS === 'ios' ? { top: insets.top + HEADER_BAR_HEIGHT } : undefined}
-          contentOffset={Platform.OS === 'ios' ? { x: 0, y: -(insets.top + HEADER_BAR_HEIGHT) } : undefined}
-        />
+        {/* Content area with tab switching */}
+        <View style={styles.contentArea}>
+          {/* Player tab — vertically centered across full area */}
+          <Animated.View
+            style={[styles.tabPanel, playerAnimatedStyle]}
+            pointerEvents={activeTab === 'player' ? 'auto' : 'none'}
+          >
+            <PlayerContent
+              currentTrack={currentTrack}
+              colors={colors}
+              queueLoading={queueLoading}
+              handleSeek={handleSeek}
+            />
+          </Animated.View>
+
+          {/* Queue tab — below header */}
+          <Animated.View
+            style={[styles.tabPanel, { top: headerTopPadding }, queueAnimatedStyle]}
+            pointerEvents={activeTab === 'queue' ? 'auto' : 'none'}
+          >
+            {mountedTabs.has('queue') && (
+              <FlashList
+                data={queue}
+                renderItem={renderQueueItem}
+                keyExtractor={keyExtractor}
+                ListHeaderComponent={queueListHeader}
+                onScrollBeginDrag={closeOpenRow}
+                drawDistance={200}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 12 }}
+              />
+            )}
+          </Animated.View>
+
+          {/* Album Info tab — below header */}
+          <Animated.View
+            style={[styles.tabPanel, { top: headerTopPadding }, infoAnimatedStyle]}
+            pointerEvents={activeTab === 'info' ? 'auto' : 'none'}
+          >
+            {mountedTabs.has('info') && (
+              <AlbumInfoTab currentTrack={currentTrack} colors={colors} />
+            )}
+          </Animated.View>
+
+          {/* Lyrics tab — below header */}
+          <Animated.View
+            style={[styles.tabPanel, { top: headerTopPadding }, lyricsAnimatedStyle]}
+            pointerEvents={activeTab === 'lyrics' ? 'auto' : 'none'}
+          >
+            {mountedTabs.has('lyrics') && (
+              <View style={styles.lyricsPlaceholder}>
+                <MaterialCommunityIcons name="comment-quote-outline" size={48} color={colors.textSecondary} />
+                <Text style={[styles.lyricsPlaceholderText, { color: colors.textSecondary }]}>
+                  Lyrics coming soon
+                </Text>
+              </View>
+            )}
+          </Animated.View>
+        </View>
+
+        {/* Tab bar */}
+        <View style={{ paddingBottom: insets.bottom }}>
+          <PlayerTabBar activeTab={activeTab} onSelect={setActiveTab} colors={colors} offlineMode={offlineMode} />
+        </View>
 
         {/* Shuffle overlay */}
         {shuffling && (
@@ -383,32 +485,22 @@ const FavoriteButton = memo(function FavoriteButton({
 });
 
 /* ------------------------------------------------------------------ */
-/*  List header (hero, controls, queue heading)                        */
+/*  Player content (hero, controls) — "Player" tab                     */
 /* ------------------------------------------------------------------ */
 
-interface PlayerListHeaderProps {
-  currentTrack: Child | null;
+interface PlayerContentProps {
+  currentTrack: Child;
   colors: ThemeColors;
   queueLoading: boolean;
   handleSeek: (seconds: number) => void;
-  handleClearQueue: () => void;
-  handleShuffle: () => void;
-  handleShareQueue: () => void;
-  shuffling: boolean;
-  queueLength: number;
 }
 
-const PlayerListHeader = memo(function PlayerListHeader({
+const PlayerContent = memo(function PlayerContent({
   currentTrack,
   colors,
   queueLoading,
   handleSeek,
-  handleClearQueue,
-  handleShuffle,
-  handleShareQueue,
-  shuffling,
-  queueLength,
-}: PlayerListHeaderProps) {
+}: PlayerContentProps) {
   const playbackState = playerStore((s) => s.playbackState);
   const position = playerStore((s) => s.position);
   const duration = playerStore((s) => s.duration);
@@ -429,185 +521,281 @@ const PlayerListHeader = memo(function PlayerListHeader({
     [colors.textPrimary],
   );
 
-  if (!currentTrack) return null;
+  if (queueLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.textSecondary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          Loading...
+        </Text>
+      </View>
+    );
+  }
 
   return (
-    <View>
-      {queueLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.textSecondary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading...
-          </Text>
+    <View style={styles.playerContentContainer}>
+      {/* Hero cover art */}
+      <View style={styles.hero}>
+        <View style={styles.heroImageWrap}>
+          <CachedImage
+            coverArtId={currentTrack.coverArt}
+            size={HERO_COVER_SIZE}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
         </View>
-      ) : (
-        <>
-          {/* Hero cover art */}
-          <View style={styles.hero}>
-            <View style={styles.heroImageWrap}>
-              <CachedImage
-                coverArtId={currentTrack.coverArt}
-                size={HERO_COVER_SIZE}
-                style={styles.heroImage}
-                resizeMode="cover"
-              />
-            </View>
-          </View>
+      </View>
 
-          {/* Track info */}
-          <View style={styles.trackInfo}>
-            <View style={styles.trackInfoRow}>
-              <View style={styles.trackInfoText}>
-                <MarqueeText style={marqueeStyle}>
-                  {currentTrack.title}
-                </MarqueeText>
-                <Text
-                  style={[styles.trackArtist, { color: colors.textSecondary }]}
-                  numberOfLines={1}
-                >
-                  {currentTrack.artist ?? 'Unknown Artist'}
-                </Text>
-              </View>
-              <FavoriteButton trackId={currentTrack.id} colors={colors} />
-            </View>
+      {/* Track info */}
+      <View style={styles.trackInfo}>
+        <View style={styles.trackInfoRow}>
+          <View style={styles.trackInfoText}>
+            <MarqueeText style={marqueeStyle}>
+              {currentTrack.title}
+            </MarqueeText>
+            <Text
+              style={[styles.trackArtist, { color: colors.textSecondary }]}
+              numberOfLines={1}
+            >
+              {currentTrack.artist ?? 'Unknown Artist'}
+            </Text>
           </View>
+          <FavoriteButton trackId={currentTrack.id} colors={colors} />
+        </View>
+      </View>
 
-          {/* Progress bar */}
-          <View style={styles.progressSection}>
-            <PlayerProgressBar
-              position={position}
-              duration={duration}
-              bufferedPosition={bufferedPosition}
-              colors={colors}
-              onSeek={handleSeek}
-              isBuffering={isBuffering}
-              error={error}
-              retrying={retrying}
-              onRetry={retryPlayback}
+      {/* Progress bar */}
+      <View style={styles.progressSection}>
+        <PlayerProgressBar
+          position={position}
+          duration={duration}
+          bufferedPosition={bufferedPosition}
+          colors={colors}
+          onSeek={handleSeek}
+          isBuffering={isBuffering}
+          error={error}
+          retrying={retrying}
+          onRetry={retryPlayback}
+        />
+      </View>
+
+      {/* Playback controls */}
+      <View style={styles.controls}>
+        {/* Playback rate toggle */}
+        <View style={styles.controlSideLeft}>
+          <PlaybackRateButton />
+        </View>
+
+        {/* Transport controls */}
+        <View style={styles.transportControls}>
+          <Pressable
+            onPress={skipToPrevious}
+            hitSlop={12}
+            disabled={!canSkipPrevious}
+            style={({ pressed }) => [pressed && styles.pressed, !canSkipPrevious && styles.disabled]}
+          >
+            <Ionicons
+              name="play-back"
+              size={32}
+              color={canSkipPrevious ? colors.textPrimary : colors.textSecondary}
             />
-          </View>
+          </Pressable>
 
-          {/* Playback controls */}
-          <View style={styles.controls}>
-            {/* Playback rate toggle */}
-            <View style={styles.controlSideLeft}>
-              <PlaybackRateButton />
-            </View>
-
-            {/* Transport controls */}
-            <View style={styles.transportControls}>
-              <Pressable
-                onPress={skipToPrevious}
-                hitSlop={12}
-                disabled={!canSkipPrevious}
-                style={({ pressed }) => [pressed && styles.pressed, !canSkipPrevious && styles.disabled]}
-              >
-                <Ionicons
-                  name="play-back"
-                  size={32}
-                  color={canSkipPrevious ? colors.textPrimary : colors.textSecondary}
-                />
-              </Pressable>
-
-              {showSkipInterval && (
-                <SkipIntervalButton direction="backward" size={32} />
-              )}
-
-              <Pressable
-                onPress={togglePlayPause}
-                style={({ pressed }) => [
-                  styles.playPauseButton,
-                  { backgroundColor: colors.textPrimary },
-                  pressed && styles.playPausePressed,
-                ]}
-              >
-                {isBuffering ? (
-                  <ActivityIndicator size="small" color={colors.background} />
-                ) : (
-                  <Ionicons
-                    name={isPlaying ? 'pause' : 'play'}
-                    size={32}
-                    color={colors.background}
-                    style={!isPlaying ? styles.playIcon : undefined}
-                  />
-                )}
-              </Pressable>
-
-              {showSkipInterval && (
-                <SkipIntervalButton direction="forward" size={32} />
-              )}
-
-              <Pressable
-                onPress={skipToNext}
-                hitSlop={12}
-                disabled={!canSkipNext}
-                style={({ pressed }) => [pressed && styles.pressed, !canSkipNext && styles.disabled]}
-              >
-                <Ionicons
-                  name="play-forward"
-                  size={32}
-                  color={canSkipNext ? colors.textPrimary : colors.textSecondary}
-                />
-              </Pressable>
-            </View>
-
-            {/* Repeat toggle */}
-            <View style={styles.controlSideRight}>
-              <RepeatButton />
-            </View>
-          </View>
-
-          {/* Queue section header */}
-          {queueLength > 0 && (
-            <View style={styles.queueSection}>
-              <View style={styles.queueHeaderRow}>
-                <Text
-                  style={[styles.queueHeader, { color: colors.textPrimary }]}
-                >
-                  Queue
-                </Text>
-                <View style={styles.queueActions}>
-                  <ShuffleButton
-                    onPress={handleShuffle}
-                    disabled={shuffling || queueLength < 2}
-                  />
-                  <Pressable
-                    onPress={handleShareQueue}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Share queue"
-                    style={({ pressed }) => [
-                      styles.queueActionButton,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
-                  </Pressable>
-                  <Pressable
-                    onPress={handleClearQueue}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Clear queue"
-                    style={({ pressed }) => [
-                      styles.queueActionButton,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.clearButtonText,
-                        { color: colors.textPrimary },
-                      ]}
-                    >
-                      Clear
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
+          {showSkipInterval && (
+            <SkipIntervalButton direction="backward" size={32} />
           )}
-        </>
-      )}
+
+          <Pressable
+            onPress={togglePlayPause}
+            style={({ pressed }) => [
+              styles.playPauseButton,
+              { backgroundColor: colors.textPrimary },
+              pressed && styles.playPausePressed,
+            ]}
+          >
+            {isBuffering ? (
+              <ActivityIndicator size="small" color={colors.background} />
+            ) : (
+              <Ionicons
+                name={isPlaying ? 'pause' : 'play'}
+                size={32}
+                color={colors.background}
+                style={!isPlaying ? styles.playIcon : undefined}
+              />
+            )}
+          </Pressable>
+
+          {showSkipInterval && (
+            <SkipIntervalButton direction="forward" size={32} />
+          )}
+
+          <Pressable
+            onPress={skipToNext}
+            hitSlop={12}
+            disabled={!canSkipNext}
+            style={({ pressed }) => [pressed && styles.pressed, !canSkipNext && styles.disabled]}
+          >
+            <Ionicons
+              name="play-forward"
+              size={32}
+              color={canSkipNext ? colors.textPrimary : colors.textSecondary}
+            />
+          </Pressable>
+        </View>
+
+        {/* Repeat toggle */}
+        <View style={styles.controlSideRight}>
+          <RepeatButton />
+        </View>
+      </View>
+    </View>
+  );
+});
+
+/* ------------------------------------------------------------------ */
+/*  Queue header (shuffle, share, clear)                               */
+/* ------------------------------------------------------------------ */
+
+interface QueueHeaderProps {
+  colors: ThemeColors;
+  handleClearQueue: () => void;
+  handleShuffle: () => void;
+  handleShareQueue: () => void;
+  shuffling: boolean;
+  queueLength: number;
+}
+
+const QueueHeader = memo(function QueueHeader({
+  colors,
+  handleClearQueue,
+  handleShuffle,
+  handleShareQueue,
+  shuffling,
+  queueLength,
+}: QueueHeaderProps) {
+  if (queueLength === 0) return null;
+
+  return (
+    <View style={styles.queueSection}>
+      <View style={styles.queueHeaderRow}>
+        <Text style={[styles.queueHeaderText, { color: colors.textPrimary }]}>
+          Queue
+        </Text>
+        <View style={styles.queueActions}>
+          <ShuffleButton
+            onPress={handleShuffle}
+            disabled={shuffling || queueLength < 2}
+          />
+          <Pressable
+            onPress={handleShareQueue}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Share queue"
+            style={({ pressed }) => [
+              styles.queueActionButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+          </Pressable>
+          <Pressable
+            onPress={handleClearQueue}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Clear queue"
+            style={({ pressed }) => [
+              styles.queueActionButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text
+              style={[styles.clearButtonText, { color: colors.textPrimary }]}
+            >
+              Clear
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+});
+
+/* ------------------------------------------------------------------ */
+/*  Album info tab                                                     */
+/* ------------------------------------------------------------------ */
+
+const AlbumInfoTab = memo(function AlbumInfoTab({
+  currentTrack,
+  colors,
+}: {
+  currentTrack: Child;
+  colors: ThemeColors;
+}) {
+  const albumId = currentTrack.albumId ?? null;
+  const albumInfoEntry = albumInfoStore((s) => albumId ? s.entries[albumId] : undefined);
+  const albumInfoLoading = albumInfoStore((s) => albumId ? (s.loading[albumId] ?? false) : false);
+  const fetchAttemptedRef = useRef<string | null>(null);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (!albumId || albumInfoEntry || albumInfoLoading) return;
+    if (fetchAttemptedRef.current === albumId) return;
+    fetchAttemptedRef.current = albumId;
+    albumInfoStore.getState().fetchAlbumInfo(
+      albumId,
+      currentTrack.artist ?? undefined,
+      currentTrack.album ?? undefined,
+    );
+  }, [albumId, albumInfoEntry, albumInfoLoading, currentTrack.artist, currentTrack.album]);
+
+  // Reset fetch guard when album changes
+  useEffect(() => {
+    fetchAttemptedRef.current = null;
+  }, [albumId]);
+
+  const sanitizedNotes = useMemo(() => {
+    // Prefer server notes, fall back to Wikipedia-enriched notes
+    const serverNotes = albumInfoEntry?.albumInfo.notes;
+    if (serverNotes) {
+      const sanitized = sanitizeBiographyText(serverNotes);
+      if (sanitized) return sanitized;
+    }
+    return albumInfoEntry?.enrichedNotes ?? null;
+  }, [albumInfoEntry?.albumInfo.notes, albumInfoEntry?.enrichedNotes]);
+
+  const notesAttributionUrl = albumInfoEntry?.enrichedNotesUrl ?? null;
+
+  const handleRefresh = useCallback(async () => {
+    if (!albumId) return;
+    setRefreshing(true);
+    const delay = minDelay();
+    // Clear existing entry so a fresh fetch is triggered
+    const { [albumId]: _, ...rest } = albumInfoStore.getState().entries;
+    albumInfoStore.setState({ entries: rest });
+    fetchAttemptedRef.current = null;
+    await albumInfoStore.getState().fetchAlbumInfo(
+      albumId,
+      currentTrack.artist ?? undefined,
+      currentTrack.album ?? undefined,
+    );
+    await delay;
+    setRefreshing(false);
+  }, [albumId, currentTrack.artist, currentTrack.album]);
+
+  return (
+    <View style={styles.albumInfoContainer}>
+      <AlbumInfoContent
+        track={currentTrack}
+        albumInfo={albumInfoEntry?.albumInfo ?? null}
+        overrideMbid={albumInfoEntry?.overrideMbid ?? null}
+        sanitizedNotes={sanitizedNotes}
+        notesAttributionUrl={notesAttributionUrl}
+        albumInfoLoading={albumInfoLoading}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        colors={colors}
+      />
     </View>
   );
 });
@@ -620,15 +808,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  contentArea: {
+    flex: 1,
+  },
+  tabPanel: {
+    ...StyleSheet.absoluteFillObject,
+  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 120,
   },
   loadingText: {
     fontSize: 16,
     marginTop: 16,
+  },
+  playerContentContainer: {
+    flex: 1,
+    justifyContent: 'center',
   },
   hero: {
     width: '100%',
@@ -645,7 +842,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: 'rgba(0,0,0,0.06)',
-    // Shadow for depth
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -699,7 +895,6 @@ const styles = StyleSheet.create({
     maxWidth: 464,
     width: '100%',
     alignSelf: 'center',
-    marginBottom: 32,
   },
   controlSideLeft: {
     flex: 1,
@@ -746,7 +941,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  queueHeader: {
+  queueHeaderText: {
     fontSize: 13,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -765,6 +960,20 @@ const styles = StyleSheet.create({
   clearButtonText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  albumInfoContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  lyricsPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  lyricsPlaceholderText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
   shuffleOverlay: {
     ...StyleSheet.absoluteFillObject,
