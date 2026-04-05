@@ -1,17 +1,12 @@
-Fix miniplayer song title wrapping
-Stop music playback and clear notification when app killed.
-Implement translation support.  English as base, create some initial translations for other languages where we have user base.  These are AI generated to provide a starting point, mechanisms for community contribution will be put in place for fixes and new translations
-Improve the player layout and enable lyrics and album info display on phone screens.
-Add shuffle play button to album, playlist and favorite songs screens.
-Fix download resume to not redownload items that finished.
-
-• Tablet: landscape/portrait layouts, orientation unlock, grid breakpoints
-• Album info & MBID overrides on expanded player
-• Cover art in bottom sheets and context menus
-• Mix It Up random chip on homescreen and Tuned In
-• Smoother panel player animations
-• Track detail in more options sheet
-• Skip previous: industry standard ~3s threshold
-• Android playback fixes: events, seek, end-of-track
-• Disable next/prev at queue boundaries
+• Fix miniplayer title wrapping
+• Stop playback when app killed
+• Translation support with initial translations
+• Player: lyrics & album info on phone
+• Shuffle play on album, playlist, favorites
+• Fix download resume for completed items
+• Tablet: landscape/portrait layouts
+• Album info on expanded player
+• Cover art in bottom sheets and menus
+• Mix It Up random chip on homescreen
+• Android playback fixes
 • Cleaner icons, faster startup
