@@ -1,25 +1,16 @@
 Resolve top 3 crash causes (57.6% of reported crashes)
-Dynamic playlists, artist top songs, home screen lists (recently played, recently added etc) now all have dynamic length.  The length of lists can be configured in settings.
+Dynamic list lengths for playlists, artist top songs, and home screen lists — configurable in settings.
 
-Fix miniplayer song title wrapping
-Stop music playback and clear notification when app killed.
-Implement translation support.  English as base, create some initial translations for other languages where we have user base.  These are AI generated to provide a starting point, mechanisms for community contribution will be put in place for fixes and new translations
-Improve the player layout and enable lyrics and album info display on phone screens.
-Add shuffle play button to album, playlist and favorite songs screens.
-Fix download resume to not redownload items that finished.
-
-• Tablet support: landscape and portrait layouts, UI orientation unlock, additional grid breakpoints
-• Album info and MBID overrides on expanded player view with fuzzy text search fallback
-• Cover art displayed in bottom sheets and context menus
-• Mix It Up (totally random) chip on homescreen and Tuned In page
-• Smoother animated entry and exit of the panel player
-• Track detail added to more options sheet for detailed file information
-• Skip previous aligned to industry standard: <3s skips back, otherwise restarts current track
-• Android playback fixes: event handling, seek with transcoding, end-of-track completion
-• Next/previous buttons disable when no valid action (first/last track without repeat)
-• Tapping a song in search results plays only that song, not all results
-• Playback status toast on Tuned In screen
-• Cleaner, more specific iconography throughout
-• Faster startup with persisted migration status
-• Fix stale cover art in My Listening, improved artist icon, pull to refresh
-• iOS reduce motion: static splash displayed when animations disabled
+• Translation support with initial translations
+• Player: lyrics & album info on phone screens
+• Shuffle play on album, playlist, and favorites
+• Tablet: landscape/portrait layouts with additional grid breakpoints
+• Album info and MBID overrides on expanded player
+• Cover art in bottom sheets and context menus
+• Mix It Up random chip on homescreen and Tuned In
+• Skip previous: <3s skips back, otherwise restarts track
+• Track detail in more options sheet
+• Fix miniplayer wrapping, download resume, stale cover art
+• Android playback fixes
+• Cleaner icons, faster startup
+• iOS reduce motion: static splash when animations disabled
