@@ -6,35 +6,25 @@ import { useTranslation } from 'react-i18next';
 
 import { AlbumListView } from '../components/AlbumListView';
 import { GradientBackground } from '../components/GradientBackground';
+import {
+  albumListsStore,
+  type AlbumListType,
+} from '../store/albumListsStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { minDelay } from '../utils/stringHelpers';
-import {
-  ensureCoverArtAuth,
-  getFrequentlyPlayedAlbums,
-  getRandomAlbums,
-  getRecentlyAddedAlbums,
-  getRecentlyPlayedAlbums,
-  type AlbumID3,
-} from '../services/subsonicService';
-import type { AlbumListType } from '../store/albumListsStore';
-
-const SIZE_SEE_MORE = 100;
-
-const TYPE_TO_GETTER: Record<
-  AlbumListType,
-  (size: number) => Promise<AlbumID3[]>
-> = {
-  recentlyAdded: getRecentlyAddedAlbums,
-  recentlyPlayed: getRecentlyPlayedAlbums,
-  frequentlyPlayed: getFrequentlyPlayedAlbums,
-  randomSelection: getRandomAlbums,
-};
 
 const TYPE_TO_TITLE_KEY: Record<AlbumListType, string> = {
   recentlyAdded: 'recentlyAdded',
   recentlyPlayed: 'recentlyPlayed',
   frequentlyPlayed: 'frequentlyPlayed',
   randomSelection: 'randomSelection',
+};
+
+const TYPE_TO_REFRESH: Record<AlbumListType, () => Promise<void>> = {
+  recentlyAdded: () => albumListsStore.getState().refreshRecentlyAdded(),
+  recentlyPlayed: () => albumListsStore.getState().refreshRecentlyPlayed(),
+  frequentlyPlayed: () => albumListsStore.getState().refreshFrequentlyPlayed(),
+  randomSelection: () => albumListsStore.getState().refreshRandomSelection(),
 };
 
 const VALID_TYPES: AlbumListType[] = [
@@ -54,54 +44,27 @@ export function AlbumListScreen() {
     ? params.type
     : 'recentlyAdded') as AlbumListType;
 
-  const [albums, setAlbums] = useState<AlbumID3[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const albums = albumListsStore((s) => s[type]);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     navigation.setOptions({ title: t(TYPE_TO_TITLE_KEY[type]) });
   }, [type, navigation, t]);
 
-  const fetchAlbums = useCallback(async () => {
-    try {
-      await ensureCoverArtAuth();
-      const getter = TYPE_TO_GETTER[type];
-      const list = await getter(SIZE_SEE_MORE);
-      setAlbums(list);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t('failedToLoadAlbums'));
-    }
-  }, [type]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      await fetchAlbums();
-      if (!cancelled) setLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchAlbums]);
-
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     const delay = minDelay();
-    await fetchAlbums();
+    await TYPE_TO_REFRESH[type]();
     await delay;
     setRefreshing(false);
-  }, [fetchAlbums]);
+  }, [type]);
 
   return (
     <GradientBackground style={styles.container} scrollable>
       <AlbumListView
         albums={albums}
-        loading={loading}
-        error={error}
+        loading={false}
+        error={null}
         onRefresh={offlineMode ? undefined : handleRefresh}
         refreshing={refreshing}
         contentInsetTop={headerHeight}

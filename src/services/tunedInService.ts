@@ -184,10 +184,11 @@ interface GenerateMixesInput {
   scrobbles: Array<{ time: number; song: { genre?: string; genres?: unknown[]; artist?: string; artistId?: string } }>;
   starredSongs: Child[];
   isOnline: boolean;
+  listLength?: number;
 }
 
 export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
-  const { hourBuckets, genreCounts, songCounts, artistCounts, scrobbles, starredSongs, isOnline } = input;
+  const { hourBuckets, genreCounts, songCounts, artistCounts, scrobbles, starredSongs, isOnline, listLength = 20 } = input;
   const mixes: MixDefinition[] = [];
 
   // 1. "Right Now" — Time-of-Day Mix (always shown)
@@ -205,7 +206,7 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
       icon: getTimeIcon(currentHour),
       gradientColors: getTimeGradient(currentHour),
       fetchStrategy: isOnline
-        ? { type: 'randomByGenre', genre: topGenreForHour, size: 20 }
+        ? { type: 'randomByGenre', genre: topGenreForHour, size: listLength }
         : { type: 'offline', genre: topGenreForHour },
     });
   } else {
@@ -216,7 +217,7 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
       icon: getTimeIcon(currentHour),
       gradientColors: getTimeGradient(currentHour),
       fetchStrategy: isOnline
-        ? { type: 'random', size: 20 }
+        ? { type: 'random', size: listLength }
         : { type: 'offline' },
     });
   }
@@ -258,7 +259,7 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
           subtitle: i18n.t('artistsLikeYouMightLove', { artist: picked.name }),
           icon: 'compass-outline',
           gradientColors: ['#7C3AED', '#4338CA'],
-          fetchStrategy: { type: 'similarToArtist', artistId: picked.artistId, count: 20 },
+          fetchStrategy: { type: 'similarToArtist', artistId: picked.artistId, count: listLength },
         });
       } else {
         mixes.push({
@@ -267,7 +268,7 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
           subtitle: i18n.t('randomSelectionFromLibrary'),
           icon: 'shuffle-outline',
           gradientColors: ['#7C3AED', '#4338CA'],
-          fetchStrategy: { type: 'random', size: 20 },
+          fetchStrategy: { type: 'random', size: listLength },
         });
       }
     } else {
@@ -277,7 +278,7 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
         subtitle: i18n.t('randomSelectionFromLibrary'),
         icon: 'shuffle-outline',
         gradientColors: ['#7C3AED', '#4338CA'],
-        fetchStrategy: { type: 'random', size: 20 },
+        fetchStrategy: { type: 'random', size: listLength },
       });
     }
   }
@@ -297,7 +298,7 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
           type: 'randomByDecade',
           fromYear: pickedDecade.fromYear,
           toYear: pickedDecade.toYear,
-          size: 20,
+          size: listLength,
         },
       });
     } else {
@@ -307,7 +308,7 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
         subtitle: i18n.t('randomSongsAcrossDecades'),
         icon: 'time-outline',
         gradientColors: ['#D97706', '#EA580C'],
-        fetchStrategy: { type: 'random', size: 20 },
+        fetchStrategy: { type: 'random', size: listLength },
       });
     }
   }
@@ -320,7 +321,7 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
     icon: 'shuffle',
     gradientColors: ['#3B82F6', '#6366F1'],
     fetchStrategy: isOnline
-      ? { type: 'random', size: 20 }
+      ? { type: 'random', size: listLength }
       : { type: 'offline' },
   });
 
@@ -333,7 +334,7 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
       subtitle: i18n.t('inspiredBy', { title: randomStar.title }),
       icon: 'heart',
       gradientColors: ['#E11D48', '#DB2777'],
-      fetchStrategy: { type: 'similarToSong', songId: randomStar.id, count: 20 },
+      fetchStrategy: { type: 'similarToSong', songId: randomStar.id, count: listLength },
     });
   }
 
@@ -355,8 +356,8 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
         ? {
             type: 'multiGenreBlend',
             genres: [
-              { name: genre1, size: 10 },
-              { name: genre2, size: 10 },
+              { name: genre1, size: Math.ceil(listLength / 2) },
+              { name: genre2, size: Math.ceil(listLength / 2) },
             ],
           }
         : { type: 'offline', genre: genre1 },
@@ -380,7 +381,7 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
 
   const heavyRotationSongs = [...recentCounts.values()]
     .sort((a, b) => b.count - a.count)
-    .slice(0, 20)
+    .slice(0, listLength)
     .map((entry) => entry.song);
 
   if (heavyRotationSongs.length >= 5) {
@@ -401,7 +402,7 @@ export function generateMixes(input: GenerateMixesInput): MixDefinition[] {
 /*  Fetch execution                                                    */
 /* ------------------------------------------------------------------ */
 
-export async function fetchMixSongs(strategy: FetchStrategy): Promise<Child[]> {
+export async function fetchMixSongs(strategy: FetchStrategy, listLength = 20): Promise<Child[]> {
   try {
     switch (strategy.type) {
       case 'randomByGenre': {
@@ -420,13 +421,13 @@ export async function fetchMixSongs(strategy: FetchStrategy): Promise<Child[]> {
         const songs = await getSimilarSongs2(strategy.artistId, strategy.count);
         if (songs.length > 0) return shuffleArray([...songs]);
         // Fallback to random
-        return (await getRandomSongs(20)) ?? [];
+        return (await getRandomSongs(listLength)) ?? [];
       }
       case 'similarToSong': {
         const songs = await getSimilarSongs(strategy.songId, strategy.count);
         if (songs.length > 0) return shuffleArray([...songs]);
         // Fallback to random
-        return (await getRandomSongs(20)) ?? [];
+        return (await getRandomSongs(listLength)) ?? [];
       }
       case 'multiGenreBlend': {
         const results: Child[] = [];
@@ -449,13 +450,13 @@ export async function fetchMixSongs(strategy: FetchStrategy): Promise<Child[]> {
         }
         // No genre filter — get all offline songs and shuffle
         const songs = getOfflineSongsAll();
-        return shuffleArray([...songs]).slice(0, 20);
+        return shuffleArray([...songs]).slice(0, listLength);
       }
     }
   } catch {
     // Last resort fallback
     try {
-      return (await getRandomSongs(20)) ?? [];
+      return (await getRandomSongs(listLength)) ?? [];
     } catch {
       return [];
     }
@@ -471,6 +472,7 @@ export async function fetchCustomMix(
   fromYear?: number,
   toYear?: number,
   isOnline = true,
+  listLength = 20,
 ): Promise<Child[]> {
   if (!isOnline) {
     const results: Child[] = [];
@@ -478,12 +480,12 @@ export async function fetchCustomMix(
       const songs = getOfflineSongsByGenre(genre);
       results.push(...songs);
     }
-    return shuffleArray(results).slice(0, 20);
+    return shuffleArray(results).slice(0, listLength);
   }
 
   if (genres.length === 1) {
     const songs = await getRandomSongsFiltered({
-      size: 20,
+      size: listLength,
       genre: genres[0],
       fromYear,
       toYear,
@@ -492,7 +494,7 @@ export async function fetchCustomMix(
   }
 
   // Multiple genres: split evenly
-  const perGenre = Math.ceil(20 / genres.length);
+  const perGenre = Math.ceil(listLength / genres.length);
   const results: Child[] = [];
   for (const genre of genres) {
     const songs = await getRandomSongsFiltered({

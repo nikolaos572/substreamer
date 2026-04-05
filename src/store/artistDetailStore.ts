@@ -21,6 +21,7 @@ import {
   searchArtistMBID,
 } from '../services/musicbrainzService';
 import { sanitizeBiographyText } from '../utils/formatters';
+import { layoutPreferencesStore } from './layoutPreferencesStore';
 import { ratingStore } from './ratingStore';
 
 export interface ArtistDetailEntry {
@@ -39,6 +40,8 @@ export interface ArtistDetailState {
   artists: Record<string, ArtistDetailEntry>;
   /** Fetch artist from API, store it, and return the entry. Returns null on failure. */
   fetchArtist: (id: string) => Promise<ArtistDetailEntry | null>;
+  /** Re-fetch only topSongs for all cached artists (lightweight refresh). */
+  refreshTopSongs: () => Promise<void>;
   /** Clear all cached artist details. */
   clearArtists: () => void;
 }
@@ -76,7 +79,7 @@ export const artistDetailStore = create<ArtistDetailState>()(
         // Normal artist: fetch info and top songs in parallel.
         const [infoData, topSongs] = await Promise.all([
           getArtistInfo2(id),
-          getTopSongs(artistData.name, 20).catch(() => [] as Child[]),
+          getTopSongs(artistData.name, layoutPreferencesStore.getState().listLength).catch(() => [] as Child[]),
         ]);
 
         // Resolve biography: prefer Subsonic, fall back to MusicBrainz
@@ -130,6 +133,22 @@ export const artistDetailStore = create<ArtistDetailState>()(
         return entry;
       },
 
+      refreshTopSongs: async () => {
+        const entries = get().artists;
+        const size = layoutPreferencesStore.getState().listLength;
+        const updates: Record<string, ArtistDetailEntry> = { ...entries };
+        for (const [id, entry] of Object.entries(entries)) {
+          if (isVariousArtists(entry.artist.name)) continue;
+          try {
+            const topSongs = await getTopSongs(entry.artist.name, size);
+            updates[id] = { ...entry, topSongs };
+          } catch {
+            /* keep existing topSongs */
+          }
+        }
+        set({ artists: updates });
+      },
+
       clearArtists: () => set({ artists: {} }),
     }),
     {
@@ -141,3 +160,4 @@ export const artistDetailStore = create<ArtistDetailState>()(
     }
   )
 );
+

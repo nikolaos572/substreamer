@@ -11,9 +11,8 @@ import {
   getRecentlyPlayedAlbums,
   type AlbumID3,
 } from '../services/subsonicService';
+import { layoutPreferencesStore } from './layoutPreferencesStore';
 import { ratingStore } from './ratingStore';
-
-const SIZE_HOME = 20;
 
 function reconcileAlbumRatings(albums: AlbumID3[]) {
   const entries = albums.map((a) => ({ id: a.id, serverRating: a.userRating ?? 0 }));
@@ -60,7 +59,7 @@ export const albumListsStore = create<AlbumListsState>()(
       refreshRecentlyAdded: async () => {
         try {
           await ensureCoverArtAuth();
-          const albums = await getRecentlyAddedAlbums(SIZE_HOME);
+          const albums = await getRecentlyAddedAlbums(layoutPreferencesStore.getState().listLength);
           reconcileAlbumRatings(albums);
           set({ recentlyAdded: albums });
         } catch {
@@ -71,7 +70,7 @@ export const albumListsStore = create<AlbumListsState>()(
       refreshRecentlyPlayed: async () => {
         try {
           await ensureCoverArtAuth();
-          const albums = await getRecentlyPlayedAlbums(SIZE_HOME);
+          const albums = await getRecentlyPlayedAlbums(layoutPreferencesStore.getState().listLength);
           reconcileAlbumRatings(albums);
           set({ recentlyPlayed: albums });
         } catch {
@@ -82,7 +81,7 @@ export const albumListsStore = create<AlbumListsState>()(
       refreshFrequentlyPlayed: async () => {
         try {
           await ensureCoverArtAuth();
-          const albums = await getFrequentlyPlayedAlbums(SIZE_HOME);
+          const albums = await getFrequentlyPlayedAlbums(layoutPreferencesStore.getState().listLength);
           reconcileAlbumRatings(albums);
           set({ frequentlyPlayed: albums });
         } catch {
@@ -93,7 +92,7 @@ export const albumListsStore = create<AlbumListsState>()(
       refreshRandomSelection: async () => {
         try {
           await ensureCoverArtAuth();
-          const albums = await getRandomAlbums(SIZE_HOME);
+          const albums = await getRandomAlbums(layoutPreferencesStore.getState().listLength);
           reconcileAlbumRatings(albums);
           set({ randomSelection: albums });
         } catch {
@@ -104,12 +103,13 @@ export const albumListsStore = create<AlbumListsState>()(
       refreshAll: async () => {
         try {
           await ensureCoverArtAuth();
+          const size = layoutPreferencesStore.getState().listLength;
           const [recentlyAdded, recentlyPlayed, frequentlyPlayed, randomSelection] =
             await Promise.all([
-              getRecentlyAddedAlbums(SIZE_HOME),
-              getRecentlyPlayedAlbums(SIZE_HOME),
-              getFrequentlyPlayedAlbums(SIZE_HOME),
-              getRandomAlbums(SIZE_HOME),
+              getRecentlyAddedAlbums(size),
+              getRecentlyPlayedAlbums(size),
+              getFrequentlyPlayedAlbums(size),
+              getRandomAlbums(size),
             ]);
           reconcileAlbumRatings([...recentlyAdded, ...recentlyPlayed, ...frequentlyPlayed, ...randomSelection]);
           set({
@@ -135,3 +135,4 @@ export const albumListsStore = create<AlbumListsState>()(
     }
   )
 );
+

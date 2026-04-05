@@ -1,6 +1,11 @@
 jest.mock('../sqliteStorage', () => require('../__mocks__/sqliteStorage'));
 jest.mock('../../services/subsonicService');
 jest.mock('../../services/musicbrainzService');
+jest.mock('../layoutPreferencesStore', () => ({
+  layoutPreferencesStore: {
+    getState: jest.fn(() => ({ listLength: 20 })),
+  },
+}));
 jest.mock('../../utils/formatters', () => ({
   sanitizeBiographyText: jest.fn((text: string) => text),
 }));
@@ -128,6 +133,22 @@ describe('fetchArtist — normal artist', () => {
     expect(mockGetTopSongs).not.toHaveBeenCalled();
   });
 
+  it('handles missing album array and absent userRating fields', async () => {
+    mockGetArtist.mockResolvedValue({
+      id: 'ar-1',
+      name: 'Radiohead',
+      albumCount: 9,
+      // album intentionally omitted
+    } as any);
+    mockGetArtistInfo2.mockResolvedValue({ biography: 'Bio.' } as any);
+    mockGetTopSongs.mockResolvedValue([{ id: 's1', title: 'Creep' }] as any);
+
+    const entry = await artistDetailStore.getState().fetchArtist('ar-1');
+
+    expect(entry).not.toBeNull();
+    expect(entry!.topSongs).toHaveLength(1);
+  });
+
   it('falls back to getTopSongs empty array when getTopSongs throws', async () => {
     mockGetArtist.mockResolvedValue({
       id: 'ar-1',
@@ -251,5 +272,149 @@ describe('fetchArtist — MusicBrainz biography fallback', () => {
 
     expect(entry!.biography).toBe('Subsonic bio exists.');
     expect(entry!.resolvedMbid).toBe('override-mbid');
+  });
+});
+
+describe('refreshTopSongs', () => {
+  const song = (id: string) => ({ id, title: `Song ${id}` } as any);
+
+  it('re-fetches topSongs for all cached artists', async () => {
+    artistDetailStore.setState({
+      artists: {
+        'ar-1': {
+          artist: { id: 'ar-1', name: 'Radiohead', albumCount: 9, album: [] } as any,
+          artistInfo: null,
+          topSongs: [song('old-1')],
+          biography: 'Bio',
+          resolvedMbid: null,
+          retrievedAt: 1000,
+        },
+        'ar-2': {
+          artist: { id: 'ar-2', name: 'Björk', albumCount: 5, album: [] } as any,
+          artistInfo: null,
+          topSongs: [],
+          biography: null,
+          resolvedMbid: null,
+          retrievedAt: 2000,
+        },
+      },
+    });
+    mockGetTopSongs
+      .mockResolvedValueOnce([song('new-1'), song('new-2')])
+      .mockResolvedValueOnce([song('new-3')]);
+
+    await artistDetailStore.getState().refreshTopSongs();
+
+    const artists = artistDetailStore.getState().artists;
+    expect(artists['ar-1'].topSongs).toEqual([song('new-1'), song('new-2')]);
+    expect(artists['ar-2'].topSongs).toEqual([song('new-3')]);
+  });
+
+  it('uses listLength from layoutPreferencesStore', async () => {
+    const { layoutPreferencesStore: mockStore } = require('../layoutPreferencesStore');
+    (mockStore.getState as jest.Mock).mockReturnValue({ listLength: 50 });
+
+    artistDetailStore.setState({
+      artists: {
+        'ar-1': {
+          artist: { id: 'ar-1', name: 'Radiohead', albumCount: 9, album: [] } as any,
+          artistInfo: null,
+          topSongs: [],
+          biography: null,
+          resolvedMbid: null,
+          retrievedAt: 1000,
+        },
+      },
+    });
+    mockGetTopSongs.mockResolvedValue([]);
+
+    await artistDetailStore.getState().refreshTopSongs();
+
+    expect(mockGetTopSongs).toHaveBeenCalledWith('Radiohead', 50);
+  });
+
+  it('skips Various Artists entries', async () => {
+    artistDetailStore.setState({
+      artists: {
+        'va-1': {
+          artist: { id: 'va-1', name: 'Various Artists', albumCount: 5, album: [] } as any,
+          artistInfo: null,
+          topSongs: [],
+          biography: 'VA bio',
+          resolvedMbid: null,
+          retrievedAt: 1000,
+        },
+        'ar-1': {
+          artist: { id: 'ar-1', name: 'Radiohead', albumCount: 9, album: [] } as any,
+          artistInfo: null,
+          topSongs: [],
+          biography: null,
+          resolvedMbid: null,
+          retrievedAt: 2000,
+        },
+      },
+    });
+    mockGetTopSongs.mockResolvedValue([song('new-1')]);
+
+    await artistDetailStore.getState().refreshTopSongs();
+
+    expect(mockGetTopSongs).toHaveBeenCalledTimes(1);
+    expect(mockGetTopSongs).toHaveBeenCalledWith('Radiohead', expect.any(Number));
+    expect(artistDetailStore.getState().artists['va-1'].topSongs).toEqual([]);
+  });
+
+  it('keeps existing topSongs on API failure', async () => {
+    const existingSongs = [song('keep-1'), song('keep-2')];
+    artistDetailStore.setState({
+      artists: {
+        'ar-1': {
+          artist: { id: 'ar-1', name: 'Radiohead', albumCount: 9, album: [] } as any,
+          artistInfo: null,
+          topSongs: existingSongs,
+          biography: null,
+          resolvedMbid: null,
+          retrievedAt: 1000,
+        },
+      },
+    });
+    mockGetTopSongs.mockRejectedValue(new Error('network error'));
+
+    await artistDetailStore.getState().refreshTopSongs();
+
+    expect(artistDetailStore.getState().artists['ar-1'].topSongs).toEqual(existingSongs);
+  });
+
+  it('preserves non-topSongs fields (biography, artistInfo, resolvedMbid)', async () => {
+    artistDetailStore.setState({
+      artists: {
+        'ar-1': {
+          artist: { id: 'ar-1', name: 'Radiohead', albumCount: 9, album: [] } as any,
+          artistInfo: { biography: 'Info bio' } as any,
+          topSongs: [song('old')],
+          biography: 'Original bio',
+          resolvedMbid: 'some-mbid',
+          retrievedAt: 1000,
+        },
+      },
+    });
+    mockGetTopSongs.mockResolvedValue([song('new')]);
+
+    await artistDetailStore.getState().refreshTopSongs();
+
+    const entry = artistDetailStore.getState().artists['ar-1'];
+    expect(entry.topSongs).toEqual([song('new')]);
+    expect(entry.biography).toBe('Original bio');
+    expect(entry.artistInfo).toEqual({ biography: 'Info bio' });
+    expect(entry.resolvedMbid).toBe('some-mbid');
+    expect(entry.retrievedAt).toBe(1000);
+  });
+
+  it('handles empty artists cache gracefully', async () => {
+    artistDetailStore.setState({ artists: {} });
+
+    await artistDetailStore.getState().refreshTopSongs();
+
+    expect(mockGetTopSongs).not.toHaveBeenCalled();
+    expect(artistDetailStore.getState().artists).toEqual({});
   });
 });

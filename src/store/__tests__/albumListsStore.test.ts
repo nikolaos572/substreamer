@@ -1,5 +1,10 @@
 jest.mock('../sqliteStorage', () => require('../__mocks__/sqliteStorage'));
 jest.mock('../../services/subsonicService');
+jest.mock('../layoutPreferencesStore', () => ({
+  layoutPreferencesStore: {
+    getState: jest.fn(() => ({ listLength: 20 })),
+  },
+}));
 
 import {
   ensureCoverArtAuth,
@@ -109,6 +114,34 @@ describe('albumListsStore', () => {
       await albumListsStore.getState().refreshAll();
 
       expect(albumListsStore.getState().recentlyAdded).toEqual([album('existing')]);
+    });
+  });
+
+  describe('listLength integration', () => {
+    it('passes configured listLength to API calls', async () => {
+      const { layoutPreferencesStore } = require('../layoutPreferencesStore');
+      (layoutPreferencesStore.getState as jest.Mock).mockReturnValue({ listLength: 50 });
+
+      mockGetRecentlyAdded.mockResolvedValue([album('1')]);
+      await albumListsStore.getState().refreshRecentlyAdded();
+      expect(mockGetRecentlyAdded).toHaveBeenCalledWith(50);
+    });
+
+    it('refreshAll uses same listLength for all fetches', async () => {
+      const { layoutPreferencesStore } = require('../layoutPreferencesStore');
+      (layoutPreferencesStore.getState as jest.Mock).mockReturnValue({ listLength: 100 });
+
+      mockGetRecentlyAdded.mockResolvedValue([]);
+      mockGetRecentlyPlayed.mockResolvedValue([]);
+      mockGetFrequentlyPlayed.mockResolvedValue([]);
+      mockGetRandom.mockResolvedValue([]);
+
+      await albumListsStore.getState().refreshAll();
+
+      expect(mockGetRecentlyAdded).toHaveBeenCalledWith(100);
+      expect(mockGetRecentlyPlayed).toHaveBeenCalledWith(100);
+      expect(mockGetFrequentlyPlayed).toHaveBeenCalledWith(100);
+      expect(mockGetRandom).toHaveBeenCalledWith(100);
     });
   });
 

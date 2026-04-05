@@ -12,6 +12,7 @@ import { favoritesStore } from '../store/favoritesStore';
 import { musicCacheStore } from '../store/musicCacheStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { playlistDetailStore } from '../store/playlistDetailStore';
+import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
 import { playlistLibraryStore } from '../store/playlistLibraryStore';
 import { processingOverlayStore } from '../store/processingOverlayStore';
 import { shuffleArray } from '../utils/arrayHelpers';
@@ -157,7 +158,7 @@ export async function playMoreLikeThis(song: Child): Promise<void> {
   processingOverlayStore.getState().show(i18n.t('loading'));
 
   try {
-    const tracks = await getSimilarSongs(song.id, 20);
+    const tracks = await getSimilarSongs(song.id, layoutPreferencesStore.getState().listLength);
     if (tracks.length === 0) {
       processingOverlayStore.getState().showError(i18n.t('noSimilarSongsFound'));
       return;
@@ -182,7 +183,7 @@ export async function playSimilarArtistsMix(artist: ArtistID3): Promise<void> {
   processingOverlayStore.getState().show(i18n.t('loading'));
 
   try {
-    const tracks = await getSimilarSongs2(artist.id, 20);
+    const tracks = await getSimilarSongs2(artist.id, layoutPreferencesStore.getState().listLength);
     if (tracks.length === 0) {
       processingOverlayStore.getState().showError(i18n.t('noSimilarArtistsMixAvailable'));
       return;
@@ -237,7 +238,6 @@ export async function saveArtistTopSongsPlaylist(artist: ArtistID3): Promise<voi
 /*  Play more by this artist                                           */
 /* ------------------------------------------------------------------ */
 
-const MORE_BY_ARTIST_COUNT = 20;
 const MORE_BY_ARTIST_MIN = 5;
 
 /** Fisher-Yates (Knuth) in-place shuffle. */
@@ -313,7 +313,7 @@ export async function playMoreByArtist(artistId: string, artistName: string): Pr
       }
     }
 
-    const queue = shuffleArray(songs).slice(0, MORE_BY_ARTIST_COUNT);
+    const queue = shuffleArray(songs).slice(0, layoutPreferencesStore.getState().listLength);
     await playTrack(queue[0], queue);
     processingOverlayStore.getState().showSuccess(i18n.t('playingArtistMix', { artist: artistName }));
   } catch {

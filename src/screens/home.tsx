@@ -39,6 +39,7 @@ import { favoritesStore } from '../store/favoritesStore';
 import { pendingScrobbleStore } from '../store/pendingScrobbleStore';
 import { filterBarStore } from '../store/filterBarStore';
 import { musicCacheStore } from '../store/musicCacheStore';
+import { LIST_LENGTH_DISPLAY_CAP } from '../store/layoutPreferencesStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { playlistLibraryStore } from '../store/playlistLibraryStore';
 import { searchStore } from '../store/searchStore';
@@ -190,7 +191,7 @@ function AlbumSection({
         <SectionPlaceholder message={t(config.emptyMessageKey)} colors={colors} />
       ) : (
         <FlashList
-          data={albums}
+          data={albums.slice(0, LIST_LENGTH_DISPLAY_CAP)}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
           horizontal

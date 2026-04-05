@@ -13,6 +13,7 @@ beforeEach(() => {
     albumSortOrder: 'artist',
     artistAlbumSortOrder: 'newest',
     dateFormat: 'yyyy/mm/dd',
+    listLength: 20,
   });
 });
 
@@ -60,5 +61,16 @@ describe('layoutPreferencesStore', () => {
   it('setDateFormat changes date format', () => {
     layoutPreferencesStore.getState().setDateFormat('yyyy/dd/mm');
     expect(layoutPreferencesStore.getState().dateFormat).toBe('yyyy/dd/mm');
+  });
+
+  it('has default listLength of 20', () => {
+    expect(layoutPreferencesStore.getState().listLength).toBe(20);
+  });
+
+  it('setListLength changes list length', () => {
+    for (const value of [30, 50, 100, 20] as const) {
+      layoutPreferencesStore.getState().setListLength(value);
+      expect(layoutPreferencesStore.getState().listLength).toBe(value);
+    }
   });
 });

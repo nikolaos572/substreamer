@@ -298,7 +298,7 @@ describe('generateMixes', () => {
       expect(deepCuts.fetchStrategy).toEqual({
         type: 'similarToArtist',
         artistId: 'ar-1',
-        count: 20,
+        count: 20, // default listLength
       });
       expect(deepCuts.subtitle).toContain('Pink Floyd');
     } else {
@@ -424,6 +424,37 @@ describe('generateMixes', () => {
     const mixes = generateMixes(baseInput);
     const rightNow = mixes.find((m) => m.id === 'right-now')!;
     expect(rightNow.fetchStrategy.type).toBe('random');
+  });
+
+  it('uses custom listLength in fetch strategies', () => {
+    const input = {
+      ...baseInput,
+      genreCounts: { Rock: 10, Jazz: 8 },
+      starredSongs: [makeSong({ id: 'fav-1' })],
+      listLength: 50,
+    };
+    const mixes = generateMixes(input);
+
+    // Right Now should use listLength
+    const rightNow = mixes.find((m) => m.id === 'right-now')!;
+    if (rightNow.fetchStrategy.type === 'randomByGenre') {
+      expect(rightNow.fetchStrategy.size).toBe(50);
+    } else if (rightNow.fetchStrategy.type === 'random') {
+      expect(rightNow.fetchStrategy.size).toBe(50);
+    }
+
+    // Genre Blend should split listLength across genres
+    const blend = mixes.find((m) => m.id === 'genre-blend')!;
+    if (blend.fetchStrategy.type === 'multiGenreBlend') {
+      expect(blend.fetchStrategy.genres[0].size).toBe(25);
+      expect(blend.fetchStrategy.genres[1].size).toBe(25);
+    }
+
+    // Favorites Radio should use listLength
+    const favRadio = mixes.find((m) => m.id === 'favorites-radio')!;
+    if (favRadio.fetchStrategy.type === 'similarToSong') {
+      expect(favRadio.fetchStrategy.count).toBe(50);
+    }
   });
 
   describe('Heavy Rotation', () => {
@@ -605,6 +636,20 @@ describe('fetchMixSongs', () => {
     expect(mockGetOfflineSongsAll).toHaveBeenCalled();
   });
 
+  it('uses custom listLength for fallback random calls', async () => {
+    mockGetSimilarSongs2.mockResolvedValue([]);
+    mockGetRandomSongs.mockResolvedValue(songs);
+    await fetchMixSongs({ type: 'similarToArtist', artistId: 'ar-1', count: 50 }, 50);
+    expect(mockGetRandomSongs).toHaveBeenCalledWith(50);
+  });
+
+  it('uses custom listLength for offline slice', async () => {
+    const manySongs = Array.from({ length: 100 }, (_, i) => makeSong({ id: `s${i}` }));
+    mockGetOfflineSongsAll.mockReturnValue(manySongs);
+    const result = await fetchMixSongs({ type: 'offline' }, 50);
+    expect(result.length).toBe(50);
+  });
+
   it('returns empty array on null API response', async () => {
     mockGetRandomSongsFiltered.mockResolvedValue(null);
     const result = await fetchMixSongs({ type: 'randomByGenre', genre: 'Rock', size: 20 });
@@ -687,6 +732,33 @@ describe('fetchCustomMix', () => {
     mockGetRandomSongsFiltered.mockResolvedValue(null);
     const result = await fetchCustomMix(['Rock'], undefined, undefined, true);
     expect(result).toEqual([]);
+  });
+
+  it('uses custom listLength for single genre', async () => {
+    mockGetRandomSongsFiltered.mockResolvedValue(songs);
+    await fetchCustomMix(['Rock'], 1990, 1999, true, 50);
+    expect(mockGetRandomSongsFiltered).toHaveBeenCalledWith({
+      size: 50,
+      genre: 'Rock',
+      fromYear: 1990,
+      toYear: 1999,
+    });
+  });
+
+  it('splits custom listLength across multiple genres', async () => {
+    mockGetRandomSongsFiltered.mockResolvedValue([makeSong()]);
+    await fetchCustomMix(['Rock', 'Jazz', 'Pop'], undefined, undefined, true, 50);
+    // Math.ceil(50 / 3) = 17
+    expect(mockGetRandomSongsFiltered).toHaveBeenCalledWith(
+      expect.objectContaining({ size: 17, genre: 'Rock' }),
+    );
+  });
+
+  it('uses custom listLength for offline slice', async () => {
+    const manySongs = Array.from({ length: 100 }, (_, i) => makeSong({ id: `s${i}` }));
+    mockGetOfflineSongsByGenre.mockReturnValue(manySongs);
+    const result = await fetchCustomMix(['Rock'], undefined, undefined, false, 50);
+    expect(result.length).toBe(50);
   });
 });
 

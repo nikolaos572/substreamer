@@ -17,7 +17,7 @@ jest.mock('expo-sqlite', () => {
   };
 });
 
-import { sqliteStorage } from '../sqliteStorage';
+import { sqliteStorage, clearAllStorage } from '../sqliteStorage';
 
 beforeEach(() => {
   mockGetFirstSync.mockReset();
@@ -67,6 +67,13 @@ describe('sqliteStorage', () => {
         'DELETE FROM storage WHERE key = ?;',
         ['my-key'],
       );
+    });
+  });
+
+  describe('clearAllStorage', () => {
+    it('deletes every row from the storage table', () => {
+      clearAllStorage();
+      expect(mockRunSync).toHaveBeenCalledWith('DELETE FROM storage;');
     });
   });
 });

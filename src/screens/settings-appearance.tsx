@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderHeightContext } from '@react-navigation/elements';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { GradientBackground } from '../components/GradientBackground';
@@ -15,7 +15,12 @@ import {
   type ArtistAlbumSortOrder,
   type DateFormat,
   type ItemLayout,
+  type ListLength,
 } from '../store/layoutPreferencesStore';
+import { albumListsStore } from '../store/albumListsStore';
+import { artistDetailStore } from '../store/artistDetailStore';
+import { offlineModeStore } from '../store/offlineModeStore';
+import { processingOverlayStore } from '../store/processingOverlayStore';
 
 const THEME_OPTIONS: { value: ThemePreference; labelKey: string; icon: 'phone-portrait-outline' | 'sunny-outline' | 'moon-outline' }[] = [
   { value: 'system', labelKey: 'themeSystem', icon: 'phone-portrait-outline' },
@@ -50,6 +55,13 @@ const DATE_FORMAT_OPTIONS: { value: DateFormat; labelKey: string; example: strin
   { value: 'yyyy/dd/mm', labelKey: 'dateFormatDayMonth', example: '21/02' },
 ];
 
+const LIST_LENGTH_OPTIONS: { value: ListLength; labelKey: string }[] = [
+  { value: 20, labelKey: 'listLength20' },
+  { value: 30, labelKey: 'listLength30' },
+  { value: 50, labelKey: 'listLength50' },
+  { value: 100, labelKey: 'listLength100' },
+];
+
 const ACCENT_COLORS: { labelKey: string; hex: string }[] = [
   { labelKey: 'colorBlueDefault', hex: '#1D9BF0' },
   { labelKey: 'colorRed', hex: '#E91429' },
@@ -70,6 +82,7 @@ export function SettingsAppearanceScreen() {
   const [sortOrderOpen, setSortOrderOpen] = useState(false);
   const [artistAlbumSortOpen, setArtistAlbumSortOpen] = useState(false);
   const [dateFormatOpen, setDateFormatOpen] = useState(false);
+  const [listLengthOpen, setListLengthOpen] = useState(false);
   const activeAccentMatch = ACCENT_COLORS.find((c) => c.hex === activePrimary);
   const activeAccentLabel = activeAccentMatch ? t(activeAccentMatch.labelKey) : t('custom');
 
@@ -103,6 +116,34 @@ export function SettingsAppearanceScreen() {
 
   const dateFormat = layoutPreferencesStore((s) => s.dateFormat);
   const setDateFormat = layoutPreferencesStore((s) => s.setDateFormat);
+
+  const listLength = layoutPreferencesStore((s) => s.listLength);
+  const setListLength = layoutPreferencesStore((s) => s.setListLength);
+
+  const handleListLengthChange = useCallback(
+    async (value: ListLength) => {
+      setListLength(value);
+      setListLengthOpen(false);
+      if (offlineModeStore.getState().offlineMode) {
+        Alert.alert(
+          t('offlineListLengthTitle'),
+          t('offlineListLengthMessage'),
+        );
+        return;
+      }
+      processingOverlayStore.getState().show(t('updatingCachedLists'));
+      try {
+        await Promise.all([
+          albumListsStore.getState().refreshAll(),
+          artistDetailStore.getState().refreshTopSongs(),
+        ]);
+        processingOverlayStore.getState().showSuccess(t('cachedListsUpdated'));
+      } catch {
+        processingOverlayStore.getState().showError(t('cachedListsUpdateFailed'));
+      }
+    },
+    [setListLength, t]
+  );
 
   const layoutValues: Record<string, ItemLayout> = {
     albumLayout,
@@ -410,6 +451,54 @@ export function SettingsAppearanceScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>{t('listLength')}</Text>
+        <Text style={[styles.sectionHint, { color: colors.textSecondary }]}>{t('listLengthHint')}</Text>
+        <View style={[styles.accentDropdown, { backgroundColor: colors.card }]}>
+          <Pressable
+            onPress={() => setListLengthOpen((prev) => !prev)}
+            style={({ pressed }) => [
+              styles.accentHeader,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.chipLabel, { color: colors.textPrimary }]}>
+              {t(LIST_LENGTH_OPTIONS.find((o) => o.value === listLength)?.labelKey ?? 'listLength20')}
+            </Text>
+            <Ionicons
+              name={listLengthOpen ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+          {listLengthOpen && (
+            <View style={[styles.accentList, { borderTopColor: colors.border }]}>
+              {LIST_LENGTH_OPTIONS.map((opt) => {
+                const isActive = listLength === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => handleListLengthChange(opt.value)}
+                    style={({ pressed }) => [
+                      styles.accentOption,
+                      { borderBottomColor: colors.border },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={[styles.chipLabel, { color: colors.textPrimary }]}>
+                      {t(opt.labelKey)}
+                    </Text>
+                    {isActive && (
+                      <Ionicons name="checkmark" size={20} color={colors.primary} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>{t('libraryLayout')}</Text>
         <View style={styles.themeCard}>
           {LAYOUT_ROWS.map((row) => {
@@ -517,6 +606,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  sectionHint: {
+    fontSize: 13,
     marginBottom: 8,
     marginLeft: 4,
   },

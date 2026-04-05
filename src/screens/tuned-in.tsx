@@ -42,6 +42,7 @@ import { completedScrobbleStore } from '../store/completedScrobbleStore';
 import { connectivityStore } from '../store/connectivityStore';
 import { favoritesStore } from '../store/favoritesStore';
 import { genreStore } from '../store/genreStore';
+import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { useTheme } from '../hooks/useTheme';
 import { useTransitionComplete } from '../hooks/useTransitionComplete';
@@ -135,7 +136,7 @@ function useMixCardPlayback(mix: MixDefinition, index: number) {
     selectionAsync();
     setLoading(true);
     try {
-      const songs = await fetchMixSongs(mix.fetchStrategy);
+      const songs = await fetchMixSongs(mix.fetchStrategy, layoutPreferencesStore.getState().listLength);
       if (songs.length === 0) {
         setError(t('noSongsFound'));
         return;
@@ -628,12 +629,13 @@ const BuildMixSheetContent = memo(function BuildMixSheetContent({
     setLoading(true);
     try {
       let songs: Child[];
+      const ll = layoutPreferencesStore.getState().listLength;
       if (selectedGenres.length === 0) {
         // No selection — fully random "Mix It Up"
         const strategy = online
-          ? { type: 'random' as const, size: 20 }
+          ? { type: 'random' as const, size: ll }
           : { type: 'offline' as const };
-        songs = await fetchMixSongs(strategy);
+        songs = await fetchMixSongs(strategy, ll);
       } else {
         const decade = DECADES[selectedDecadeIndex];
         songs = await fetchCustomMix(
@@ -641,6 +643,7 @@ const BuildMixSheetContent = memo(function BuildMixSheetContent({
           decade.fromYear,
           decade.toYear,
           online,
+          ll,
         );
       }
       if (songs.length > 0) {
@@ -792,6 +795,7 @@ export function TunedInScreen() {
       scrobbles,
       starredSongs,
       isOnline: online,
+      listLength: layoutPreferencesStore.getState().listLength,
     });
   }, [aggregates, completedScrobbles, starredSongs, online, refreshKey]);
 

@@ -43,7 +43,7 @@ import { shuffleArray } from '../utils/arrayHelpers';
 import { minDelay } from '../utils/stringHelpers';
 import { playTrack } from '../services/playerService';
 import { artistDetailStore } from '../store/artistDetailStore';
-import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
+import { layoutPreferencesStore, LIST_LENGTH_DISPLAY_CAP } from '../store/layoutPreferencesStore';
 import { moreOptionsStore } from '../store/moreOptionsStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 
@@ -341,7 +341,7 @@ export function ArtistDetailScreen() {
               <View style={styles.section}>
                 <SectionTitle title={t('topSongs')} color={colors.label} />
                 <FlashList
-                  data={topSongs}
+                  data={topSongs.slice(0, LIST_LENGTH_DISPLAY_CAP)}
                   renderItem={topSongsRenderItem}
                   keyExtractor={topSongsKeyExtractor}
                   horizontal

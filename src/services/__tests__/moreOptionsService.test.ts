@@ -70,6 +70,12 @@ jest.mock('../../store/playlistLibraryStore', () => ({
   },
 }));
 
+jest.mock('../../store/layoutPreferencesStore', () => ({
+  layoutPreferencesStore: {
+    getState: jest.fn(() => ({ listLength: 20 })),
+  },
+}));
+
 const mockOverlayShow = jest.fn();
 const mockOverlayShowSuccess = jest.fn();
 const mockOverlayShowError = jest.fn();
@@ -548,7 +554,7 @@ describe('playMoreByArtist', () => {
       expect(queue.every((s: any) => s.artistId === 'ar1')).toBe(true);
     });
 
-    it('limits queue to MORE_BY_ARTIST_COUNT (20)', async () => {
+    it('limits queue to listLength (default 20)', async () => {
       const songs = Array.from({ length: 30 }, (_, i) => ({
         id: `s${i}`,
         artist: 'Artist A',
