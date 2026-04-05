@@ -36,6 +36,11 @@ jest.mock('react-native-track-player', () => ({
     PlaybackSeekCompleted: 'playback-seek-completed',
     PlaybackProgressUpdated: 'playback-progress-updated',
   },
+  AppKilledPlaybackBehavior: {
+    ContinuePlayback: 'continue-playback',
+    PausePlayback: 'pause-playback',
+    StopPlaybackAndRemoveNotification: 'stop-playback-and-remove-notification',
+  },
   IOSCategory: { Playback: 'playback' },
   RepeatMode: { Off: 0, Track: 1, Queue: 2 },
   State: { Playing: 3, Paused: 2, Buffering: 6, Loading: 9, Stopped: 1, Ended: 11, None: 0, Ready: 8, Connecting: 7, Error: 10 },
@@ -1808,5 +1813,22 @@ describe('updateRemoteCapabilities', () => {
 
     const call = mockTP.updateOptions.mock.calls[0][0];
     expect(call.notificationCapabilities).toEqual(call.capabilities);
+  });
+
+  it('sets android appKilledPlaybackBehavior to stop on kill', async () => {
+    const { AppKilledPlaybackBehavior } = require('react-native-track-player');
+    playbackSettingsStore.setState({
+      remoteControlMode: 'skip-track',
+      skipForwardInterval: 30,
+      skipBackwardInterval: 15,
+    } as any);
+
+    await updateRemoteCapabilities();
+
+    const call = mockTP.updateOptions.mock.calls[0][0];
+    expect(call.android).toEqual({
+      appKilledPlaybackBehavior:
+        AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+    });
   });
 });

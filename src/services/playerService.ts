@@ -6,6 +6,7 @@
 import { AppState, type AppStateStatus } from 'react-native';
 import i18n from 'i18next';
 import TrackPlayer, {
+  AppKilledPlaybackBehavior,
   Capability,
   Event,
   IOSCategory,
@@ -713,6 +714,10 @@ export async function updateRemoteCapabilities(): Promise<void> {
     forwardJumpInterval: skipForwardInterval,
     backwardJumpInterval: skipBackwardInterval,
     progressUpdateEventInterval: 0.25,
+    android: {
+      appKilledPlaybackBehavior:
+        AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+    },
   });
 }
 

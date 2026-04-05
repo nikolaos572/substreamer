@@ -226,12 +226,14 @@ class MusicService : HeadlessJsMediaService() {
             player.skipSilence = androidOptions.getBoolean(SKIP_SILENCE)
         }
 
+        // Local fork: default to stopping playback when app is killed.
+        // Upstream RNTP defaults to CONTINUE_PLAYBACK.
         appKilledPlaybackBehavior =
             AppKilledPlaybackBehavior::string.find(
                 androidOptions?.getString(
                     APP_KILLED_PLAYBACK_BEHAVIOR_KEY
                 )
-            ) ?: AppKilledPlaybackBehavior.CONTINUE_PLAYBACK
+            ) ?: AppKilledPlaybackBehavior.STOP_PLAYBACK_AND_REMOVE_NOTIFICATION
 
         player.alwaysPauseOnInterruption =
             androidOptions?.getBoolean(PAUSE_ON_INTERRUPTION_KEY) ?: false
