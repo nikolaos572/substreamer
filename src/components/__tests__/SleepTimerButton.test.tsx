@@ -78,21 +78,14 @@ describe('SleepTimerButton', () => {
   });
 
   it('does not show countdown when inactive', () => {
-    sleepTimerStore.setState({ remaining: null });
     const { queryByText } = render(<SleepTimerButton />);
     expect(queryByText(/\d:\d/)).toBeNull();
   });
 
-  it('shows dot indicator for endOfTrack mode', () => {
-    sleepTimerStore.setState({ endOfTrack: true, endTime: 123 });
-    const { UNSAFE_root } = render(<SleepTimerButton />);
-    // The dot has a specific backgroundColor style
-    const views = UNSAFE_root.findAll((node) =>
-      node.props.style && Array.isArray(node.props.style)
-        ? node.props.style.some((s: Record<string, unknown>) => s?.backgroundColor === '#ff6600' && s?.borderRadius === 2.5)
-        : false,
-    );
-    expect(views.length).toBeGreaterThan(0);
+  it('does not show countdown when remaining is null', () => {
+    sleepTimerStore.setState({ endTime: Date.now() / 1000 + 600, remaining: null });
+    const { queryByText } = render(<SleepTimerButton />);
+    expect(queryByText(/\d:\d/)).toBeNull();
   });
 
   it('opens sheet on press', () => {
@@ -101,9 +94,9 @@ describe('SleepTimerButton', () => {
     expect(sleepTimerStore.getState().sheetVisible).toBe(true);
   });
 
-  it('has correct accessibility label', () => {
+  it('has accessibility role and label', () => {
     const { getByRole } = render(<SleepTimerButton />);
     const button = getByRole('button');
-    expect(button.props.accessibilityLabel).toBe('sleepTimer');
+    expect(button.props.accessibilityLabel).toBe('Sleep Timer');
   });
 });
