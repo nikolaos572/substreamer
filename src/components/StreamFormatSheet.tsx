@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -165,24 +165,30 @@ export function StreamFormatSheet() {
             bounces={false}
             showsVerticalScrollIndicator={false}
           >
-            {FORMAT_PRESETS.map((preset) => {
+            {FORMAT_PRESETS.map((preset, index) => {
               const isActive = preset.value === currentValue;
+              const prev = FORMAT_PRESETS[index - 1];
+              const showGroupSeparator = prev !== undefined && prev.group !== preset.group;
               return (
-                <Pressable
-                  key={preset.value}
-                  onPress={() => handleSelectPreset(preset)}
-                  style={({ pressed }) => [
-                    styles.row,
-                    pressed && styles.rowPressed,
-                  ]}
-                >
-                  <Text style={[styles.rowLabel, dynamicStyles.rowLabel]}>
-                    {t(preset.labelKey)}
-                  </Text>
-                  {isActive && (
-                    <Ionicons name="checkmark" size={22} color={colors.primary} />
+                <Fragment key={preset.value}>
+                  {showGroupSeparator && (
+                    <View style={[styles.groupSeparator, dynamicStyles.separator]} />
                   )}
-                </Pressable>
+                  <Pressable
+                    onPress={() => handleSelectPreset(preset)}
+                    style={({ pressed }) => [
+                      styles.row,
+                      pressed && styles.rowPressed,
+                    ]}
+                  >
+                    <Text style={[styles.rowLabel, dynamicStyles.rowLabel]}>
+                      {t(preset.labelKey)}
+                    </Text>
+                    {isActive && (
+                      <Ionicons name="checkmark" size={22} color={colors.primary} />
+                    )}
+                  </Pressable>
+                </Fragment>
               );
             })}
 
@@ -312,6 +318,11 @@ const styles = StyleSheet.create({
   separator: {
     height: StyleSheet.hairlineWidth,
     marginVertical: 4,
+  },
+  groupSeparator: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 8,
+    marginHorizontal: 16,
   },
   formSection: {
     paddingHorizontal: 4,

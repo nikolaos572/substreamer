@@ -106,9 +106,12 @@ describe('StreamFormatSheet', () => {
       const { getByText } = render(<StreamFormatSheet />);
       expect(getByText('Original')).toBeTruthy();
       expect(getByText('MP3')).toBeTruthy();
+      expect(getByText('MP3 (Replay Gain)')).toBeTruthy();
+      expect(getByText('MP3 (Car mode)')).toBeTruthy();
       expect(getByText('AAC')).toBeTruthy();
+      expect(getByText('M4A (AAC in MP4)')).toBeTruthy();
       expect(getByText('Opus')).toBeTruthy();
-      expect(getByText('Opus (ReplayGain)')).toBeTruthy();
+      expect(getByText('Opus (Replay Gain)')).toBeTruthy();
       expect(getByText('Opus (Car mode)')).toBeTruthy();
       expect(getByText('Ogg Vorbis')).toBeTruthy();
       expect(getByText('FLAC')).toBeTruthy();
@@ -209,7 +212,7 @@ describe('StreamFormatSheet', () => {
     it('does not show the alert when moving from one Opus variant to another', () => {
       playbackSettingsStore.setState({ streamFormat: 'opus' });
       const { getByText } = render(<StreamFormatSheet />);
-      fireEvent.press(getByText('Opus (ReplayGain)'));
+      fireEvent.press(getByText('Opus (Replay Gain)'));
       expect(alertSpy).not.toHaveBeenCalled();
       expect(playbackSettingsStore.getState().streamFormat).toBe('opus_rg');
     });

@@ -14,12 +14,22 @@ import { sqliteStorage } from './sqliteStorage';
 export type StreamFormat = string;
 export type MaxBitRate = 64 | 128 | 192 | 256 | 320 | null;
 
+/**
+ * Codec group identifier — presets sharing the same group are visually
+ * grouped together in the picker (with separators between groups).
+ * Variants within a group keep a consistent ordering: base codec → ReplayGain
+ * variant → Car-mode variant.
+ */
+export type FormatGroup = 'raw' | 'mp3' | 'aac' | 'opus' | 'ogg' | 'flac';
+
 /** A built-in format preset shown in the picker. */
 export interface FormatPreset {
   /** Value sent to the server as `format=`. */
   value: StreamFormat;
   /** i18n key for the display label. */
   labelKey: string;
+  /** Codec group — used for visual grouping in the picker. */
+  group: FormatGroup;
   /**
    * HIGH default max bitrate substituted when the user has the bitrate
    * picker set to "no limit" (null). `null` = lossless / pass-through,
@@ -31,19 +41,24 @@ export interface FormatPreset {
 }
 
 /**
- * Built-in stream format presets, with HIGH default bitrates applied when
- * the user has the bitrate picker set to "no limit". Custom-entered values
- * (anything not in this list) are treated as lossy and fall back to 320.
+ * Built-in stream format presets, grouped by base codec with consistent
+ * variant ordering (base → ReplayGain → Car mode). HIGH default bitrates
+ * are applied when the user has the bitrate picker set to "no limit".
+ * Custom-entered values (anything not in this list) are treated as lossy
+ * and fall back to 320.
  */
 export const FORMAT_PRESETS: FormatPreset[] = [
-  { value: 'raw',      labelKey: 'formatOriginal',  highBitrate: null, lossless: true  },
-  { value: 'mp3',      labelKey: 'formatMp3',       highBitrate: 320,  lossless: false },
-  { value: 'aac',      labelKey: 'formatAac',       highBitrate: 320,  lossless: false },
-  { value: 'opus',     labelKey: 'formatOpus',      highBitrate: 320,  lossless: false },
-  { value: 'opus_rg',  labelKey: 'formatOpusRg',    highBitrate: 320,  lossless: false },
-  { value: 'opus_car', labelKey: 'formatOpusCar',   highBitrate: 192,  lossless: false },
-  { value: 'ogg',      labelKey: 'formatOggVorbis', highBitrate: 320,  lossless: false },
-  { value: 'flac',     labelKey: 'formatFlac',      highBitrate: null, lossless: true  },
+  { value: 'raw',      labelKey: 'formatOriginal',  group: 'raw',  highBitrate: null, lossless: true  },
+  { value: 'mp3',      labelKey: 'formatMp3',       group: 'mp3',  highBitrate: 320, lossless: false },
+  { value: 'mp3_rg',   labelKey: 'formatMp3Rg',     group: 'mp3',  highBitrate: 320, lossless: false },
+  { value: 'mp3_car',  labelKey: 'formatMp3Car',    group: 'mp3',  highBitrate: 320, lossless: false },
+  { value: 'aac',      labelKey: 'formatAac',       group: 'aac',  highBitrate: 320, lossless: false },
+  { value: 'm4a',      labelKey: 'formatM4a',       group: 'aac',  highBitrate: 320, lossless: false },
+  { value: 'opus',     labelKey: 'formatOpus',      group: 'opus', highBitrate: 320, lossless: false },
+  { value: 'opus_rg',  labelKey: 'formatOpusRg',    group: 'opus', highBitrate: 320, lossless: false },
+  { value: 'opus_car', labelKey: 'formatOpusCar',   group: 'opus', highBitrate: 192, lossless: false },
+  { value: 'ogg',      labelKey: 'formatOggVorbis', group: 'ogg',  highBitrate: 320, lossless: false },
+  { value: 'flac',     labelKey: 'formatFlac',      group: 'flac', highBitrate: null, lossless: true  },
 ];
 
 /** Normalize a user-entered or selected format value. */

@@ -132,6 +132,12 @@ the server's transcoding profile UI under the matching profile name.
 │          │        -v 0 -c:a aac -f adts -                        │     │         │ silent output. Ampache needs libfdk_aac      │
 │          │                                                       │     │         │ ffmpeg build (or admin swap to native aac).  │
 ├──────────┼───────────────────────────────────────────────────────┼─────┼─────────┼──────────────────────────────────────────────┤
+│ m4a    ★ │ ffmpeg -i %s -ss %t -map 0:a:0 -b:a %bk               │  ✓  │    ✓    │ Not shipped by ANY server. Admin must add    │
+│          │        -v 0 -c:a aac -movflags                        │     │         │ the profile under "m4a" on every server.     │
+│          │        +frag_keyframe+empty_moov+default_base_moof    │     │         │ Fragmented MP4 — pipe-safe. The "aac"        │
+│          │        -f mp4 -                                       │     │         │ (ADTS) preset is the simpler default; m4a    │
+│          │                                                       │     │         │ is for clients that need true MP4 container. │
+├──────────┼───────────────────────────────────────────────────────┼─────┼─────────┼──────────────────────────────────────────────┤
 │ opus     │ ffmpeg -i %s -ss %t -map 0:a:0 -b:a %bk               │  ✗  │    ✓    │ iOS cannot play Opus-in-Ogg (which is what   │
 │          │        -v 0 -c:a libopus -f opus -                    │     │         │ every server outputs). Android-only in       │
 │          │                                                       │     │         │ practice.                                    │
@@ -192,9 +198,13 @@ the server's transcoding profile UI under the matching profile name.
 └──────────┴───────────────────────────────────────────────────────┴─────┴─────────┴──────────────────────────────────────────────┘
 ```
 
-★ = proposed Substreamer additions (cross-platform alternatives to Gonic's
-Opus-only ReplayGain / Car-mode profiles, which give iOS users access to features
-that today are Android+Gonic-only).
+★ = Substreamer presets that need admin configuration on most or all servers.
+`mp3_rg` ships in Gonic only; `mp3_car` and `m4a` ship nowhere by default.
+The `mp3_rg` / `mp3_car` profiles are cross-platform alternatives to Gonic's
+Opus-only ReplayGain / Car-mode profiles (which give iOS users access to features
+that today are Android+Gonic-only). The `m4a` profile is for clients that
+specifically need AAC inside an MP4 container rather than the raw ADTS stream
+that the `aac` preset produces — which is the safer default for both platforms.
 
 ¹ `raw` playback depends on the source codec — both clients handle MP3/AAC/FLAC/
 ALAC/WAV; uncommon containers (`.dsf`, `.wv`, `.tta`, `.shn`) won't decode on either.
@@ -221,18 +231,23 @@ ReplayGain tags so the client can't double-apply gain.
   https://developer.android.com/media/media3/exoplayer/supported-formats
 - react-native-track-player issue #809 — Opus on iOS:
   https://github.com/doublesymmetry/react-native-track-player/issues/809
+- ffmpeg `mp4` muxer `movflags` (fragmented MP4 for pipe-safe streaming):
+  https://ffmpeg.org/ffmpeg-formats.html#mov_002c-mp4_002c-ismv
 
 ---
 
 ## Enabling advanced transcoding profiles
 
-The `opus_rg`, `opus_car`, `mp3_rg`, and (proposed) `mp3_car` presets need
-ffmpeg with `libopus` / `libmp3lame` (for the encoders) and `libsoxr` (for the
-Car-mode `aresample=96000:resampler=soxr` filter step). **Every Subsonic
-server Substreamer supports already ships an ffmpeg that has all three.** No
-custom binary, no recompile, no Dockerfile patch. The only setup cost is
-adding the transcoding profile in the server's admin UI under the exact
-preset name (`opus_rg`, `opus_car`, `mp3_rg`, `mp3_car`) so that Substreamer's
+The `opus_rg`, `opus_car`, `mp3_rg`, `mp3_car`, and `m4a` presets all need
+admin configuration on most servers. The `*_rg` / `*_car` presets need ffmpeg
+with `libopus` / `libmp3lame` (for the encoders) and `libsoxr` (for the
+Car-mode `aresample=96000:resampler=soxr` filter step). The `m4a` preset
+needs only the native `aac` encoder and the `mp4` muxer, both of which ship
+in every mainstream ffmpeg build. **Every Subsonic server Substreamer
+supports already ships an ffmpeg that has everything required.** No custom
+binary, no recompile, no Dockerfile patch. The only setup cost is adding the
+transcoding profile in the server's admin UI under the exact preset name
+(`opus_rg`, `opus_car`, `mp3_rg`, `mp3_car`, `m4a`) so that Substreamer's
 `format=` query parameter matches.
 
 `libfdk_aac` is a separate concern — it is the preferred AAC encoder on
@@ -253,10 +268,10 @@ presets.
 | BtbN FFmpeg-Builds (`nonfree`) | N/A | standalone binary | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 **Bottom line:** All four supported servers' official Docker images already
-have everything needed for `opus_rg`, `opus_car`, `mp3_rg`, and `mp3_car`. The
-only action required is creating the transcoding profile in the admin UI. The
-static-binary recipes below are kept around as escape hatches for edge cases
-(very old base images, custom builds, ffmpeg with `libfdk_aac`).
+have everything needed for `opus_rg`, `opus_car`, `mp3_rg`, `mp3_car`, and
+`m4a`. The only action required is creating the transcoding profile in the
+admin UI. The static-binary recipes below are kept around as escape hatches
+for edge cases (very old base images, custom builds, ffmpeg with `libfdk_aac`).
 
 ### Navidrome
 
@@ -270,8 +285,8 @@ library the presets need.
 Just add the transcoding profiles in the Navidrome admin UI (Settings →
 Transcoding → New) using the ffmpeg commands from the
 [Transcoding profiles](#transcoding-profiles) table above, and set the profile
-`Name` to exactly `opus_rg`, `opus_car`, `mp3_rg`, or `mp3_car` — Substreamer
-sends these strings as the `format=` parameter.
+`Name` to exactly `opus_rg`, `opus_car`, `mp3_rg`, `mp3_car`, or `m4a` —
+Substreamer sends these strings as the `format=` parameter.
 
 If you ever want to swap in a different ffmpeg build (e.g. to get
 `libfdk_aac`), Navidrome supports
@@ -289,9 +304,10 @@ alpine:3.22` and installs ffmpeg via `apk add`, so the same libsoxr / libopus /
 libmp3lame story as Navidrome. On top of that, Gonic already **ships**
 `opus`, `opus_rg`, `opus_car`, and `mp3_rg` as built-in transcoding profiles
 in [`transcode/transcode.go`](https://github.com/sentriz/gonic/blob/master/transcode/transcode.go) —
-no admin action needed. The only preset that requires config is the proposed
-`mp3_car`, which no server ships by default; Gonic users would need to either
-wait for a Substreamer upstream PR or add a custom profile.
+no admin action needed. The presets that need user-defined profiles are
+`mp3_car` and `m4a`, neither of which any server ships by default; Gonic
+users would need to either wait for a Substreamer upstream PR or add custom
+profiles.
 
 Gonic resolves the ffmpeg binary via `exec.LookPath("ffmpeg")`, so any
 bind-mount that replaces `/usr/bin/ffmpeg` inside the container works.
@@ -309,8 +325,9 @@ footgun on Debian-based installs is still present — the admin must either
 swap `libfdk_aac` for `aac` in Ampache's `config/ampache.cfg.php`
 (`encode_args_m4a`) or bind-mount a non-free ffmpeg build (see below).
 
-To add `opus_rg` / `opus_car` / `mp3_rg`, edit `ampache.cfg.php` and add new
-transcode profiles keyed by the preset name, matching Ampache's
+To add `opus_rg` / `opus_car` / `mp3_rg` / `mp3_car` / `m4a`, edit
+`ampache.cfg.php` and add new transcode profiles keyed by the preset name,
+matching Ampache's
 [transcoding configuration documentation](https://ampache.org/docs/configuration/transcoding).
 Substreamer sends `format=opus_rg` etc., and Ampache will match that against
 its `encode_args_*` / `transcode_cmd_*` entries.
@@ -332,8 +349,8 @@ ln -s /usr/bin/ffmpeg /var/airsonic/transcode/ffmpeg
 ```
 
 Add the new profiles in the Airsonic admin UI (Settings → Transcoding). Use
-exactly the preset name (`opus_rg`, `opus_car`, `mp3_rg`, `mp3_car`) as the
-profile `Name` so Substreamer's `format=` query parameter matches.
+exactly the preset name (`opus_rg`, `opus_car`, `mp3_rg`, `mp3_car`, `m4a`)
+as the profile `Name` so Substreamer's `format=` query parameter matches.
 
 **Legacy original Airsonic** (the archived project, not Airsonic-Advanced)
 is no longer maintained and its Docker image has not been rebuilt in years —

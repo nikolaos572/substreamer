@@ -141,7 +141,7 @@ describe('playbackSettingsStore', () => {
     });
 
     it('uses 320 high bitrate for the standard lossy presets', () => {
-      const standardLossy = ['mp3', 'aac', 'opus', 'opus_rg', 'ogg'];
+      const standardLossy = ['mp3', 'mp3_rg', 'mp3_car', 'aac', 'm4a', 'opus', 'opus_rg', 'ogg'];
       for (const value of standardLossy) {
         const preset = FORMAT_PRESETS.find((p) => p.value === value);
         expect(preset?.highBitrate).toBe(320);
@@ -151,6 +151,33 @@ describe('playbackSettingsStore', () => {
     it('uses unique values across all presets', () => {
       const values = FORMAT_PRESETS.map((p) => p.value);
       expect(new Set(values).size).toBe(values.length);
+    });
+
+    it('groups variants under their base codec', () => {
+      const groupOf = (value: string) => FORMAT_PRESETS.find((p) => p.value === value)?.group;
+      expect(groupOf('mp3')).toBe('mp3');
+      expect(groupOf('mp3_rg')).toBe('mp3');
+      expect(groupOf('mp3_car')).toBe('mp3');
+      expect(groupOf('opus')).toBe('opus');
+      expect(groupOf('opus_rg')).toBe('opus');
+      expect(groupOf('opus_car')).toBe('opus');
+      expect(groupOf('aac')).toBe('aac');
+      expect(groupOf('m4a')).toBe('aac');
+      expect(groupOf('ogg')).toBe('ogg');
+      expect(groupOf('flac')).toBe('flac');
+      expect(groupOf('raw')).toBe('raw');
+    });
+
+    it('keeps all presets within a group contiguous in the array', () => {
+      const seenGroups = new Set<string>();
+      let currentGroup: string | null = null;
+      for (const preset of FORMAT_PRESETS) {
+        if (preset.group !== currentGroup) {
+          expect(seenGroups.has(preset.group)).toBe(false);
+          seenGroups.add(preset.group);
+          currentGroup = preset.group;
+        }
+      }
     });
   });
 });
