@@ -6,10 +6,15 @@ import {
   getTrustedCertificates,
   isCertificateTrusted,
   initTrustStore,
+  getInstallStatus,
   isSSLError,
 } from '../ExpoSslTrust';
 
-import type { CertificateInfo, TrustedCert } from '../ExpoSslTrust';
+import type {
+  CertificateInfo,
+  TrustedCert,
+  TrustStoreInstallStatus,
+} from '../ExpoSslTrust';
 
 jest.mock('../ExpoSslTrustModule');
 
@@ -22,18 +27,55 @@ beforeEach(() => {
 // -- Native-delegating functions --
 
 describe('initTrustStore', () => {
-  it('delegates to native', async () => {
-    mockModule.initTrustStore.mockResolvedValue(undefined);
+  it('delegates to native and returns install status', async () => {
+    const status: TrustStoreInstallStatus = { installed: true, error: null };
+    mockModule.initTrustStore.mockResolvedValue(status);
 
-    await initTrustStore();
+    const result = await initTrustStore();
 
     expect(mockModule.initTrustStore).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(status);
+  });
+
+  it('returns failure status when native install failed', async () => {
+    const status: TrustStoreInstallStatus = {
+      installed: false,
+      error: 'JSSE provider broken',
+    };
+    mockModule.initTrustStore.mockResolvedValue(status);
+
+    const result = await initTrustStore();
+    expect(result).toEqual(status);
   });
 
   it('propagates native errors', async () => {
     mockModule.initTrustStore.mockRejectedValue(new Error('Init failed'));
 
     await expect(initTrustStore()).rejects.toThrow('Init failed');
+  });
+});
+
+describe('getInstallStatus', () => {
+  it('returns the current install status from native', async () => {
+    const status: TrustStoreInstallStatus = { installed: true, error: null };
+    mockModule.getInstallStatus.mockResolvedValue(status);
+
+    const result = await getInstallStatus();
+
+    expect(mockModule.getInstallStatus).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(status);
+  });
+
+  it('reflects an unhealthy state', async () => {
+    const status: TrustStoreInstallStatus = {
+      installed: false,
+      error: 'broken',
+    };
+    mockModule.getInstallStatus.mockResolvedValue(status);
+
+    const result = await getInstallStatus();
+    expect(result.installed).toBe(false);
+    expect(result.error).toBe('broken');
   });
 });
 

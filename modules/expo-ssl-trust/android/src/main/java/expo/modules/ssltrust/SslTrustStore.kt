@@ -32,10 +32,33 @@ object SslTrustStore {
         val acceptedAt: Long
     )
 
+    /**
+     * True after a successful `installCustomTrustManager()` run. Stays false
+     * if init was never called or if JSSE / OkHttpClientProvider wiring threw.
+     */
+    @Volatile
+    var installSucceeded: Boolean = false
+        private set
+
+    /** The most recent install error message, if any. Null on success. */
+    @Volatile
+    var lastInstallError: String? = null
+        private set
+
     fun init(context: Context) {
-        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        load()
-        installCustomTrustManager()
+        try {
+            prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            load()
+            installCustomTrustManager()
+        } catch (e: Throwable) {
+            // Catastrophic failure (e.g. broken JSSE, denied prefs access).
+            // Record the error so the JS layer can surface a banner; do NOT
+            // throw — that would crash the JS bundle since init() is called
+            // from a top-level AsyncFunction at app start.
+            installSucceeded = false
+            lastInstallError = e.message ?: e.javaClass.simpleName
+            android.util.Log.e("SslTrustStore", "init failed: $lastInstallError", e)
+        }
     }
 
     private fun load() {
@@ -108,6 +131,7 @@ object SslTrustStore {
      */
     fun checkTrust(hostname: String, chain: Array<X509Certificate>): Boolean {
         val entry = trustedCerts[hostname] ?: return false
+        if (chain.isEmpty()) return false
         val serverFingerprint = getFingerprint(chain[0])
         if (serverFingerprint.equals(entry.sha256Fingerprint, ignoreCase = true)) {
             return true
@@ -132,54 +156,90 @@ object SslTrustStore {
     fun getCustomSslSocketFactory(): SSLSocketFactory? = customSslSocketFactory
     fun getCustomTrustManager(): X509TrustManager? = customTrustManager
 
+    /**
+     * Resolve a usable system X509TrustManager. Some stripped Android OEM
+     * ROMs (notably MIUI/HyperOS, FunTouchOS) ship a broken JSSE provider
+     * where the default algorithm throws or returns no X509 trust managers.
+     * Walk a fallback chain rather than crashing.
+     */
     private fun getDefaultTrustManager(): X509TrustManager {
-        if (defaultTrustManager == null) {
-            val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-            tmf.init(null as KeyStore?)
-            defaultTrustManager = tmf.trustManagers
-                .filterIsInstance<X509TrustManager>()
-                .first()
+        if (defaultTrustManager != null) return defaultTrustManager!!
+
+        val algorithms = listOf(
+            TrustManagerFactory.getDefaultAlgorithm(),
+            "X509",
+            "PKIX",
+        ).distinct()
+
+        val errors = mutableListOf<String>()
+        for (algo in algorithms) {
+            try {
+                val tmf = TrustManagerFactory.getInstance(algo)
+                tmf.init(null as KeyStore?)
+                val tm = tmf.trustManagers
+                    .filterIsInstance<X509TrustManager>()
+                    .firstOrNull()
+                if (tm != null) {
+                    defaultTrustManager = tm
+                    return tm
+                }
+                errors += "$algo: no X509TrustManager in factory"
+            } catch (e: Throwable) {
+                errors += "$algo: ${e.message ?: e.javaClass.simpleName}"
+            }
         }
-        return defaultTrustManager!!
+        throw IllegalStateException(
+            "No usable X509TrustManager available. Tried: ${errors.joinToString("; ")}"
+        )
     }
 
     private fun installCustomTrustManager() {
-        val appTrustManager = AppTrustManager(getDefaultTrustManager())
-        val sslContext = SSLContext.getInstance("TLS")
-        sslContext.init(null, arrayOf<TrustManager>(appTrustManager), SecureRandom())
-        customSslSocketFactory = sslContext.socketFactory
-        customTrustManager = appTrustManager
-
-        // 1. Set the global default SSLSocketFactory and HostnameVerifier.
-        //    This covers HttpsURLConnection-based networking, which ExoPlayer
-        //    (used by react-native-track-player) uses for audio streaming.
-        javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(customSslSocketFactory)
-        javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(
-            CustomOkHttpClientFactory.CustomHostnameVerifier()
-        )
-
-        // 2. Install the custom OkHttpClient factory for React Native networking
-        //    (fetch, Image loading, etc.)
         try {
-            val providerClass = Class.forName("com.facebook.react.modules.network.OkHttpClientProvider")
-            val factoryClass = Class.forName("com.facebook.react.modules.network.OkHttpClientFactory")
-            val setMethod = providerClass.getMethod("setOkHttpClientFactory", factoryClass)
-            val factory = CustomOkHttpClientFactory(customSslSocketFactory!!, appTrustManager)
+            val appTrustManager = AppTrustManager(getDefaultTrustManager())
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, arrayOf<TrustManager>(appTrustManager), SecureRandom())
+            customSslSocketFactory = sslContext.socketFactory
+            customTrustManager = appTrustManager
 
-            // Create a proxy that implements OkHttpClientFactory
-            val proxy = java.lang.reflect.Proxy.newProxyInstance(
-                factoryClass.classLoader,
-                arrayOf(factoryClass)
-            ) { _, method, args ->
-                if (method.name == "createNewNetworkModuleClient") {
-                    factory.createNewNetworkModuleClient()
-                } else {
-                    null
+            // 1. Set the global default SSLSocketFactory and HostnameVerifier.
+            //    This covers HttpsURLConnection-based networking, which ExoPlayer
+            //    (used by react-native-track-player) uses for audio streaming.
+            javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(customSslSocketFactory)
+            javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(
+                CustomOkHttpClientFactory.CustomHostnameVerifier()
+            )
+
+            // 2. Install the custom OkHttpClient factory for React Native networking
+            //    (fetch, Image loading, etc.). Reflection failure here is non-fatal —
+            //    the HttpsURLConnection path above is still in place.
+            try {
+                val providerClass = Class.forName("com.facebook.react.modules.network.OkHttpClientProvider")
+                val factoryClass = Class.forName("com.facebook.react.modules.network.OkHttpClientFactory")
+                val setMethod = providerClass.getMethod("setOkHttpClientFactory", factoryClass)
+                val factory = CustomOkHttpClientFactory(customSslSocketFactory!!, appTrustManager)
+
+                // Create a proxy that implements OkHttpClientFactory
+                val proxy = java.lang.reflect.Proxy.newProxyInstance(
+                    factoryClass.classLoader,
+                    arrayOf(factoryClass)
+                ) { _, method, args ->
+                    if (method.name == "createNewNetworkModuleClient") {
+                        factory.createNewNetworkModuleClient()
+                    } else {
+                        null
+                    }
                 }
+                setMethod.invoke(null, proxy)
+            } catch (e: Exception) {
+                android.util.Log.w("SslTrustStore", "Could not install custom OkHttpClientFactory: ${e.message}")
             }
-            setMethod.invoke(null, proxy)
-        } catch (e: Exception) {
-            android.util.Log.w("SslTrustStore", "Could not install custom OkHttpClientFactory: ${e.message}")
+
+            installSucceeded = true
+            lastInstallError = null
+        } catch (e: Throwable) {
+            installSucceeded = false
+            lastInstallError = e.message ?: e.javaClass.simpleName
+            android.util.Log.e("SslTrustStore", "installCustomTrustManager failed: $lastInstallError", e)
         }
     }
 
@@ -201,7 +261,11 @@ object SslTrustStore {
                 systemTrustManager.checkServerTrusted(chain, authType)
             } catch (e: Exception) {
                 // System trust failed. Check our custom trust store.
-                // Try to match against all trusted hostnames by fingerprint.
+                // Defensive: a malformed peer cert chain (or a stripped JSSE provider
+                // delivering an empty array) would otherwise cause an unhandled
+                // IndexOutOfBoundsException inside the SSL handshake — bypass our
+                // custom trust path and re-throw the original system error instead.
+                if (chain.isEmpty()) throw e
                 val serverFingerprint = getFingerprint(chain[0])
                 val matchingEntry = trustedCerts.entries.find { (_, entry) ->
                     entry.sha256Fingerprint.equals(serverFingerprint, ignoreCase = true)

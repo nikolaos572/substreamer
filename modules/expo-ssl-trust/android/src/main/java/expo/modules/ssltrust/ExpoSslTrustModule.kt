@@ -15,10 +15,27 @@ class ExpoSslTrustModule : Module() {
             try {
                 val context = appContext.reactContext ?: throw Exception("React context not available")
                 SslTrustStore.init(context)
-                promise.resolve(null)
+                // SslTrustStore.init() catches its own JSSE failures and records them
+                // on installSucceeded / lastInstallError. The JS layer queries
+                // getInstallStatus() to surface failures to the user.
+                promise.resolve(
+                    mapOf(
+                        "installed" to SslTrustStore.installSucceeded,
+                        "error" to SslTrustStore.lastInstallError,
+                    )
+                )
             } catch (e: Exception) {
                 promise.reject("ERR_INIT_TRUST_STORE", e.message, e)
             }
+        }
+
+        AsyncFunction("getInstallStatus") { promise: Promise ->
+            promise.resolve(
+                mapOf(
+                    "installed" to SslTrustStore.installSucceeded,
+                    "error" to SslTrustStore.lastInstallError,
+                )
+            )
         }
 
         AsyncFunction("getCertificateInfo") { url: String, promise: Promise ->

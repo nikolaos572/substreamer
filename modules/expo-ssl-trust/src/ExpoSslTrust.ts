@@ -27,6 +27,18 @@ export interface TrustedCert {
 }
 
 /**
+ * Result of attempting to install the custom TrustManager. On stripped
+ * Android OEM ROMs the JSSE provider can be broken — in that case
+ * `installed` is false and `error` carries the failure message.
+ */
+export interface TrustStoreInstallStatus {
+  /** True if the custom TrustManager is wired into HttpsURLConnection / OkHttp. */
+  installed: boolean;
+  /** Failure message if install did not succeed. */
+  error: string | null;
+}
+
+/**
  * Connect to a server and retrieve its SSL certificate information.
  * This opens a raw TLS connection to extract the certificate without
  * going through the normal trust validation.
@@ -69,12 +81,26 @@ export async function isCertificateTrusted(hostname: string): Promise<boolean> {
 }
 
 /**
- * Initialize the native trust store. Should be called early in app startup
- * to ensure the custom TrustManager / URLSession delegate is installed
- * before any network requests are made.
+ * Initialize the native trust store. Should be called the first time the
+ * app actually needs SSL pinning (i.e. before adding a custom certificate),
+ * not unconditionally at startup — installing the custom TrustManager is
+ * what triggers the JSSE crash on broken OEM ROMs, so we want to defer
+ * that work until it's needed.
+ *
+ * Returns the install status. If `installed` is false, the JS layer should
+ * surface a banner to the user and fall back to the system trust store.
  */
-export async function initTrustStore(): Promise<void> {
+export async function initTrustStore(): Promise<TrustStoreInstallStatus> {
   return ExpoSslTrustModule.initTrustStore();
+}
+
+/**
+ * Query the current install status of the native trust store without
+ * triggering an install attempt. Returns `{ installed: false, error: null }`
+ * before `initTrustStore()` has been called.
+ */
+export async function getInstallStatus(): Promise<TrustStoreInstallStatus> {
+  return ExpoSslTrustModule.getInstallStatus();
 }
 
 /**

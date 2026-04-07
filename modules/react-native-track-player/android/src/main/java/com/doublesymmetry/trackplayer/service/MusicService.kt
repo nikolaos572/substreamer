@@ -26,6 +26,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionCommands
 import androidx.media3.session.SessionResult
+import com.doublesymmetry.kotlinaudio.event.PlayerEventHolder
 import com.doublesymmetry.kotlinaudio.models.*
 import com.doublesymmetry.kotlinaudio.players.QueuedAudioPlayer
 import com.doublesymmetry.trackplayer.HeadlessJsMediaService
@@ -88,34 +89,53 @@ class MusicService : HeadlessJsMediaService() {
     }
 
     override fun onCreate() {
-        Timber.plant(object : Timber.DebugTree() {
-            override fun createStackElementTag(element: StackTraceElement): String? {
-                return "RNTP-${element.className}:${element.methodName}"
+        // Wrap the entire body in try/catch. ExoPlayer.Builder, MediaLibrarySession.Builder
+        // and CoilBitmapLoader all reach into AndroidX Media3, OkHttp and Coil — any of
+        // which can throw NoClassDefFoundError / ClassNotFoundException on stripped OEM
+        // ROMs (MIUI/HyperOS, FunTouchOS) where R8 has too-aggressively shrunk the APK,
+        // or where the Play Store delivered a degraded split. An unhandled throw inside
+        // a Service.onCreate() crashes the service host and ANR-loops the activity. The
+        // catch swallows the failure, leaves fakePlayer/mediaSession uninitialized
+        // (lateinit; later media calls will throw, but onDestroy already gates with
+        // ::mediaSession.isInitialized), and still calls super.onCreate() so the Service
+        // contract is satisfied and the React activity can still launch — the user sees
+        // an app, not a black-screen ANR.
+        try {
+            Timber.plant(object : Timber.DebugTree() {
+                override fun createStackElementTag(element: StackTraceElement): String? {
+                    return "RNTP-${element.className}:${element.methodName}"
+                }
+            })
+            fakePlayer = ExoPlayer.Builder(this).build()
+            val openAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            } ?: Intent(Intent.ACTION_MAIN).apply {
+                setPackage(packageName)
+                addCategory(Intent.CATEGORY_LAUNCHER)
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
-        })
-        fakePlayer = ExoPlayer.Builder(this).build()
-        val openAppIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        } ?: Intent(Intent.ACTION_MAIN).apply {
-            setPackage(packageName)
-            addCategory(Intent.CATEGORY_LAUNCHER)
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        mediaSession = MediaLibrarySession.Builder(this, fakePlayer,
-            InnerMediaSessionCallback()
-        )
-            .setId("TrackPlayer")
-            .setBitmapLoader(CacheBitmapLoader(CoilBitmapLoader(this)))
-            // https://github.com/androidx/media/issues/1218
-            .setSessionActivity(
-                PendingIntent.getActivity(
-                    this,
-                    0,
-                    openAppIntent,
-                    getPendingIntentFlags()
-                )
+            mediaSession = MediaLibrarySession.Builder(this, fakePlayer,
+                InnerMediaSessionCallback()
             )
-            .build()
+                .setId("TrackPlayer")
+                .setBitmapLoader(CacheBitmapLoader(CoilBitmapLoader(this)))
+                // https://github.com/androidx/media/issues/1218
+                .setSessionActivity(
+                    PendingIntent.getActivity(
+                        this,
+                        0,
+                        openAppIntent,
+                        getPendingIntentFlags()
+                    )
+                )
+                .build()
+        } catch (t: Throwable) {
+            android.util.Log.e(
+                "MusicService",
+                "onCreate failed; service starting in degraded state: ${t.message}",
+                t
+            )
+        }
         super.onCreate()
     }
 
@@ -128,33 +148,49 @@ class MusicService : HeadlessJsMediaService() {
     private var appKilledPlaybackBehavior =
         AppKilledPlaybackBehavior.STOP_PLAYBACK_AND_REMOVE_NOTIFICATION
 
+    // Placeholder PlayerEventHolder returned from `event` when `player` has not
+    // been initialized yet. PlayerEventHolder() is a no-arg constructor that just
+    // creates SharedFlows — safe to instantiate eagerly.
+    private val emptyEventHolder = PlayerEventHolder()
+
+    // All property accessors below are guarded with `::player.isInitialized`.
+    // The lateinit `player` is only assigned inside `setupPlayer()`, but external
+    // MediaController callbacks (Android Auto, Wear, Assistant) can bind to the
+    // service before `setupPlayer()` runs. Without these guards, an unguarded
+    // access throws UninitializedPropertyAccessException and crashes the service.
     val tracks: List<Track>
-        get() = player.items.map { (it as TrackAudioItem).track }
+        get() = if (::player.isInitialized) {
+            player.items.map { (it as TrackAudioItem).track }
+        } else {
+            emptyList()
+        }
 
     val currentTrack: Track?
-        get() {
-            return (player.currentItem as TrackAudioItem?)?.track
+        get() = if (::player.isInitialized) {
+            (player.currentItem as TrackAudioItem?)?.track
+        } else {
+            null
         }
 
-    val state
-        get() = player.playerState
+    val state: AudioPlayerState
+        get() = if (::player.isInitialized) player.playerState else AudioPlayerState.IDLE
 
     var ratingType: Int
-        get() = player.ratingType
+        get() = if (::player.isInitialized) player.ratingType else 0
         set(value) {
-            player.ratingType = value
+            if (::player.isInitialized) player.ratingType = value
         }
 
-    val playbackError
-        get() = player.playbackError
+    val playbackError: PlaybackError?
+        get() = if (::player.isInitialized) player.playbackError else null
 
-    val event
-        get() = player.playerEventHolder
+    val event: PlayerEventHolder
+        get() = if (::player.isInitialized) player.playerEventHolder else emptyEventHolder
 
     var playWhenReady: Boolean
-        get() = player.playWhenReady
+        get() = if (::player.isInitialized) player.playWhenReady else false
         set(value) {
-            player.playWhenReady = value
+            if (::player.isInitialized) player.playWhenReady = value
         }
 
     // Sleep timer state
@@ -1290,12 +1326,17 @@ class MusicService : HeadlessJsMediaService() {
             command: SessionCommand,
             args: Bundle
         ): ListenableFuture<SessionResult> {
-            player.forwardingPlayer.let {
-                when (command.customAction) {
-                    CustomCommandButton.JUMP_BACKWARD.customAction -> { it.seekBack() }
-                    CustomCommandButton.JUMP_FORWARD.customAction -> { it.seekForward() }
-                    CustomCommandButton.NEXT.customAction -> { it.seekToNext() }
-                    CustomCommandButton.PREVIOUS.customAction -> { it.seekToPrevious() }
+            // System media controllers can deliver custom commands before the JS
+            // layer has called setupPlayer(). Skip the action rather than crashing
+            // on the lateinit `player`.
+            if (::player.isInitialized) {
+                player.forwardingPlayer.let {
+                    when (command.customAction) {
+                        CustomCommandButton.JUMP_BACKWARD.customAction -> { it.seekBack() }
+                        CustomCommandButton.JUMP_FORWARD.customAction -> { it.seekForward() }
+                        CustomCommandButton.NEXT.customAction -> { it.seekToNext() }
+                        CustomCommandButton.PREVIOUS.customAction -> { it.seekToPrevious() }
+                    }
                 }
             }
             return super.onCustomCommand(session, controller, command, args)

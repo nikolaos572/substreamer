@@ -63,7 +63,14 @@ class MediaFactory (
         }
         val resourceId = mediaItem.mediaMetadata.extras?.getInt("resource-id")
         val resourceType = mediaItem.mediaMetadata.extras?.getString("type")?.lowercase()
-        val uri = Uri.parse(mediaItem.mediaMetadata.extras?.getString("uri")!!)
+        // Defensive: an external MediaController (Auto, Wear, Assistant) or a
+        // restored playback queue can hand us a MediaItem with no extras at all,
+        // or extras missing the "uri" key. The previous `!!` would NPE the entire
+        // service. Throwing IllegalStateException here surfaces as a Media3
+        // PlaybackException the JS layer can recover from.
+        val uriString = mediaItem.mediaMetadata.extras?.getString("uri")
+            ?: throw IllegalStateException("MediaItem missing required 'uri' extra")
+        val uri = Uri.parse(uriString)
         val factory: DataSource.Factory = when {
             resourceId != 0 && resourceId != null -> {
                 val raw = RawResourceDataSource(context)
@@ -95,18 +102,18 @@ class MediaFactory (
         }
     }
 
-    private fun createDashSource(mediaItem: MediaItem, factory: DataSource.Factory?): MediaSource {
-        return DashMediaSource.Factory(DefaultDashChunkSource.Factory(factory!!), factory)
+    private fun createDashSource(mediaItem: MediaItem, factory: DataSource.Factory): MediaSource {
+        return DashMediaSource.Factory(DefaultDashChunkSource.Factory(factory), factory)
             .createMediaSource(mediaItem)
     }
 
-    private fun createHlsSource(mediaItem: MediaItem, factory: DataSource.Factory?): MediaSource {
-        return HlsMediaSource.Factory(factory!!)
+    private fun createHlsSource(mediaItem: MediaItem, factory: DataSource.Factory): MediaSource {
+        return HlsMediaSource.Factory(factory)
             .createMediaSource(mediaItem)
     }
 
-    private fun createSsSource(mediaItem: MediaItem, factory: DataSource.Factory?): MediaSource {
-        return SsMediaSource.Factory(DefaultSsChunkSource.Factory(factory!!), factory)
+    private fun createSsSource(mediaItem: MediaItem, factory: DataSource.Factory): MediaSource {
+        return SsMediaSource.Factory(DefaultSsChunkSource.Factory(factory), factory)
             .createMediaSource(mediaItem)
     }
 

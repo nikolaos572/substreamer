@@ -16,7 +16,19 @@ object AppForegroundTracker {
 
     fun start() {
         UiThreadUtil.runOnUiThread {
-            ProcessLifecycleOwner.get().lifecycle.addObserver(Observer)
+            // ProcessLifecycleOwner.get() can throw NoClassDefFoundError on stripped
+            // OEM ROMs where androidx.lifecycle.process was over-shrunk by the
+            // Play Store delivery layer. Falling back to "always backgrounded" is
+            // safer than crashing the host activity at module init.
+            try {
+                ProcessLifecycleOwner.get().lifecycle.addObserver(Observer)
+            } catch (t: Throwable) {
+                android.util.Log.w(
+                    "AppForegroundTracker",
+                    "Failed to register lifecycle observer: ${t.message}",
+                    t
+                )
+            }
         }
     }
 

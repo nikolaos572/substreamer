@@ -124,18 +124,30 @@ const trackToItems = new Map<string, Set<string>>();
  */
 export function initMusicCache(): void {
   if (cacheDir) return;
-  const dir = new Directory(Paths.document, CACHE_DIR_NAME);
-  if (!dir.exists) {
-    dir.create();
-  }
-  cacheDir = dir;
+  // Wrap in try/catch because this is invoked at module-scope from
+  // _layout.tsx, before any React error boundary is mounted. On stripped
+  // OEM ROMs the synchronous Directory.create() can throw with restricted
+  // storage permissions, and an unhandled throw here would crash the JS
+  // bundle before the user can even reach the login screen. If init fails
+  // here, cacheDir stays null and downstream callers will hit a controlled
+  // null deref inside React, where an error boundary CAN catch it.
+  try {
+    const dir = new Directory(Paths.document, CACHE_DIR_NAME);
+    if (!dir.exists) {
+      dir.create();
+    }
+    cacheDir = dir;
 
-  if (!appStateSubscription) {
-    appStateSubscription = AppState.addEventListener('change', (next: AppStateStatus) => {
-      if (next === 'active' && !isProcessing) {
-        recoverStalledDownloadsAsync();
-      }
-    });
+    if (!appStateSubscription) {
+      appStateSubscription = AppState.addEventListener('change', (next: AppStateStatus) => {
+        if (next === 'active' && !isProcessing) {
+          recoverStalledDownloadsAsync();
+        }
+      });
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('[musicCacheService] initMusicCache failed:', e instanceof Error ? e.message : String(e));
   }
 }
 

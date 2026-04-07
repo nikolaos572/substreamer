@@ -465,4 +465,42 @@ describe('onRehydrateStorage', () => {
     expect(aggregates.dayCounts['2025-01-15']).toBe(1);
     expect(aggregates.artistCounts['A']).toBe(1);
   });
+
+  it('resets to defaults when rehydrate body throws (corrupt persisted payload)', () => {
+    // Persist a non-array shape under `completedScrobbles`. After Zustand
+    // round-trips through JSON the field comes back as a plain object with
+    // no `.filter` method — exactly the kind of garbage a downgraded build
+    // or truncated JSON could leave behind. The rehydrate body would throw
+    // "filter is not a function" without the try/catch.
+    completedScrobbleStore.setState({
+      completedScrobbles: { not: 'an array' } as unknown as CompletedScrobble[],
+      stats: { totalPlays: 999, totalListeningSeconds: 999, uniqueArtists: { Garbage: true } },
+      aggregates: { ...EMPTY_AGGREGATES, hourBuckets: new Array(24).fill(0) },
+    });
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Must NOT throw — the catch handler resets to safe defaults.
+    expect(() => completedScrobbleStore.persist.rehydrate()).not.toThrow();
+
+    const state = completedScrobbleStore.getState();
+    expect(state.completedScrobbles).toEqual([]);
+    expect(state.stats.totalPlays).toBe(0);
+    expect(state.stats.totalListeningSeconds).toBe(0);
+    expect(state.stats.uniqueArtists).toEqual({});
+    expect(state.aggregates.artistCounts).toEqual({});
+    expect(state.aggregates.albumCounts).toEqual({});
+    expect(state.aggregates.songCounts).toEqual({});
+    expect(state.aggregates.genreCounts).toEqual({});
+    expect(state.aggregates.dayCounts).toEqual({});
+    expect(state.aggregates.hourBuckets).toEqual(new Array(24).fill(0));
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('rehydrate failed'),
+      expect.stringContaining('filter is not a function'),
+    );
+
+    warnSpy.mockRestore();
+  });
+
 });

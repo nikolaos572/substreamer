@@ -3,7 +3,7 @@ jest.mock('../sqliteStorage', () => require('../__mocks__/sqliteStorage'));
 import { sslCertStore } from '../sslCertStore';
 
 beforeEach(() => {
-  sslCertStore.setState({ trustedCerts: {} });
+  sslCertStore.setState({ trustedCerts: {}, installFailed: null });
 });
 
 describe('sslCertStore', () => {
@@ -61,5 +61,28 @@ describe('sslCertStore', () => {
 
   it('getTrustedFingerprint returns null for unknown host', () => {
     expect(sslCertStore.getState().getTrustedFingerprint('unknown.com')).toBeNull();
+  });
+
+  describe('installFailed state', () => {
+    it('starts as null', () => {
+      expect(sslCertStore.getState().installFailed).toBeNull();
+    });
+
+    it('setInstallFailed records an error message', () => {
+      sslCertStore.getState().setInstallFailed('JSSE provider broken');
+      expect(sslCertStore.getState().installFailed).toBe('JSSE provider broken');
+    });
+
+    it('setInstallFailed accepts null to clear', () => {
+      sslCertStore.getState().setInstallFailed('something');
+      sslCertStore.getState().setInstallFailed(null);
+      expect(sslCertStore.getState().installFailed).toBeNull();
+    });
+
+    it('clearInstallFailed resets to null', () => {
+      sslCertStore.getState().setInstallFailed('something');
+      sslCertStore.getState().clearInstallFailed();
+      expect(sslCertStore.getState().installFailed).toBeNull();
+    });
   });
 });

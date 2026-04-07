@@ -1,9 +1,14 @@
 import { requireNativeModule } from 'expo-modules-core';
 
-import { type CertificateInfo, type TrustedCert } from './ExpoSslTrust';
+import {
+  type CertificateInfo,
+  type TrustedCert,
+  type TrustStoreInstallStatus,
+} from './ExpoSslTrust';
 
 interface ExpoSslTrustNative {
-  initTrustStore(): Promise<void>;
+  initTrustStore(): Promise<TrustStoreInstallStatus>;
+  getInstallStatus(): Promise<TrustStoreInstallStatus>;
   getCertificateInfo(url: string): Promise<CertificateInfo>;
   trustCertificate(hostname: string, sha256Fingerprint: string): Promise<void>;
   removeTrustedCertificate(hostname: string): Promise<void>;
@@ -25,16 +30,18 @@ try {
   );
 
   // Provide a no-op stub so the JS side doesn't crash
-  const noop = () => Promise.resolve(null);
+  const stubStatus: TrustStoreInstallStatus = { installed: false, error: null };
+  const noop = () => Promise.resolve(undefined as unknown as void);
   module = {
-    initTrustStore: noop,
+    initTrustStore: () => Promise.resolve(stubStatus),
+    getInstallStatus: () => Promise.resolve(stubStatus),
     getCertificateInfo: () =>
       Promise.reject(new Error('expo-ssl-trust native module not available. Rebuild the app.')),
     trustCertificate: noop,
     removeTrustedCertificate: noop,
     getTrustedCertificates: () => Promise.resolve([]),
     isCertificateTrusted: () => Promise.resolve(false),
-  } as any;
+  };
 }
 
 export default module;

@@ -6,34 +6,76 @@ import {
 import { sslCertStore } from '../store/sslCertStore';
 
 let initialized = false;
+let nativeInstalled = false;
+let nativeInstallInflight: Promise<boolean> | null = null;
 
 /**
- * Initialise the SSL trust store. Should be called early in app startup
- * (at module scope in _layout.tsx) before any network requests are made.
+ * Initialise the SSL trust store from JS. Called at module scope from
+ * `_layout.tsx`, before any network requests are made.
  *
- * Loads persisted trusted certificates from the Zustand store and syncs
- * them to the native trust store so the custom TrustManager (Android) /
- * URLProtocol (iOS) is configured before any connections happen.
+ * **Lazy install**: We deliberately skip the native install when the user
+ * has no trusted certificates persisted. Installing the custom TrustManager
+ * is what triggers the JSSE crash on stripped Android OEM ROMs (MIUI/HyperOS,
+ * FunTouchOS), so users on broken ROMs who never need pinning never pay
+ * for it. The install runs lazily on first call to `trustCertificateForHost`.
+ *
+ * For users who already have certs persisted, install runs immediately so
+ * those connections work from app start.
  */
 export function initSslTrustStore(): void {
   if (initialized) return;
   initialized = true;
 
-  // Initialize the native trust store (installs custom TrustManager / URLProtocol)
-  initTrustStore().catch((err) => {
-    console.warn('[sslTrustService] Failed to init native trust store:', err);
-  });
+  const { trustedCerts } = sslCertStore.getState();
+  if (Object.keys(trustedCerts).length === 0) {
+    // No persisted certs → no need to touch native JSSE wiring at all.
+    return;
+  }
 
-  // Sync any persisted trusted certs from Zustand -> native
-  // Use a small delay to ensure the native module is ready
-  setTimeout(() => {
-    syncToNative();
-  }, 100);
+  // Persisted certs present — install eagerly and sync them.
+  void ensureNativeTrustStoreInstalled().then((ok) => {
+    if (ok) void syncToNative();
+  });
+}
+
+/**
+ * Idempotently install the native trust store. On stripped OEM ROMs the
+ * install can fail; the failure is recorded on `sslCertStore.installFailed`
+ * so the UI can surface a banner. Returns true on success.
+ */
+export async function ensureNativeTrustStoreInstalled(): Promise<boolean> {
+  if (nativeInstalled) return true;
+  if (nativeInstallInflight) return nativeInstallInflight;
+
+  nativeInstallInflight = (async () => {
+    try {
+      const status = await initTrustStore();
+      if (status.installed) {
+        nativeInstalled = true;
+        sslCertStore.getState().clearInstallFailed();
+        return true;
+      }
+      const message =
+        status.error ??
+        'SSL trust store could not be installed on this device.';
+      sslCertStore.getState().setInstallFailed(message);
+      console.warn('[sslTrustService] native trust store install failed:', message);
+      return false;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      sslCertStore.getState().setInstallFailed(message);
+      console.warn('[sslTrustService] native trust store install threw:', err);
+      return false;
+    } finally {
+      nativeInstallInflight = null;
+    }
+  })();
+
+  return nativeInstallInflight;
 }
 
 /**
  * Sync all trusted certificates from the Zustand store to the native module.
- * Called on startup and whenever the Zustand store changes.
  */
 async function syncToNative(): Promise<void> {
   const { trustedCerts } = sslCertStore.getState();
@@ -47,17 +89,30 @@ async function syncToNative(): Promise<void> {
 }
 
 /**
- * Trust a certificate for a hostname, persisting in both Zustand and native stores.
+ * Trust a certificate for a hostname, persisting in both Zustand and native
+ * stores. Triggers a native install on first call (for users who launched
+ * with no persisted certs).
  */
 export async function trustCertificateForHost(
   hostname: string,
   sha256Fingerprint: string,
   validTo?: string,
 ): Promise<void> {
+  // Ensure the native trust manager is wired before we hand it a cert.
+  // If install fails, persist anyway — the JS-side store still drives
+  // the certificate prompt UI even when native pinning is unavailable.
+  await ensureNativeTrustStoreInstalled();
+
   // Persist in Zustand store (SQLite)
   sslCertStore.getState().trustCertificate(hostname, sha256Fingerprint, validTo);
-  // Sync to native store
-  await nativeTrustCertificate(hostname, sha256Fingerprint);
+
+  // Sync to native store. Swallow per-cert failures: install may have
+  // failed entirely, in which case the call is a no-op against the stub.
+  try {
+    await nativeTrustCertificate(hostname, sha256Fingerprint);
+  } catch (err) {
+    console.warn(`[sslTrustService] Failed to push cert for ${hostname}:`, err);
+  }
 }
 
 /**
@@ -65,5 +120,18 @@ export async function trustCertificateForHost(
  */
 export async function removeTrustForHost(hostname: string): Promise<void> {
   sslCertStore.getState().removeTrustedCertificate(hostname);
-  await nativeRemoveTrustedCertificate(hostname);
+  try {
+    await nativeRemoveTrustedCertificate(hostname);
+  } catch (err) {
+    console.warn(`[sslTrustService] Failed to remove cert for ${hostname}:`, err);
+  }
+}
+
+/**
+ * Reset module-private state — for tests only. Has no effect outside Jest.
+ */
+export function __resetForTests(): void {
+  initialized = false;
+  nativeInstalled = false;
+  nativeInstallInflight = null;
 }

@@ -5,7 +5,8 @@ export {
   getTrustedCertificates,
   isCertificateTrusted,
   initTrustStore,
+  getInstallStatus,
   isSSLError,
 } from './ExpoSslTrust';
 
-export type { CertificateInfo, TrustedCert } from './ExpoSslTrust';
+export type { CertificateInfo, TrustedCert, TrustStoreInstallStatus } from './ExpoSslTrust';

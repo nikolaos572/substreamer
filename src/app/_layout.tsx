@@ -85,18 +85,46 @@ import i18n from '../i18n/i18n';
 // until BootSplash.hide() is called. AnimatedSplashScreen handles the
 // hide via useHideAnimation for a seamless native → JS transition.
 
+// All four module-scope initialisers below are wrapped in try/catch because
+// they run before any React error boundary mounts. On stripped OEM ROMs
+// (MIUI/HyperOS, FunTouch) or restricted permission states, the underlying
+// native calls (NetInfo bridge, fs mkdir, JSSE TrustManager install) can
+// throw — and any throw at this point would crash the JS bundle before the
+// app can render its login screen, leaving the user with a black screen.
+// Better to log the failure and let the affected feature degrade gracefully.
+
 // Enable SSID fetching globally — must be called before any NetInfo listener
 // is registered (connectivityService, autoOfflineService). Safe to always
 // enable; it simply tells the native module to include SSID in state updates.
-NetInfo.configure({ shouldFetchWiFiSSID: true });
+try {
+  NetInfo.configure({ shouldFetchWiFiSSID: true });
+} catch (e) {
+  // eslint-disable-next-line no-console
+  console.warn('[layout] NetInfo.configure failed:', e instanceof Error ? e.message : String(e));
+}
 
 // Initialise the on-disk cache directories at module load (fast mkdir only).
-initImageCache();
-initMusicCache();
+try {
+  initImageCache();
+} catch (e) {
+  // eslint-disable-next-line no-console
+  console.warn('[layout] initImageCache failed:', e instanceof Error ? e.message : String(e));
+}
+try {
+  initMusicCache();
+} catch (e) {
+  // eslint-disable-next-line no-console
+  console.warn('[layout] initMusicCache failed:', e instanceof Error ? e.message : String(e));
+}
 
 // Initialise the SSL trust store so the custom TrustManager / URLSession
 // delegate is installed before any network requests are made.
-initSslTrustStore();
+try {
+  initSslTrustStore();
+} catch (e) {
+  // eslint-disable-next-line no-console
+  console.warn('[layout] initSslTrustStore failed:', e instanceof Error ? e.message : String(e));
+}
 
 // Sync the persisted theme preference to the native UIKit layer at module
 // scope — before any React component renders. This ensures liquid glass
@@ -115,15 +143,30 @@ initSslTrustStore();
 })();
 
 // Detect phone vs tablet at module scope using Android 16's large-screen
-// threshold (smallest screen dimension >= 600dp).
-const screenDims = Dimensions.get('screen');
-const IS_TABLET = Math.min(screenDims.width, screenDims.height) >= 600;
+// threshold (smallest screen dimension >= 600dp). Falls back to "phone" if
+// the Dimensions bridge is unavailable for any reason — this is the safer
+// default since the phone-only orientation lock below is opt-out.
+let IS_TABLET = false;
+try {
+  const screenDims = Dimensions.get('screen');
+  IS_TABLET = Math.min(screenDims.width, screenDims.height) >= 600;
+} catch (e) {
+  // eslint-disable-next-line no-console
+  console.warn('[layout] Dimensions.get failed; assuming phone:', e instanceof Error ? e.message : String(e));
+}
 
 // Lock orientation to portrait on phones. Tablets are left free to rotate
 // (controlled at runtime by the orientation lock setting in layoutPreferencesStore).
+// The synchronous property access on ScreenOrientation.OrientationLock can
+// throw if the native module is missing (the .catch() only handles promise
+// rejection), so wrap the whole thing.
 if (!IS_TABLET) {
-  ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
-    .catch(() => { /* non-critical: orientation lock unavailable */ });
+  try {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
+      .catch(() => { /* non-critical: orientation lock unavailable */ });
+  } catch {
+    /* non-critical: ScreenOrientation native module unavailable */
+  }
 }
 
 // Suppress ExpoKeepAwake errors that fire when the activity becomes
@@ -275,17 +318,33 @@ export default function RootLayout() {
       albumListsStore.getState().refreshAll();
       favoritesStore.getState().fetchStarred();
 
-      // Pre-fetch library data on first launch or when stores are empty
-      if (albumLibraryStore.getState().albums.length === 0) {
-        albumLibraryStore.getState().fetchAllAlbums();
-      }
-      if (artistLibraryStore.getState().artists.length === 0) {
-        artistLibraryStore.getState().fetchAllArtists();
-      }
-      if (playlistLibraryStore.getState().playlists.length === 0) {
-        playlistLibraryStore.getState().fetchAllPlaylists();
-      }
-      genreStore.getState().fetchGenres();
+      // Defer the four library prefetches (albums/artists/playlists/genres)
+      // until after the home screen has finished its first paint AND a brief
+      // settling delay. Without this all four fire in parallel with the home
+      // screen's own refreshAll() at app launch — that's eight large list
+      // requests racing on the JS thread plus the network, which can spike
+      // CPU and overload slow servers (a "thundering herd"). On low-end
+      // Android devices the bridge backs up far enough to ANR.
+      //
+      // requestIdleCallback waits for the JS thread to be idle (i.e. the
+      // navigation animation and initial render have settled); the inner
+      // setTimeout(1500) gives the home content fetches another beat to
+      // actually return data over the wire before piling on the heavier
+      // library scans.
+      requestIdleCallback(() => {
+        setTimeout(() => {
+          if (albumLibraryStore.getState().albums.length === 0) {
+            albumLibraryStore.getState().fetchAllAlbums();
+          }
+          if (artistLibraryStore.getState().artists.length === 0) {
+            artistLibraryStore.getState().fetchAllArtists();
+          }
+          if (playlistLibraryStore.getState().playlists.length === 0) {
+            playlistLibraryStore.getState().fetchAllPlaylists();
+          }
+          genreStore.getState().fetchGenres();
+        }, 1500);
+      });
     }
 
     const unsubAutoOffline = autoOfflineStore.subscribe((state, prev) => {
@@ -308,16 +367,24 @@ export default function RootLayout() {
         albumListsStore.getState().refreshAll();
         favoritesStore.getState().fetchStarred();
 
-        if (albumLibraryStore.getState().albums.length === 0) {
-          albumLibraryStore.getState().fetchAllAlbums();
-        }
-        if (artistLibraryStore.getState().artists.length === 0) {
-          artistLibraryStore.getState().fetchAllArtists();
-        }
-        if (playlistLibraryStore.getState().playlists.length === 0) {
-          playlistLibraryStore.getState().fetchAllPlaylists();
-        }
-        genreStore.getState().fetchGenres();
+        // Same deferral pattern as the launch path above — sequence the
+        // library prefetches behind the home content so they don't race
+        // with the home screen refresh on the JS thread or hammer the
+        // server with a parallel burst when leaving offline mode.
+        requestIdleCallback(() => {
+          setTimeout(() => {
+            if (albumLibraryStore.getState().albums.length === 0) {
+              albumLibraryStore.getState().fetchAllAlbums();
+            }
+            if (artistLibraryStore.getState().artists.length === 0) {
+              artistLibraryStore.getState().fetchAllArtists();
+            }
+            if (playlistLibraryStore.getState().playlists.length === 0) {
+              playlistLibraryStore.getState().fetchAllPlaylists();
+            }
+            genreStore.getState().fetchGenres();
+          }, 1500);
+        });
       } else if (!prev.offlineMode && state.offlineMode) {
         stopMonitoring();
       }

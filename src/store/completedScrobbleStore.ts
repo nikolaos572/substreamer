@@ -214,40 +214,68 @@ export const completedScrobbleStore = create<CompletedScrobbleState>()(
       onRehydrateStorage: () => (state) => {
         if (!state) return;
 
-        const seen = new Set<string>();
-        const before = state.completedScrobbles.length;
-        state.completedScrobbles = state.completedScrobbles.filter((s) => {
-          if (!s.id || !s.song?.id || !s.song.title || seen.has(s.id)) return false;
-          seen.add(s.id);
-          return true;
-        });
-        if (state.completedScrobbles.length !== before) {
-          state.rebuildStats();
-          state.rebuildAggregates();
-          return;
-        }
-
-        if (
-          state.stats.totalPlays === 0 &&
-          state.completedScrobbles.length > 0
-        ) {
-          state.rebuildStats();
-        }
-
-        // Clean up corrupted "[object Object]" keys in genreCounts from the
-        // genres type mismatch bug (genres elements were {name} objects, not strings)
-        if (state.aggregates?.genreCounts && '[object Object]' in state.aggregates.genreCounts) {
-          if (state.completedScrobbles.length > 0) {
+        // The rehydrate body touches user-supplied scrobble objects via array
+        // mutations, set lookups, and arbitrary genre keys. A corrupt persisted
+        // payload (truncated JSON, wrong shape from a downgraded build, garbage
+        // values from a flaky disk) could throw inside any of these — and a
+        // throw inside a Zustand `onRehydrateStorage` callback propagates up
+        // through the persist middleware and crashes the JS bundle before any
+        // React error boundary mounts. Wrap the entire body and reset to safe
+        // defaults if anything goes wrong; the user loses their scrobble cache
+        // but the app still launches and can rebuild from the server.
+        try {
+          const seen = new Set<string>();
+          const before = state.completedScrobbles.length;
+          state.completedScrobbles = state.completedScrobbles.filter((s) => {
+            if (!s.id || !s.song?.id || !s.song.title || seen.has(s.id)) return false;
+            seen.add(s.id);
+            return true;
+          });
+          if (state.completedScrobbles.length !== before) {
+            state.rebuildStats();
             state.rebuildAggregates();
             return;
           }
-        }
 
-        // Rebuild aggregates if missing (upgrade from older version)
-        if (!state.aggregates?.dayCounts || Object.keys(state.aggregates.dayCounts).length === 0) {
-          if (state.completedScrobbles.length > 0) {
-            state.rebuildAggregates();
+          if (
+            state.stats.totalPlays === 0 &&
+            state.completedScrobbles.length > 0
+          ) {
+            state.rebuildStats();
           }
+
+          // Clean up corrupted "[object Object]" keys in genreCounts from the
+          // genres type mismatch bug (genres elements were {name} objects, not strings)
+          if (state.aggregates?.genreCounts && '[object Object]' in state.aggregates.genreCounts) {
+            if (state.completedScrobbles.length > 0) {
+              state.rebuildAggregates();
+              return;
+            }
+          }
+
+          // Rebuild aggregates if missing (upgrade from older version)
+          if (!state.aggregates?.dayCounts || Object.keys(state.aggregates.dayCounts).length === 0) {
+            if (state.completedScrobbles.length > 0) {
+              state.rebuildAggregates();
+            }
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            '[completedScrobbleStore] rehydrate failed; resetting to defaults:',
+            e instanceof Error ? e.message : String(e),
+          );
+          state.completedScrobbles = [];
+          state.stats = { ...EMPTY_STATS, uniqueArtists: {} };
+          state.aggregates = {
+            ...EMPTY_AGGREGATES,
+            artistCounts: {},
+            albumCounts: {},
+            songCounts: {},
+            genreCounts: {},
+            hourBuckets: new Array(24).fill(0),
+            dayCounts: {},
+          };
         }
       },
     }

@@ -6,6 +6,9 @@ const mockDownloadFileAsyncWithProgress = jest.fn();
 let mockFileExists = false;
 let mockFileSize = 100;
 let mockDirExists = true;
+// When non-null, MockDirectory.create() throws this Error. Used to exercise
+// the catch handler in initMusicCache (Fix 3 — module-scope crash hardening).
+let mockDirCreateError: Error | null = null;
 
 jest.mock('expo-file-system', () => {
   class MockFile {
@@ -37,7 +40,9 @@ jest.mock('expo-file-system', () => {
       this.uri = `file://${this._name}`;
     }
     get exists() { return mockDirExists; }
-    create = jest.fn();
+    create = jest.fn(() => {
+      if (mockDirCreateError) throw mockDirCreateError;
+    });
     delete = jest.fn();
   }
   return {
@@ -247,6 +252,31 @@ describe('initMusicCache', () => {
     // Already called in beforeEach; calling again should not throw
     initMusicCache();
     initMusicCache();
+  });
+
+  it('swallows Directory.create() failures so the bundle still boots', () => {
+    // initMusicCache is invoked at module-scope from _layout.tsx, before any
+    // React error boundary is mounted. On stripped OEM ROMs the synchronous
+    // Directory.create() can throw — verify the catch handler keeps the
+    // exception from propagating up and crashing the bundle.
+    mockDirExists = false;
+    mockDirCreateError = new Error('EACCES: permission denied');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fresh = require('../musicCacheService');
+        expect(() => fresh.initMusicCache()).not.toThrow();
+      });
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('initMusicCache failed'),
+        expect.stringContaining('EACCES'),
+      );
+    } finally {
+      mockDirCreateError = null;
+      mockDirExists = true;
+      warnSpy.mockRestore();
+    }
   });
 });
 

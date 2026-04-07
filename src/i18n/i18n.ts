@@ -1,11 +1,41 @@
-// Polyfill Intl.PluralRules for Hermes — MUST be imported before i18next.
-// Use /polyfill-force to skip slow detection code on Android/Hermes.
+// Hermes Intl polyfills — MUST be the first imports in the entire app.
+//
+// Hermes ships only a partial native Intl implementation on Android and
+// relies on platform ICU data. Stripped OEM ROMs (MIUI/HyperOS, FunTouchOS)
+// can be missing or have broken ICU, which causes Hermes to throw
+// JSRangeErrorException from .toLocaleString() / Intl.NumberFormat /
+// Intl.DateTimeFormat at module init or first use — crashing the JS
+// bundle before any error boundary mounts.
+//
+// We polyfill all three Intl APIs we use, with /polyfill-force so the
+// formatjs detection code (which is itself slow on Hermes) is bypassed.
+//
+// When adding a new locale to languages.ts, ALL THREE locale-data lists
+// below must be extended together, plus the pluralrules block.
+import '@formatjs/intl-getcanonicallocales/polyfill-force.js';
+import '@formatjs/intl-locale/polyfill-force.js';
+
 import '@formatjs/intl-pluralrules/polyfill-force.js';
 import '@formatjs/intl-pluralrules/locale-data/en.js';
 import '@formatjs/intl-pluralrules/locale-data/fr.js';
 import '@formatjs/intl-pluralrules/locale-data/de.js';
 import '@formatjs/intl-pluralrules/locale-data/es.js';
 import '@formatjs/intl-pluralrules/locale-data/it.js';
+
+import '@formatjs/intl-numberformat/polyfill-force.js';
+import '@formatjs/intl-numberformat/locale-data/en.js';
+import '@formatjs/intl-numberformat/locale-data/fr.js';
+import '@formatjs/intl-numberformat/locale-data/de.js';
+import '@formatjs/intl-numberformat/locale-data/es.js';
+import '@formatjs/intl-numberformat/locale-data/it.js';
+
+import '@formatjs/intl-datetimeformat/polyfill-force.js';
+import '@formatjs/intl-datetimeformat/add-all-tz.js';
+import '@formatjs/intl-datetimeformat/locale-data/en.js';
+import '@formatjs/intl-datetimeformat/locale-data/fr.js';
+import '@formatjs/intl-datetimeformat/locale-data/de.js';
+import '@formatjs/intl-datetimeformat/locale-data/es.js';
+import '@formatjs/intl-datetimeformat/locale-data/it.js';
 
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';

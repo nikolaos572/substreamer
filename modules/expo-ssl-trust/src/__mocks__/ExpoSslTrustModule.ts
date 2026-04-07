@@ -1,5 +1,6 @@
 export default {
-  initTrustStore: jest.fn().mockResolvedValue(undefined),
+  initTrustStore: jest.fn().mockResolvedValue({ installed: true, error: null }),
+  getInstallStatus: jest.fn().mockResolvedValue({ installed: true, error: null }),
   getCertificateInfo: jest.fn().mockResolvedValue({
     subject: 'CN=test.local',
     issuer: 'CN=test.local',

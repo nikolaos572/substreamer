@@ -3,6 +3,9 @@ const mockGetDirectorySizeAsync = jest.fn();
 
 const mockFileExistsMap = new Map<string, boolean>();
 const mockDirExistsMap = new Map<string, boolean>();
+// When non-null, MockDirectory.create() throws this Error. Used to exercise
+// the catch handler in initImageCache (Fix 3 — module-scope crash hardening).
+let mockDirCreateError: Error | null = null;
 
 jest.mock('expo-file-system', () => {
   class MockFile {
@@ -36,7 +39,10 @@ jest.mock('expo-file-system', () => {
       this.uri = `file://${this._name}`;
     }
     get exists() { return mockDirExistsMap.get(this._name) ?? true; }
-    create = jest.fn(() => { mockDirExistsMap.set(this._name, true); });
+    create = jest.fn(() => {
+      if (mockDirCreateError) throw mockDirCreateError;
+      mockDirExistsMap.set(this._name, true);
+    });
     delete = jest.fn(() => { mockDirExistsMap.set(this._name, false); });
   }
   return {
@@ -149,6 +155,33 @@ beforeEach(() => {
 describe('IMAGE_SIZES', () => {
   it('contains the four standard sizes', () => {
     expect(IMAGE_SIZES).toEqual([50, 150, 300, 600]);
+  });
+});
+
+describe('initImageCache — module-scope crash hardening', () => {
+  it('swallows Directory.create() failures so the bundle still boots', () => {
+    // initImageCache is invoked at module-scope from _layout.tsx, before any
+    // React error boundary is mounted. On stripped OEM ROMs the synchronous
+    // Directory.create() can throw — verify the catch handler keeps the
+    // exception from propagating up and crashing the bundle.
+    mockDirExistsMap.set('file:///document/image-cache', false);
+    mockDirCreateError = new Error('EACCES: permission denied');
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fresh = require('../imageCacheService');
+        expect(() => fresh.initImageCache()).not.toThrow();
+      });
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('initImageCache failed'),
+        expect.stringContaining('EACCES'),
+      );
+    } finally {
+      mockDirCreateError = null;
+      mockDirExistsMap.clear();
+      warnSpy.mockRestore();
+    }
   });
 });
 
