@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -79,6 +79,7 @@ export function AlbumDetailScreen() {
   const offlineMode = offlineModeStore((s) => s.offlineMode);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const cachedEntry = albumDetailStore((s) => (id ? s.albums[id] : undefined));
   const [album, setAlbum] = useState<AlbumWithSongsID3 | null>(cachedEntry?.album ?? null);
@@ -245,9 +246,23 @@ export function AlbumDetailScreen() {
           </MarqueeText>
           <View style={styles.subtitleRow}>
             <View style={styles.subtitleText}>
-              <Text style={[styles.artistName, { color: colors.textSecondary }]}>
-                {album.artist ?? album.displayArtist ?? t('unknownArtist')}
-              </Text>
+              {album.artistId && !offlineMode ? (
+                <Pressable
+                  onPress={() => router.push(`/artist/${album.artistId}`)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('goToArtist')}
+                  style={({ pressed }) => pressed && styles.artistNamePressed}
+                >
+                  <Text style={[styles.artistName, { color: colors.textSecondary }]}>
+                    {album.artist ?? album.displayArtist ?? t('unknownArtist')}
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text style={[styles.artistName, { color: colors.textSecondary }]}>
+                  {album.artist ?? album.displayArtist ?? t('unknownArtist')}
+                </Text>
+              )}
               {album.year ? (
                 <Text style={[styles.albumYear, { color: colors.textSecondary }]}>
                   {album.year}
@@ -287,7 +302,7 @@ export function AlbumDetailScreen() {
         <View style={styles.trackListSpacer} />
       </>
     );
-  }, [album, colors, allSongs, t]);
+  }, [album, colors, allSongs, offlineMode, router, t]);
 
   const listEmpty = useMemo(
     () => (
@@ -504,6 +519,9 @@ const styles = StyleSheet.create({
   },
   artistName: {
     fontSize: 16,
+  },
+  artistNamePressed: {
+    opacity: 0.6,
   },
   trackItemWrap: {
     paddingHorizontal: 16,
