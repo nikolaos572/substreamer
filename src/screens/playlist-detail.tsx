@@ -39,6 +39,7 @@ import {
 import { SKIP_COLOR_EXTRACTION, useColorExtraction } from '../hooks/useColorExtraction';
 import { useDownloadStatus } from '../hooks/useDownloadStatus';
 import { useLayoutMode } from '../hooks/useLayoutMode';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import { mixHexColors } from '../utils/colors';
 import { useTransitionComplete } from '../hooks/useTransitionComplete';
@@ -77,6 +78,7 @@ export function PlaylistDetailScreen() {
   const transitionComplete = useTransitionComplete();
   const downloadStatus = useDownloadStatus('playlist', Platform.OS === 'ios' ? (id ?? '') : '');
   const isWide = useLayoutMode() === 'wide';
+  const refreshControlKey = useRefreshControlKey();
 
   const offlineMode = offlineModeStore((s) => s.offlineMode);
   const [editing, setEditing] = useState(false);
@@ -568,6 +570,7 @@ export function PlaylistDetailScreen() {
           refreshControl={
             offlineMode ? undefined : (
               <RefreshControl
+                key={refreshControlKey}
                 refreshing={refreshing}
                 onRefresh={onRefresh}
                 tintColor={colors.primary}

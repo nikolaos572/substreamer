@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useSharedValue } from 'react-native-reanimated';
 
 import { useGridColumns, getGridItemPadding, GRID_GAP, LIST_PADDING } from '../hooks/useGridColumns';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import { EmptyState } from './EmptyState';
 import type { ArtistID3 } from '../services/subsonicService';
@@ -76,6 +77,7 @@ export function ArtistListView({
   const gridColumns = useGridColumns();
   const listRef = useRef<FlashListRef<ArtistID3>>(null);
   const scrollY = useSharedValue(0);
+  const refreshControlKey = useRefreshControlKey();
 
   const handleScroll = useCallback(
     (e: { nativeEvent: { contentOffset: { y: number } } }) => {
@@ -199,6 +201,7 @@ export function ArtistListView({
         refreshControl={
           onRefresh ? (
             <RefreshControl
+              key={refreshControlKey}
               refreshing={refreshing}
               onRefresh={onRefresh}
               tintColor={contentInsetTop > 0 ? 'transparent' : colors.primary}

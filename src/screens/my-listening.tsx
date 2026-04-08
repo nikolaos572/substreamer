@@ -14,6 +14,7 @@ import { SectionTitle } from '../components/SectionTitle';
 import { StatCard } from '../components/StatCard';
 import { TopItemRow } from '../components/TopItemRow';
 import { usePlaybackAnalytics, type TimePeriod } from '../hooks/usePlaybackAnalytics';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import { useTransitionComplete } from '../hooks/useTransitionComplete';
 import { completedScrobbleStore } from '../store/completedScrobbleStore';
@@ -65,6 +66,7 @@ export function MyListeningScreen() {
   const { t } = useTranslation();
   const transitionComplete = useTransitionComplete();
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
+  const refreshControlKey = useRefreshControlKey();
   const [period, setPeriod] = useState<TimePeriod>('30d');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -138,6 +140,7 @@ export function MyListeningScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
+          key={refreshControlKey}
           refreshing={refreshing}
           onRefresh={handleRefresh}
           tintColor={colors.primary}

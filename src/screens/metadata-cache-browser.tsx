@@ -17,6 +17,7 @@ import { EmptyState } from '../components/EmptyState';
 import { GradientBackground } from '../components/GradientBackground';
 import { SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
 import { ThemedAlert } from '../components/ThemedAlert';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import { useThemedAlert } from '../hooks/useThemedAlert';
 import { albumDetailStore } from '../store/albumDetailStore';
@@ -193,6 +194,7 @@ export function MetadataCacheBrowserScreen() {
   const { t } = useTranslation();
   const { alert, alertProps } = useThemedAlert();
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
+  const refreshControlKey = useRefreshControlKey();
   const [entries, setEntries] = useState<MetadataEntry[]>(() => buildEntries());
   const [filter, setFilter] = useState('');
   const listRef = useRef<FlashListRef<MetadataEntry>>(null);
@@ -350,6 +352,7 @@ export function MetadataCacheBrowserScreen() {
         extraData={statusMap}
         refreshControl={
           <RefreshControl
+            key={refreshControlKey}
             refreshing={refreshing}
             onRefresh={handlePullRefresh}
             tintColor={colors.primary}

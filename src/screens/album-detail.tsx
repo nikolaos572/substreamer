@@ -33,6 +33,7 @@ import { SKIP_COLOR_EXTRACTION, useColorExtraction } from '../hooks/useColorExtr
 import { useDownloadStatus } from '../hooks/useDownloadStatus';
 import { useIsStarred } from '../hooks/useIsStarred';
 import { useLayoutMode } from '../hooks/useLayoutMode';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import { mixHexColors } from '../utils/colors';
 import { useTransitionComplete } from '../hooks/useTransitionComplete';
@@ -88,6 +89,7 @@ export function AlbumDetailScreen() {
   const transitionComplete = useTransitionComplete();
   const downloadStatus = useDownloadStatus('album', Platform.OS === 'ios' ? (id ?? '') : '');
   const isWide = useLayoutMode() === 'wide';
+  const refreshControlKey = useRefreshControlKey();
 
   const handleToggleStar = useCallback(() => {
     if (id) toggleStar('album', id);
@@ -399,6 +401,7 @@ export function AlbumDetailScreen() {
           refreshControl={
             offlineMode ? undefined : (
               <RefreshControl
+                key={refreshControlKey}
                 refreshing={refreshing}
                 onRefresh={onRefresh}
                 tintColor={colors.primary}

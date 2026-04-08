@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { getGenreNames } from '../utils/genreHelpers';
 import { type Child } from '../services/subsonicService';
 
@@ -56,6 +57,7 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
   const { t } = useTranslation();
   const [notesExpanded, setNotesExpanded] = useState(false);
   const [needsTruncation, setNeedsTruncation] = useState(false);
+  const refreshControlKey = useRefreshControlKey();
 
   // Reset expand/truncation state when notes change (different album)
   const notesRef = useRef(sanitizedNotes);
@@ -114,6 +116,7 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
+          key={refreshControlKey}
           refreshing={refreshing}
           onRefresh={onRefresh}
           tintColor={colors.primary}

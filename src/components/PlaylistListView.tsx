@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useSharedValue } from 'react-native-reanimated';
 
 import { useGridColumns, getGridItemPadding, GRID_GAP, LIST_PADDING } from '../hooks/useGridColumns';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import type { Playlist } from '../services/subsonicService';
 import { getFirstLetter } from '../utils/stringHelpers';
@@ -76,6 +77,7 @@ export function PlaylistListView({
   const gridColumns = useGridColumns();
   const listRef = useRef<FlashListRef<Playlist>>(null);
   const scrollY = useSharedValue(0);
+  const refreshControlKey = useRefreshControlKey();
 
   const handleScroll = useCallback(
     (e: { nativeEvent: { contentOffset: { y: number } } }) => {
@@ -199,6 +201,7 @@ export function PlaylistListView({
         refreshControl={
           onRefresh ? (
             <RefreshControl
+              key={refreshControlKey}
               refreshing={refreshing}
               onRefresh={onRefresh}
               tintColor={contentInsetTop > 0 ? 'transparent' : colors.primary}

@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useSharedValue } from 'react-native-reanimated';
 
 import { useGridColumns, getGridItemPadding, GRID_GAP, LIST_PADDING } from '../hooks/useGridColumns';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import { EmptyState } from './EmptyState';
 import { InsetRefreshSpacer } from './InsetRefreshSpacer';
@@ -74,6 +75,7 @@ export function SongListView({
   const resolvedEmptySubtitle = emptySubtitle ?? t('tryAdjustingFilters');
   const gridColumns = useGridColumns();
   const scrollY = useSharedValue(0);
+  const refreshControlKey = useRefreshControlKey();
 
   const handleScroll = useCallback(
     (e: { nativeEvent: { contentOffset: { y: number } } }) => {
@@ -179,6 +181,7 @@ export function SongListView({
       refreshControl={
         onRefresh ? (
           <RefreshControl
+            key={refreshControlKey}
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={contentInsetTop > 0 ? 'transparent' : colors.primary}

@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { EditShareSheet } from '../components/EditShareSheet';
 import { EmptyState } from '../components/EmptyState';
 import { GradientBackground } from '../components/GradientBackground';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import { useThemedAlert } from '../hooks/useThemedAlert';
 import { ThemedAlert } from '../components/ThemedAlert';
@@ -90,6 +91,7 @@ export function SettingsSharesScreen() {
   const { colors } = useTheme();
   const { alert, alertProps } = useThemedAlert();
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
+  const refreshControlKey = useRefreshControlKey();
   const offlineMode = offlineModeStore((s) => s.offlineMode);
   const serverUrl = authStore((s) => s.serverUrl);
   const shareBaseUrl = shareSettingsStore((s) => s.shareBaseUrl);
@@ -211,6 +213,7 @@ export function SettingsSharesScreen() {
         refreshControl={
           offlineMode ? undefined : (
             <RefreshControl
+              key={refreshControlKey}
               refreshing={refreshing}
               onRefresh={handleRefresh}
               tintColor={colors.textSecondary}

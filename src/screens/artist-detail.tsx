@@ -34,6 +34,7 @@ import {
 import { SKIP_COLOR_EXTRACTION, useColorExtraction } from '../hooks/useColorExtraction';
 import { useIsStarred } from '../hooks/useIsStarred';
 import { useLayoutMode } from '../hooks/useLayoutMode';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import { mixHexColors } from '../utils/colors';
 import { useTransitionComplete } from '../hooks/useTransitionComplete';
@@ -98,6 +99,7 @@ export function ArtistDetailScreen() {
   // mounting dozens of CachedImage components synchronously.
   const ready = useTransitionComplete(!cachedEntry);
   const isWide = useLayoutMode() === 'wide';
+  const refreshControlKey = useRefreshControlKey();
 
   const { coverBackgroundColor, gradientOpacity } = useColorExtraction(
     isWide ? SKIP_COLOR_EXTRACTION : artist?.coverArt,
@@ -515,6 +517,7 @@ export function ArtistDetailScreen() {
           refreshControl={
             offlineMode ? undefined : (
               <RefreshControl
+                key={refreshControlKey}
                 refreshing={refreshing}
                 onRefresh={onRefresh}
                 tintColor={colors.primary}

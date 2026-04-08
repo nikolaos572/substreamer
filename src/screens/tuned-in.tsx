@@ -44,6 +44,7 @@ import { favoritesStore } from '../store/favoritesStore';
 import { genreStore } from '../store/genreStore';
 import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
 import { offlineModeStore } from '../store/offlineModeStore';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTheme } from '../hooks/useTheme';
 import { useTransitionComplete } from '../hooks/useTransitionComplete';
 import { type ThemeColors } from '../constants/theme';
@@ -766,6 +767,7 @@ export function TunedInScreen() {
   const { t } = useTranslation();
   const transitionComplete = useTransitionComplete();
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
+  const refreshControlKey = useRefreshControlKey();
 
   const aggregates = completedScrobbleStore((s) => s.aggregates);
   const completedScrobbles = completedScrobbleStore((s) => s.completedScrobbles);
@@ -879,6 +881,7 @@ export function TunedInScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
+            key={refreshControlKey}
             refreshing={refreshing}
             onRefresh={handleRefresh}
             tintColor={colors.primary}

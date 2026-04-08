@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { EmptyState } from '../components/EmptyState';
 import { GradientBackground } from '../components/GradientBackground';
 import { SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
+import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
 import { useTransitionComplete } from '../hooks/useTransitionComplete';
 import { useTheme } from '../hooks/useTheme';
 import { ThemedAlert } from '../components/ThemedAlert';
@@ -130,6 +131,7 @@ export function ImageCacheBrowserScreen() {
   const { alert, alertProps } = useThemedAlert();
   const transitionComplete = useTransitionComplete();
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
+  const refreshControlKey = useRefreshControlKey();
   const [entries, setEntries] = useState<CachedImageEntry[]>([]);
   const [filter, setFilter] = useState('');
   const listRef = useRef<FlashListRef<CachedImageEntry>>(null);
@@ -328,6 +330,7 @@ export function ImageCacheBrowserScreen() {
         refreshControl={
           loading ? undefined : (
             <RefreshControl
+              key={refreshControlKey}
               refreshing={refreshing}
               onRefresh={handlePullRefresh}
               tintColor={colors.primary}
