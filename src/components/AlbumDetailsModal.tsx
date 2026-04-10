@@ -93,7 +93,7 @@ export function AlbumDetailsModal({ album, visible, onClose }: AlbumDetailsModal
   const { t } = useTranslation();
 
   const rows = useMemo(() => {
-    const result: { label: string; value: string }[] = [];
+    const result: { label: string; value: string; wide?: boolean }[] = [];
 
     const artist = album.artist ?? album.displayArtist;
     if (artist) result.push({ label: t('detailArtist'), value: artist });
@@ -104,7 +104,7 @@ export function AlbumDetailsModal({ album, visible, onClose }: AlbumDetailsModal
 
     const genreNames = getGenreNames(album);
     const genre = genreNames.length > 0 ? genreNames.join(', ') : null;
-    if (genre) result.push({ label: t('detailGenre'), value: genre });
+    if (genre) result.push({ label: t('detailGenre'), value: genre, wide: true });
 
     result.push({ label: t('detailTracks'), value: String(album.songCount) });
 
@@ -166,8 +166,8 @@ export function AlbumDetailsModal({ album, visible, onClose }: AlbumDetailsModal
               {row.label}
             </Text>
             <Text
-              style={[styles.value, { color: colors.textPrimary }]}
-              numberOfLines={2}
+              style={[styles.value, row.wide && styles.wideValue, { color: colors.textPrimary }]}
+              numberOfLines={row.wide ? 4 : 2}
             >
               {row.value}
             </Text>
@@ -224,5 +224,8 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     textAlign: 'right',
     flexShrink: 1,
+  },
+  wideValue: {
+    maxWidth: '55%',
   },
 });

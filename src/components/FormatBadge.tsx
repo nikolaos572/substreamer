@@ -55,17 +55,17 @@ function LossyGlyph({ color }: { color: string }) {
 /*  Component                                                         */
 /* ------------------------------------------------------------------ */
 
-export const FormatBadge = memo(function FormatBadge({ format }: { format: EffectiveFormat }) {
+export const FormatBadge = memo(function FormatBadge({ format, textColor = '#FFFFFF' }: { format: EffectiveFormat; textColor?: string }) {
   const tier = useMemo(() => classifyAudio(format), [format]);
   const details = useMemo(() => formatAudioDetails(format), [format]);
   const color = getQualityColor(tier);
-  const bgColor = hexWithAlpha(color, 0.12);
+  const bgColor = hexWithAlpha(color, 0.55);
   const isLossless = tier === 'lossless' || tier === 'hires';
 
   return (
     <View style={[styles.badge, { backgroundColor: bgColor }]}>
-      {isLossless ? <LosslessGlyph color={color} /> : <LossyGlyph color={color} />}
-      <Text style={[styles.label, { color }]}>{details}</Text>
+      {isLossless ? <LosslessGlyph color={textColor} /> : <LossyGlyph color={textColor} />}
+      <Text style={[styles.label, { color: textColor }]}>{details}</Text>
       {tier === 'hires' && <HiResPill color={color} />}
     </View>
   );

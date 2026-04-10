@@ -57,7 +57,7 @@ export function TrackDetailsModal({ track, visible, onClose }: TrackDetailsModal
   const { t } = useTranslation();
 
   const rows = useMemo(() => {
-    const result: { label: string; value: string }[] = [];
+    const result: { label: string; value: string; wide?: boolean }[] = [];
 
     const artist = track.artist ?? track.displayArtist;
     if (artist) result.push({ label: t('detailArtist'), value: artist });
@@ -70,7 +70,7 @@ export function TrackDetailsModal({ track, visible, onClose }: TrackDetailsModal
 
     const genreNames = getGenreNames(track);
     const genre = genreNames.length > 0 ? genreNames.join(', ') : null;
-    if (genre) result.push({ label: t('detailGenre'), value: genre });
+    if (genre) result.push({ label: t('detailGenre'), value: genre, wide: true });
 
     const trackNum = formatTrackNumber(track, t);
     if (trackNum) result.push({ label: t('detailTrack'), value: trackNum });
@@ -158,8 +158,8 @@ export function TrackDetailsModal({ track, visible, onClose }: TrackDetailsModal
               {row.label}
             </Text>
             <Text
-              style={[styles.value, { color: colors.textPrimary }]}
-              numberOfLines={2}
+              style={[styles.value, row.wide && styles.wideValue, { color: colors.textPrimary }]}
+              numberOfLines={row.wide ? 4 : 2}
             >
               {row.value}
             </Text>
@@ -216,5 +216,8 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     textAlign: 'right',
     flex: 1,
+  },
+  wideValue: {
+    maxWidth: '55%',
   },
 });

@@ -20,7 +20,7 @@ import { useTransitionComplete } from '../hooks/useTransitionComplete';
 import { completedScrobbleStore } from '../store/completedScrobbleStore';
 import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
 import { pendingScrobbleStore } from '../store/pendingScrobbleStore';
-import { getArtistInitials, minDelay } from '../utils/stringHelpers';
+import { getArtistInitials, minDelay, timeAgo } from '../utils/stringHelpers';
 
 const PERIODS: { key: TimePeriod; labelKey: string }[] = [
   { key: '7d', labelKey: 'period7d' },
@@ -47,19 +47,6 @@ function formatHour(hour: number): string {
   return hour < 12 ? `${hour} AM` : `${hour - 12} PM`;
 }
 
-function timeAgo(ts: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return t('justNow');
-  if (mins < 60) return t('minutesAgo', { count: mins });
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return t('hoursAgo', { count: hours });
-  const days = Math.floor(hours / 24);
-  if (days === 1) return t('yesterday');
-  if (days < 7) return t('daysAgo', { count: days });
-  const weeks = Math.floor(days / 7);
-  return t('weeksAgo', { count: weeks });
-}
 
 export function MyListeningScreen() {
   const { colors } = useTheme();

@@ -18,6 +18,7 @@ jest.mock('@expo/vector-icons', () => {
   return {
     Ionicons: (props: { name: string }) => <Text>{props.name}</Text>,
     MaterialCommunityIcons: (props: { name: string }) => <Text>{props.name}</Text>,
+    FontAwesome5: (props: { name: string }) => <Text>{props.name}</Text>,
   };
 });
 
@@ -63,7 +64,7 @@ describe('AlbumInfoContent', () => {
     (getEffectiveFormat as jest.Mock).mockReturnValue(null);
   });
 
-  it('renders track metadata rows', () => {
+  it('renders track metadata in hero and meta strip', () => {
     const { getByText } = render(
       <AlbumInfoContent
         track={MOCK_TRACK}
@@ -78,19 +79,15 @@ describe('AlbumInfoContent', () => {
       />,
     );
 
-    // Credits section
-    expect(getByText('Album')).toBeTruthy();
+    // Hero block: album title and artist
     expect(getByText('Test Album')).toBeTruthy();
-    expect(getByText('Artist')).toBeTruthy();
     expect(getByText('Test Artist')).toBeTruthy();
-    // Quick stats section
-    expect(getByText('Year')).toBeTruthy();
-    expect(getByText('2024')).toBeTruthy();
-    expect(getByText('Play Count')).toBeTruthy();
-    expect(getByText('42')).toBeTruthy();
+    // Inline metadata strip with dot separators
+    expect(getByText(/2024/)).toBeTruthy();
+    expect(getByText(/42 plays/)).toBeTruthy();
   });
 
-  it('renders genre row when genres are available', () => {
+  it('renders genre pills when genres are available', () => {
     (getGenreNames as jest.Mock).mockReturnValue(['Rock', 'Alternative']);
 
     const { getByText } = render(
@@ -107,13 +104,12 @@ describe('AlbumInfoContent', () => {
       />,
     );
 
-    expect(getByText('Genres')).toBeTruthy();
-    // Genres are rendered as individual pills, not comma-separated
+    // Genres rendered as individual pills in hero block
     expect(getByText('Rock')).toBeTruthy();
     expect(getByText('Alternative')).toBeTruthy();
   });
 
-  it('renders singular Genre label for single genre', () => {
+  it('renders single genre pill', () => {
     (getGenreNames as jest.Mock).mockReturnValue(['Jazz']);
 
     const { getByText } = render(
@@ -130,7 +126,7 @@ describe('AlbumInfoContent', () => {
       />,
     );
 
-    expect(getByText('Genre')).toBeTruthy();
+    expect(getByText('Jazz')).toBeTruthy();
   });
 
   it('renders skeleton loading state', () => {
@@ -314,10 +310,10 @@ describe('AlbumInfoContent', () => {
     expect(queryByText('FLAC')).toBeNull();
   });
 
-  it('does not render play count when zero', () => {
+  it('renders friendly text for zero play count', () => {
     const trackNoPlays = { ...MOCK_TRACK, playCount: 0 } as Child;
 
-    const { queryByText } = render(
+    const { getByText } = render(
       <AlbumInfoContent
         track={trackNoPlays}
         albumInfo={null}
@@ -331,7 +327,8 @@ describe('AlbumInfoContent', () => {
       />,
     );
 
-    expect(queryByText('Play Count')).toBeNull();
+    // Zero play count shows "Not played" in the metadata strip
+    expect(getByText(/Not played/)).toBeTruthy();
   });
 
   it('renders skeleton during refresh', () => {
@@ -491,7 +488,7 @@ describe('AlbumInfoContent', () => {
     expect(getByText('Second album description.')).toBeTruthy();
   });
 
-  it('renders BPM row when track has bpm', () => {
+  it('renders BPM in metadata strip when track has bpm', () => {
     const trackWithBpm = { ...MOCK_TRACK, bpm: 120 } as Child;
 
     const { getByText } = render(
@@ -508,8 +505,8 @@ describe('AlbumInfoContent', () => {
       />,
     );
 
-    expect(getByText('BPM')).toBeTruthy();
-    expect(getByText('120')).toBeTruthy();
+    // BPM appears in the inline metadata strip
+    expect(getByText(/120 BPM/)).toBeTruthy();
   });
 
   it('triggers onTextLayout and handles truncation/show more', () => {

@@ -7,7 +7,7 @@
  * state, and external links (Last.fm, MusicBrainz, Wikipedia).
  */
 
-import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import {
   Linking,
@@ -26,6 +26,7 @@ import { type Child } from '../services/subsonicService';
 import { hexWithAlpha } from '../utils/colors';
 import { getEffectiveFormat } from '../utils/effectiveFormat';
 import { getGenreNames } from '../utils/genreHelpers';
+import { timeAgo } from '../utils/stringHelpers';
 
 /* ------------------------------------------------------------------ */
 /*  Genre pill palette (matches GenreChart)                            */
@@ -95,26 +96,36 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
   const effectiveFormat = useMemo(() => getEffectiveFormat(track), [track]);
   const genreNames = useMemo(() => getGenreNames(track), [track]);
 
-  // Build quick stats
-  const quickStats = useMemo(() => {
-    const stats: { icon: string; value: string; label: string }[] = [];
+  // Build inline metadata phrases
+  const metaPhrases = useMemo(() => {
+    const phrases: string[] = [];
     if (track.year) {
-      stats.push({ icon: 'calendar-outline', value: String(track.year), label: t('detailYear') });
+      phrases.push(String(track.year));
     }
-    if (track.playCount != null && track.playCount > 0) {
-      stats.push({ icon: 'play-outline', value: String(track.playCount), label: t('detailPlayCount') });
+    if (track.playCount != null) {
+      phrases.push(
+        track.playCount > 0
+          ? t('metaPlayCount', { count: track.playCount })
+          : t('metaNotPlayed'),
+      );
     }
     if (track.bpm) {
-      stats.push({ icon: 'pulse-outline', value: String(track.bpm), label: t('detailBpm') });
+      phrases.push(t('metaBpm', { value: track.bpm }));
     }
-    return stats;
+    if (track.played) {
+      const d = typeof track.played === 'string' ? new Date(track.played) : track.played;
+      phrases.push(t('metaLastPlayed', { time: timeAgo(d.getTime(), t) }));
+    }
+    if (track.created) {
+      const d = typeof track.created === 'string' ? new Date(track.created) : track.created;
+      phrases.push(t('metaAdded', { date: d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' }) }));
+    }
+    return phrases;
   }, [track, t]);
 
-  // Build credit rows (artist, album artist, composer)
+  // Build credit rows (album artist if different, composer)
   const credits = useMemo(() => {
     const rows: { label: string; value: string }[] = [];
-    if (track.album) rows.push({ label: t('detailAlbum'), value: track.album });
-    if (track.artist) rows.push({ label: t('detailArtist'), value: track.artist });
     if (track.displayAlbumArtist && track.displayAlbumArtist !== track.artist) {
       rows.push({ label: t('detailAlbumArtist'), value: track.displayAlbumArtist });
     }
@@ -162,7 +173,7 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
               <View style={[styles.skeletonBar, { width: `${w * 100}%` }]} />
             </View>
           ))}
-          <View style={styles.infoSection}>
+          <View style={styles.descriptionSection}>
             {[1, 0.97, 1, 0.95, 0.98, 1, 0.93, 0.96, 1, 0.6].map((w, i) => (
               <View
                 key={i}
@@ -178,61 +189,71 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
         </View>
       ) : (
         <>
-          {/* Format badge */}
-          {effectiveFormat && (
-            <View style={styles.formatSection}>
-              <FormatBadge format={effectiveFormat} />
-            </View>
-          )}
-
-          {/* Quick stats */}
-          {quickStats.length > 0 && (
-            <View style={styles.statsRow}>
-              {quickStats.map((stat) => (
-                <View key={stat.label} style={[styles.statCard, { backgroundColor: colors.card }]}>
-                  <Ionicons name={stat.icon as any} size={16} color={colors.primary} />
-                  <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stat.value}</Text>
-                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{stat.label}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Genre pills */}
-          {genreNames.length > 0 && (
-            <View style={styles.genreSection}>
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-                {genreNames.length > 1 ? t('detailGenres') : t('detailGenre')}
+          {/* ── Hero header block (centered) ── */}
+          <View style={styles.heroBlock}>
+            {/* Album & artist */}
+            {track.album && (
+              <Text style={[styles.albumTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                {track.album}
               </Text>
+            )}
+            {track.artist && (
+              <Text style={[styles.artistSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                {track.artist}
+              </Text>
+            )}
+
+            {/* Format badge */}
+            {effectiveFormat && (
+              <View style={styles.formatBadgeWrap}>
+                <FormatBadge format={effectiveFormat} textColor={colors.textPrimary} />
+              </View>
+            )}
+
+            {/* Genre pills */}
+            {genreNames.length > 0 && (
               <View style={styles.genrePillCloud}>
                 {genreNames.map((name, i) => {
                   const pillColor = GENRE_PALETTE[i % GENRE_PALETTE.length];
                   return (
                     <View
                       key={name}
-                      style={[styles.genrePill, { backgroundColor: hexWithAlpha(pillColor, 0.15) }]}
+                      style={[styles.genrePill, { backgroundColor: hexWithAlpha(pillColor, 0.35) }]}
                     >
-                      <Text style={[styles.genrePillText, { color: pillColor }]}>{name}</Text>
+                      <Text style={[styles.genrePillText, { color: colors.textPrimary }]}>{name}</Text>
                     </View>
                   );
                 })}
               </View>
+            )}
+          </View>
+
+          {/* ── Inline metadata strip ── */}
+          {metaPhrases.length > 0 && (
+            <Text style={[styles.metaStrip, { color: colors.textSecondary }]}>
+              {metaPhrases.join('  ·  ')}
+            </Text>
+          )}
+
+          {/* ── Credits (only if present) ── */}
+          {credits.length > 0 && (
+            <View style={styles.creditsSection}>
+              <View style={[styles.divider, { backgroundColor: colors.textSecondary }]} />
+              {credits.map((row) => (
+                <View key={row.label} style={styles.creditRow}>
+                  <Text style={[styles.creditLabel, { color: colors.textSecondary }]}>{row.label}</Text>
+                  <Text style={[styles.creditValue, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {row.value}
+                  </Text>
+                </View>
+              ))}
             </View>
           )}
 
-          {/* Credits & details */}
-          {credits.map((row) => (
-            <View key={row.label} style={[styles.infoDetailRow, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.infoDetailLabel, { color: colors.textSecondary }]}>{row.label}</Text>
-              <Text style={[styles.infoDetailValue, { color: colors.textPrimary }]} numberOfLines={2}>
-                {row.value}
-              </Text>
-            </View>
-          ))}
-
-          {/* Album description */}
+          {/* ── Album description ── */}
           {sanitizedNotes ? (
-            <View style={styles.infoSection}>
+            <View style={styles.descriptionSection}>
+              <View style={[styles.divider, { backgroundColor: colors.textSecondary }]} />
               <Text
                 style={[styles.infoNotesText, { color: colors.textPrimary }]}
                 numberOfLines={notesExpanded || !needsTruncation ? undefined : 12}
@@ -272,17 +293,19 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
         </>
       )}
 
-      {/* External links */}
+      {/* ── External links (centered) ── */}
       {(albumInfo?.lastFmUrl || overrideMbid || albumInfo?.musicBrainzId || notesAttributionUrl) && (
+        <View>
+          <View style={[styles.divider, { backgroundColor: colors.textSecondary }]} />
         <View style={styles.infoLinksRow}>
           {albumInfo?.lastFmUrl && (
             <Pressable
               onPress={handleLastFm}
               accessibilityRole="link"
               accessibilityLabel={t('viewOnLastFm')}
-              style={({ pressed }) => [styles.infoLinkChip, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.infoLinkChip, { borderColor: hexWithAlpha(colors.border, 0.5) }, pressed && styles.pressed]}
             >
-              <Ionicons name="musical-notes" size={14} color={colors.textPrimary} />
+              <FontAwesome5 name="lastfm" size={14} color={colors.textPrimary} />
               <Text style={[styles.infoLinkText, { color: colors.textPrimary }]}>Last.fm</Text>
               <Ionicons name="open-outline" size={12} color={colors.textPrimary} style={styles.infoLinkArrow} />
             </Pressable>
@@ -292,9 +315,9 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
               onPress={handleMusicBrainz}
               accessibilityRole="link"
               accessibilityLabel={t('viewOnMusicBrainz')}
-              style={({ pressed }) => [styles.infoLinkChip, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.infoLinkChip, { borderColor: hexWithAlpha(colors.border, 0.5) }, pressed && styles.pressed]}
             >
-              <Ionicons name="disc" size={14} color={colors.textPrimary} />
+              <Ionicons name="finger-print-outline" size={14} color={colors.textPrimary} />
               <Text style={[styles.infoLinkText, { color: colors.textPrimary }]}>MusicBrainz</Text>
               <Ionicons name="open-outline" size={12} color={colors.textPrimary} style={styles.infoLinkArrow} />
             </Pressable>
@@ -304,13 +327,14 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
               onPress={handleWikipedia}
               accessibilityRole="link"
               accessibilityLabel={t('viewOnWikipedia')}
-              style={({ pressed }) => [styles.infoLinkChip, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.infoLinkChip, { borderColor: hexWithAlpha(colors.border, 0.5) }, pressed && styles.pressed]}
             >
-              <Ionicons name="globe-outline" size={14} color={colors.textPrimary} />
+              <FontAwesome5 name="wikipedia-w" size={14} color={colors.textPrimary} />
               <Text style={[styles.infoLinkText, { color: colors.textPrimary }]}>Wikipedia</Text>
               <Ionicons name="open-outline" size={12} color={colors.textPrimary} style={styles.infoLinkArrow} />
             </Pressable>
           )}
+        </View>
         </View>
       )}
     </ScrollView>
@@ -329,54 +353,28 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 24,
   },
-  infoSection: {
-    marginTop: 32,
-  },
 
-  /* Format badge */
-  formatSection: {
-    marginBottom: 16,
-  },
-
-  /* Quick stats */
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: 12,
-    padding: 12,
+  /* Hero header block (centered) */
+  heroBlock: {
     alignItems: 'center',
-    gap: 2,
+    marginBottom: 20,
+    gap: 14,
   },
-  statValue: {
+  albumTitle: {
     fontSize: 16,
     fontWeight: '700',
-    marginTop: 4,
+    textAlign: 'center',
   },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
+  artistSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
   },
-
-  /* Genre pills */
-  genreSection: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
+  formatBadgeWrap: {
   },
   genrePillCloud: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: 8,
   },
   genrePill: {
@@ -389,30 +387,53 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  /* Credits & detail rows */
-  infoDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  infoDetailLabel: {
-    fontSize: 17,
-    flexShrink: 0,
-  },
-  infoDetailValue: {
-    fontSize: 17,
+  /* Inline metadata strip */
+  metaStrip: {
+    fontSize: 13,
     fontWeight: '500',
-    marginLeft: 16,
-    textAlign: 'right',
-    flex: 1,
+    textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 20,
   },
 
-  /* Album notes */
+  /* Divider */
+  divider: {
+    height: 1,
+    opacity: 0.3,
+    marginVertical: 10,
+  },
+
+  /* Credits */
+  creditsSection: {
+    marginBottom: 4,
+  },
+  creditRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 6,
+  },
+  creditLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    flexShrink: 0,
+    marginRight: 12,
+  },
+  creditValue: {
+    fontSize: 14,
+    fontWeight: '400',
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+
+  /* Album description */
+  descriptionSection: {
+    marginBottom: 4,
+  },
   infoNotesText: {
     fontSize: 17,
     lineHeight: 26,
+    textAlign: 'justify' as const,
   },
   infoReadMore: {
     fontSize: 16,
@@ -430,12 +451,13 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 
-  /* External links */
+  /* External links (centered) */
   infoLinksRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: 10,
-    marginTop: 32,
+    marginTop: 24,
   },
   infoLinkChip: {
     flexDirection: 'row',
@@ -445,7 +467,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.25)',
   },
   infoLinkText: {
     fontSize: 15,

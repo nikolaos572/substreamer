@@ -10,6 +10,7 @@ import { SegmentControl } from '../components/SegmentControl';
 import { useTheme } from '../hooks/useTheme';
 import { completedScrobbleStore, type CompletedScrobble } from '../store/completedScrobbleStore';
 import { pendingScrobbleStore, type PendingScrobble } from '../store/pendingScrobbleStore';
+import { timeAgo } from '../utils/stringHelpers';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -25,24 +26,6 @@ const SEGMENT_KEYS = [
 ] as const;
 
 const ROW_HEIGHT = 56;
-
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
-function timeAgo(ts: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return t('justNow');
-  if (mins < 60) return t('minutesAgo', { count: mins });
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return t('hoursAgo', { count: hours });
-  const days = Math.floor(hours / 24);
-  if (days === 1) return t('yesterday');
-  if (days < 7) return t('daysAgo', { count: days });
-  const d = new Date(ts);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
 
 /* ------------------------------------------------------------------ */
 /*  ScrobbleRow                                                        */

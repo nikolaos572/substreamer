@@ -35,3 +35,25 @@ export function getArtistInitials(name: string): string {
 export function minDelay(ms = 2000): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/**
+ * Format a timestamp as a human-readable relative time string.
+ * Requires i18next `t` function for localised output.
+ */
+export function timeAgo(ts: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return t('justNow');
+  if (mins < 60) return t('minutesAgo', { count: mins });
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return t('hoursAgo', { count: hours });
+  const days = Math.floor(hours / 24);
+  if (days === 1) return t('yesterday');
+  if (days < 7) return t('daysAgo', { count: days });
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return t('weeksAgo', { count: weeks });
+  const months = Math.floor(days / 30);
+  if (months < 12) return t('monthsAgo', { count: months });
+  const years = Math.floor(days / 365);
+  return t('yearsAgo', { count: years });
+}
