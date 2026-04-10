@@ -12,6 +12,7 @@ import { updateRemoteCapabilities } from '../services/playerService';
 import {
   playbackSettingsStore,
   SKIP_INTERVALS,
+  type ArtistPlayMode,
   type RemoteControlMode,
   type SkipInterval,
 } from '../store/playbackSettingsStore';
@@ -22,6 +23,11 @@ const INTERVAL_OPTIONS: { value: SkipInterval }[] =
 const REMOTE_OPTIONS: { value: RemoteControlMode; labelKey: string; subtitleKey: string }[] = [
   { value: 'skip-track', labelKey: 'remoteNextPreviousTrack', subtitleKey: 'remoteNextPreviousTrackSubtitle' },
   { value: 'skip-interval', labelKey: 'remoteSkipForwardBackward', subtitleKey: 'remoteSkipForwardBackwardSubtitle' },
+];
+
+const ARTIST_PLAY_MODE_OPTIONS: { value: ArtistPlayMode; labelKey: string }[] = [
+  { value: 'topSongs', labelKey: 'topSongs' },
+  { value: 'allSongs', labelKey: 'allSongs' },
 ];
 
 export function SettingsPlaybackScreen() {
@@ -38,18 +44,21 @@ export function SettingsPlaybackScreen() {
   const skipBackwardInterval = playbackSettingsStore((s) => s.skipBackwardInterval);
   const skipForwardInterval = playbackSettingsStore((s) => s.skipForwardInterval);
   const remoteControlMode = playbackSettingsStore((s) => s.remoteControlMode);
+  const artistPlayMode = playbackSettingsStore((s) => s.artistPlayMode);
   const setShowSkipIntervalButtons = playbackSettingsStore((s) => s.setShowSkipIntervalButtons);
   const setShowSleepTimerButton = playbackSettingsStore((s) => s.setShowSleepTimerButton);
   const setSkipBackwardInterval = playbackSettingsStore((s) => s.setSkipBackwardInterval);
   const setSkipForwardInterval = playbackSettingsStore((s) => s.setSkipForwardInterval);
   const setRemoteControlMode = playbackSettingsStore((s) => s.setRemoteControlMode);
+  const setArtistPlayMode = playbackSettingsStore((s) => s.setArtistPlayMode);
 
   const isDefault =
     !showSkipIntervalButtons &&
     !showSleepTimerButton &&
     skipBackwardInterval === 15 &&
     skipForwardInterval === 30 &&
-    remoteControlMode === 'skip-track';
+    remoteControlMode === 'skip-track' &&
+    artistPlayMode === 'topSongs';
 
   const handleRemoteChange = useCallback(
     (mode: RemoteControlMode) => {
@@ -74,6 +83,7 @@ export function SettingsPlaybackScreen() {
             setSkipBackwardInterval(15);
             setSkipForwardInterval(30);
             setRemoteControlMode('skip-track');
+            setArtistPlayMode('topSongs');
             updateRemoteCapabilities();
             setBackwardOpen(false);
             setForwardOpen(false);
@@ -81,7 +91,7 @@ export function SettingsPlaybackScreen() {
         },
       ],
     );
-  }, [setShowSkipIntervalButtons, setShowSleepTimerButton, setSkipBackwardInterval, setSkipForwardInterval, setRemoteControlMode]);
+  }, [setShowSkipIntervalButtons, setShowSleepTimerButton, setSkipBackwardInterval, setSkipForwardInterval, setRemoteControlMode, setArtistPlayMode]);
 
   const dynamicStyles = useMemo(
     () =>
@@ -271,6 +281,38 @@ export function SettingsPlaybackScreen() {
                         {t(opt.subtitleKey)}
                       </Text>
                     </View>
+                    {isActive && (
+                      <Ionicons name="checkmark" size={20} color={colors.primary} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Artist Play Mode */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>{t('artistPlayMode')}</Text>
+            <Text style={[styles.sectionHint, { color: colors.textSecondary }]}>
+              {t('artistPlayModeDescription')}
+            </Text>
+            <View style={[styles.card, { backgroundColor: colors.card }]}>
+              {ARTIST_PLAY_MODE_OPTIONS.map((opt, index) => {
+                const isActive = artistPlayMode === opt.value;
+                const isLast = index === ARTIST_PLAY_MODE_OPTIONS.length - 1;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => setArtistPlayMode(opt.value)}
+                    style={({ pressed }) => [
+                      styles.radioRow,
+                      !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={[styles.label, { color: colors.textPrimary }]}>
+                      {t(opt.labelKey)}
+                    </Text>
                     {isActive && (
                       <Ionicons name="checkmark" size={20} color={colors.primary} />
                     )}

@@ -39,7 +39,8 @@ import { useTheme } from '../hooks/useTheme';
 import { mixHexColors } from '../utils/colors';
 import { useTransitionComplete } from '../hooks/useTransitionComplete';
 import { refreshCachedImage } from '../services/imageCacheService';
-import { playMoreByArtist, toggleStar } from '../services/moreOptionsService';
+import { PillToggle } from '../components/PillToggle';
+import { playAllByArtist, playMoreByArtist, toggleStar } from '../services/moreOptionsService';
 import { shuffleArray } from '../utils/arrayHelpers';
 import { minDelay } from '../utils/stringHelpers';
 import { playTrack } from '../services/playerService';
@@ -47,6 +48,7 @@ import { artistDetailStore } from '../store/artistDetailStore';
 import { layoutPreferencesStore, LIST_LENGTH_DISPLAY_CAP } from '../store/layoutPreferencesStore';
 import { moreOptionsStore } from '../store/moreOptionsStore';
 import { offlineModeStore } from '../store/offlineModeStore';
+import { playbackSettingsStore, type ArtistPlayMode } from '../store/playbackSettingsStore';
 
 import {
   type AlbumID3,
@@ -70,6 +72,7 @@ export function ArtistDetailScreen() {
   const { t } = useTranslation();
   const { colors, theme } = useTheme();
   const offlineMode = offlineModeStore((s) => s.offlineMode);
+  const artistPlayMode = playbackSettingsStore((s) => s.artistPlayMode);
   const { width: screenWidth } = useWindowDimensions();
   const heroImageSize = Math.min(Math.max(HERO_IMAGE_SIZE, screenWidth * 0.35), 280);
   const insets = useSafeAreaInsets();
@@ -254,6 +257,18 @@ export function ArtistDetailScreen() {
     [],
   );
 
+  const playModeOptions = useMemo(
+    (): [{ key: ArtistPlayMode; label: string }, { key: ArtistPlayMode; label: string }] => [
+      { key: 'topSongs', label: t('topSongs') },
+      { key: 'allSongs', label: t('allSongs') },
+    ],
+    [t],
+  );
+
+  const handlePlayModeChange = useCallback((mode: ArtistPlayMode) => {
+    playbackSettingsStore.getState().setArtistPlayMode(mode);
+  }, []);
+
   const listHeader = useMemo(() => {
     if (!artist) return null;
     return (
@@ -278,40 +293,52 @@ export function ArtistDetailScreen() {
           </View>
         </View>
         <View style={styles.heroButtons}>
-          <Pressable
-            onPress={() => {
-              if (topSongs.length > 1) {
-                const shuffled = shuffleArray(topSongs);
-                playTrack(shuffled[0], shuffled);
-              } else if (artist) {
-                playMoreByArtist(artist.id, artist.name);
-              }
-            }}
-            style={({ pressed }) => [
-              styles.shufflePlayButton,
-              pressed && styles.shufflePlayButtonPressed,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={t('shufflePlay')}
-          >
-            <Ionicons name="shuffle" size={18} color="#000" />
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              if (topSongs.length > 0) {
-                playTrack(topSongs[0], topSongs);
-              } else if (artist) {
-                playMoreByArtist(artist.id, artist.name);
-              }
-            }}
-            style={({ pressed }) => [
-              styles.playAllButton,
-              { backgroundColor: colors.primary },
-              pressed && styles.playAllButtonPressed,
-            ]}
-          >
-            <Ionicons name="play" size={28} color="#fff" style={styles.playAllIcon} />
-          </Pressable>
+          <PillToggle
+            options={playModeOptions}
+            selected={artistPlayMode}
+            onSelect={handlePlayModeChange}
+            colors={colors}
+          />
+          <View style={styles.heroPlayButtons}>
+            <Pressable
+              onPress={() => {
+                if (artistPlayMode === 'allSongs') {
+                  playAllByArtist(artist.id, artist.name, true);
+                } else if (topSongs.length > 1) {
+                  const shuffled = shuffleArray(topSongs);
+                  playTrack(shuffled[0], shuffled);
+                } else {
+                  playMoreByArtist(artist.id, artist.name);
+                }
+              }}
+              style={({ pressed }) => [
+                styles.shufflePlayButton,
+                pressed && styles.shufflePlayButtonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t('shufflePlay')}
+            >
+              <Ionicons name="shuffle" size={18} color="#000" />
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                if (artistPlayMode === 'allSongs') {
+                  playAllByArtist(artist.id, artist.name, false);
+                } else if (topSongs.length > 0) {
+                  playTrack(topSongs[0], topSongs);
+                } else {
+                  playMoreByArtist(artist.id, artist.name);
+                }
+              }}
+              style={({ pressed }) => [
+                styles.playAllButton,
+                { backgroundColor: colors.primary },
+                pressed && styles.playAllButtonPressed,
+              ]}
+            >
+              <Ionicons name="play" size={28} color="#fff" style={styles.playAllIcon} />
+            </Pressable>
+          </View>
         </View>
 
         {/* Heavy sections deferred until after the navigation animation */}
@@ -422,6 +449,9 @@ export function ArtistDetailScreen() {
     topSongsKeyExtractor,
     similarArtistsRenderItem,
     similarArtistsKeyExtractor,
+    artistPlayMode,
+    playModeOptions,
+    handlePlayModeChange,
     t,
   ]);
 
@@ -592,9 +622,13 @@ const styles = StyleSheet.create({
   heroButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 10,
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
+  },
+  heroPlayButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   shufflePlayButton: {
     width: 36,

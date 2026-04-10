@@ -121,6 +121,7 @@ import {
   playSimilarArtistsMix,
   saveArtistTopSongsPlaylist,
   playMoreByArtist,
+  playAllByArtist,
 } from '../moreOptionsService';
 
 const mockStarSong = starSong as jest.Mock;
@@ -777,6 +778,165 @@ describe('playMoreByArtist', () => {
 
       const [, queue] = mockPlayTrack.mock.calls[0];
       expect(queue.length).toBe(20);
+    });
+  });
+});
+
+describe('playAllByArtist', () => {
+  describe('online – sequential (shuffle=false)', () => {
+    beforeEach(() => {
+      (offlineModeStore.getState as jest.Mock).mockReturnValue({ offlineMode: false });
+    });
+
+    it('plays all songs sorted by year → disc → track', async () => {
+      const songs = [
+        { id: 's1', artist: 'A', artistId: 'ar1', year: 2020, discNumber: 1, track: 2 },
+        { id: 's2', artist: 'A', artistId: 'ar1', year: 2019, discNumber: 1, track: 1 },
+        { id: 's3', artist: 'A', artistId: 'ar1', year: 2020, discNumber: 1, track: 1 },
+        { id: 's4', artist: 'A', artistId: 'ar1', year: 2020, discNumber: 2, track: 1 },
+      ];
+      (artistDetailStore.getState as jest.Mock).mockReturnValue({
+        artists: { ar1: { artist: { album: [{ id: 'alb1' }] } } },
+        fetchArtist: jest.fn(),
+      });
+      (albumDetailStore.getState as jest.Mock).mockReturnValue({
+        albums: { alb1: { album: { song: songs } } },
+      });
+
+      await playAllByArtist('ar1', 'A', false);
+
+      const [firstTrack, queue] = mockPlayTrack.mock.calls[0];
+      expect(queue.map((s: any) => s.id)).toEqual(['s2', 's3', 's1', 's4']);
+      expect(firstTrack.id).toBe('s2');
+      expect(mockOverlayShowSuccess).toHaveBeenCalledWith('Playing all songs by A');
+    });
+
+    it('does not cap queue length', async () => {
+      const songs = Array.from({ length: 50 }, (_, i) => ({
+        id: `s${i}`, artist: 'A', artistId: 'ar1', year: 2020, discNumber: 1, track: i + 1,
+      }));
+      (artistDetailStore.getState as jest.Mock).mockReturnValue({
+        artists: { ar1: { artist: { album: [{ id: 'alb1' }] } } },
+        fetchArtist: jest.fn(),
+      });
+      (albumDetailStore.getState as jest.Mock).mockReturnValue({
+        albums: { alb1: { album: { song: songs } } },
+      });
+
+      await playAllByArtist('ar1', 'A', false);
+
+      const [, queue] = mockPlayTrack.mock.calls[0];
+      expect(queue.length).toBe(50);
+    });
+
+    it('plays even with fewer than 5 songs (no min check)', async () => {
+      const songs = [
+        { id: 's1', artist: 'A', artistId: 'ar1', year: 2020, discNumber: 1, track: 1 },
+        { id: 's2', artist: 'A', artistId: 'ar1', year: 2020, discNumber: 1, track: 2 },
+      ];
+      (artistDetailStore.getState as jest.Mock).mockReturnValue({
+        artists: { ar1: { artist: { album: [{ id: 'alb1' }] } } },
+        fetchArtist: jest.fn(),
+      });
+      (albumDetailStore.getState as jest.Mock).mockReturnValue({
+        albums: { alb1: { album: { song: songs } } },
+      });
+
+      await playAllByArtist('ar1', 'A', false);
+
+      expect(mockPlayTrack).toHaveBeenCalled();
+      const [, queue] = mockPlayTrack.mock.calls[0];
+      expect(queue.length).toBe(2);
+    });
+
+    it('shows error when no songs found', async () => {
+      (artistDetailStore.getState as jest.Mock).mockReturnValue({
+        artists: { ar1: { artist: { album: [{ id: 'alb1' }] } } },
+        fetchArtist: jest.fn(),
+      });
+      (albumDetailStore.getState as jest.Mock).mockReturnValue({
+        albums: { alb1: { album: { song: [] } } },
+      });
+
+      await playAllByArtist('ar1', 'A', false);
+
+      expect(mockOverlayShowError).toHaveBeenCalledWith('No songs found by A');
+      expect(mockPlayTrack).not.toHaveBeenCalled();
+    });
+
+    it('shows error on exception', async () => {
+      (artistDetailStore.getState as jest.Mock).mockReturnValue({
+        artists: {},
+        fetchArtist: jest.fn().mockRejectedValue(new Error('fail')),
+      });
+
+      await playAllByArtist('ar1', 'A', false);
+
+      expect(mockOverlayShowError).toHaveBeenCalledWith('Failed to load A songs');
+    });
+  });
+
+  describe('online – shuffle (shuffle=true)', () => {
+    beforeEach(() => {
+      (offlineModeStore.getState as jest.Mock).mockReturnValue({ offlineMode: false });
+    });
+
+    it('shuffles all songs and plays', async () => {
+      const songs = Array.from({ length: 10 }, (_, i) => ({
+        id: `s${i}`, artist: 'A', artistId: 'ar1',
+      }));
+      (artistDetailStore.getState as jest.Mock).mockReturnValue({
+        artists: { ar1: { artist: { album: [{ id: 'alb1' }] } } },
+        fetchArtist: jest.fn(),
+      });
+      (albumDetailStore.getState as jest.Mock).mockReturnValue({
+        albums: { alb1: { album: { song: songs } } },
+      });
+
+      await playAllByArtist('ar1', 'A', true);
+
+      expect(mockPlayTrack).toHaveBeenCalled();
+      const [firstTrack, queue] = mockPlayTrack.mock.calls[0];
+      expect(queue.length).toBe(10);
+      expect(queue).toContain(firstTrack);
+      expect(mockOverlayShowSuccess).toHaveBeenCalledWith('Shuffling all songs by A');
+    });
+  });
+
+  describe('offline', () => {
+    beforeEach(() => {
+      (offlineModeStore.getState as jest.Mock).mockReturnValue({ offlineMode: true });
+    });
+
+    it('plays offline songs sorted by year when shuffle=false', async () => {
+      (musicCacheStore.getState as jest.Mock).mockReturnValue({
+        cachedItems: {
+          alb1: {
+            itemId: 'alb1',
+            name: 'Album',
+            coverArtId: 'cov',
+            tracks: [
+              { id: 's1', title: 'Song 1', artist: 'A', duration: 200, bytes: 1000, fileName: 'f1.mp3' },
+              { id: 's2', title: 'Song 2', artist: 'A', duration: 180, bytes: 900, fileName: 'f2.mp3' },
+            ],
+          },
+        },
+      });
+
+      await playAllByArtist('ar1', 'A', false);
+
+      expect(mockPlayTrack).toHaveBeenCalled();
+      const [, queue] = mockPlayTrack.mock.calls[0];
+      expect(queue.length).toBe(2);
+    });
+
+    it('shows error when no offline songs match', async () => {
+      (musicCacheStore.getState as jest.Mock).mockReturnValue({ cachedItems: {} });
+
+      await playAllByArtist('ar1', 'A', false);
+
+      expect(mockOverlayShowError).toHaveBeenCalledWith('No offline songs by A');
+      expect(mockPlayTrack).not.toHaveBeenCalled();
     });
   });
 });

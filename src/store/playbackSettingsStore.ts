@@ -73,6 +73,9 @@ export type SkipInterval = (typeof SKIP_INTERVALS)[number];
 /** Whether lock screen / notification remote shows skip-track or skip-interval. */
 export type RemoteControlMode = 'skip-track' | 'skip-interval';
 
+/** Whether artist play/shuffle buttons use top songs or all songs across all albums. */
+export type ArtistPlayMode = 'topSongs' | 'allSongs';
+
 export interface PlaybackSettingsState {
   /** Maximum bitrate for streaming. null = no limit (server default). */
   maxBitRate: MaxBitRate;
@@ -100,6 +103,8 @@ export interface PlaybackSettingsState {
   skipForwardInterval: SkipInterval;
   /** What the lock screen / Control Center remote shows. */
   remoteControlMode: RemoteControlMode;
+  /** Whether artist play/shuffle uses top songs or all songs. */
+  artistPlayMode: ArtistPlayMode;
 
   setMaxBitRate: (bitRate: MaxBitRate) => void;
   setStreamFormat: (format: StreamFormat) => void;
@@ -113,6 +118,7 @@ export interface PlaybackSettingsState {
   setSkipBackwardInterval: (interval: SkipInterval) => void;
   setSkipForwardInterval: (interval: SkipInterval) => void;
   setRemoteControlMode: (mode: RemoteControlMode) => void;
+  setArtistPlayMode: (mode: ArtistPlayMode) => void;
 }
 
 const PERSIST_KEY = 'substreamer-playback-settings';
@@ -132,6 +138,7 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       skipBackwardInterval: 15,
       skipForwardInterval: 30,
       remoteControlMode: 'skip-track',
+      artistPlayMode: 'topSongs',
 
       setMaxBitRate: (maxBitRate) => set({ maxBitRate }),
       setStreamFormat: (streamFormat) => set({ streamFormat: normalizeFormat(streamFormat) }),
@@ -145,6 +152,7 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
       setSkipBackwardInterval: (skipBackwardInterval) => set({ skipBackwardInterval }),
       setSkipForwardInterval: (skipForwardInterval) => set({ skipForwardInterval }),
       setRemoteControlMode: (remoteControlMode) => set({ remoteControlMode }),
+      setArtistPlayMode: (artistPlayMode) => set({ artistPlayMode }),
     }),
     {
       name: PERSIST_KEY,
@@ -162,6 +170,7 @@ export const playbackSettingsStore = create<PlaybackSettingsState>()(
         skipBackwardInterval: state.skipBackwardInterval,
         skipForwardInterval: state.skipForwardInterval,
         remoteControlMode: state.remoteControlMode,
+        artistPlayMode: state.artistPlayMode,
       }),
     }
   )

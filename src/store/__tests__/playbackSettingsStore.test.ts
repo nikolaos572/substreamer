@@ -16,6 +16,7 @@ beforeEach(() => {
     skipBackwardInterval: 15,
     skipForwardInterval: 30,
     remoteControlMode: 'skip-track',
+    artistPlayMode: 'topSongs',
   });
 });
 
@@ -86,6 +87,17 @@ describe('playbackSettingsStore', () => {
     expect(playbackSettingsStore.getState().showSleepTimerButton).toBe(true);
   });
 
+  it('setArtistPlayMode updates artist play mode', () => {
+    playbackSettingsStore.getState().setArtistPlayMode('allSongs');
+    expect(playbackSettingsStore.getState().artistPlayMode).toBe('allSongs');
+  });
+
+  it('setArtistPlayMode toggles back to topSongs', () => {
+    playbackSettingsStore.getState().setArtistPlayMode('allSongs');
+    playbackSettingsStore.getState().setArtistPlayMode('topSongs');
+    expect(playbackSettingsStore.getState().artistPlayMode).toBe('topSongs');
+  });
+
   it('defaults for skip interval fields', () => {
     const state = playbackSettingsStore.getState();
     expect(state.showSkipIntervalButtons).toBe(false);
@@ -93,6 +105,7 @@ describe('playbackSettingsStore', () => {
     expect(state.skipBackwardInterval).toBe(15);
     expect(state.skipForwardInterval).toBe(30);
     expect(state.remoteControlMode).toBe('skip-track');
+    expect(state.artistPlayMode).toBe('topSongs');
   });
 
   describe('format normalization', () => {

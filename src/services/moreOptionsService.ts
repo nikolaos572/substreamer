@@ -240,82 +240,133 @@ export async function saveArtistTopSongsPlaylist(artist: ArtistID3): Promise<voi
 
 const MORE_BY_ARTIST_MIN = 5;
 
-/** Fisher-Yates (Knuth) in-place shuffle. */
+/**
+ * Fetch all songs by an artist across all albums.
+ * Online: walks every album in the artist detail, fetches songs, filters by artist.
+ * Offline: scans cached music items for matching tracks.
+ * Returns `null` with an error overlay if no songs are found.
+ */
+async function fetchAllArtistSongs(
+  artistId: string,
+  artistName: string,
+): Promise<Child[] | null> {
+  const offline = offlineModeStore.getState().offlineMode;
+
+  if (offline) {
+    const items = Object.values(musicCacheStore.getState().cachedItems);
+    const songs = items.flatMap((item) =>
+      item.tracks
+        .filter((t) => t.artist === artistName)
+        .map((t) => ({
+          id: t.id,
+          title: t.title,
+          artist: t.artist,
+          album: item.name,
+          coverArt: item.coverArtId,
+          duration: t.duration,
+          isDir: false,
+        } as Child)),
+    );
+
+    if (songs.length === 0) {
+      processingOverlayStore.getState().showError(i18n.t('noOfflineSongsByArtist', { artist: artistName }));
+      return null;
+    }
+    return songs;
+  }
+
+  // Get artist detail (cached or fetched)
+  const cached = artistDetailStore.getState().artists[artistId];
+  const artistDetail = cached ?? (await artistDetailStore.getState().fetchArtist(artistId));
+  const albums = artistDetail?.artist?.album;
+  if (!albums?.length) {
+    processingOverlayStore.getState().showError(i18n.t('noSongsFoundByArtist', { artist: artistName }));
+    return null;
+  }
+
+  // Fetch songs from each album (use cache where available)
+  const cachedAlbums = albumDetailStore.getState().albums;
+  const albumSongs = await Promise.all(
+    albums.map(async (album) => {
+      const cachedSongs = cachedAlbums[album.id]?.album?.song;
+      if (cachedSongs?.length) return cachedSongs;
+      const fetched = await getAlbum(album.id);
+      return fetched?.song ?? [];
+    }),
+  );
+
+  // Flatten and filter to only this artist's songs (handles compilations)
+  const songs = albumSongs.flat().filter(
+    (s) => s.artistId === artistId || s.artist === artistName,
+  );
+
+  if (songs.length === 0) {
+    processingOverlayStore.getState().showError(i18n.t('noSongsFoundByArtist', { artist: artistName }));
+    return null;
+  }
+  return songs;
+}
+
 /**
  * Build a shuffled queue of songs by a specific artist and start playback.
  * Online: fetches all albums by the artist, collects songs, shuffles.
  * Offline: scans cached music items for matching tracks.
  */
 export async function playMoreByArtist(artistId: string, artistName: string): Promise<void> {
-  const offline = offlineModeStore.getState().offlineMode;
   processingOverlayStore.getState().show(i18n.t('loading'));
 
   try {
-    let songs: Child[];
+    const songs = await fetchAllArtistSongs(artistId, artistName);
+    if (!songs) return;
 
-    if (offline) {
-      const items = Object.values(musicCacheStore.getState().cachedItems);
-      songs = items.flatMap((item) =>
-        item.tracks
-          .filter((t) => t.artist === artistName)
-          .map((t) => ({
-            id: t.id,
-            title: t.title,
-            artist: t.artist,
-            album: item.name,
-            coverArt: item.coverArtId,
-            duration: t.duration,
-            isDir: false,
-          } as Child)),
-      );
-
-      if (songs.length === 0) {
-        processingOverlayStore.getState().showError(i18n.t('noOfflineSongsByArtist', { artist: artistName }));
-        return;
-      }
-      if (songs.length < MORE_BY_ARTIST_MIN) {
-        processingOverlayStore.getState().showError(i18n.t('notEnoughOfflineSongsByArtist', { artist: artistName }));
-        return;
-      }
-    } else {
-      // Get artist detail (cached or fetched)
-      const cached = artistDetailStore.getState().artists[artistId];
-      const artistDetail = cached ?? (await artistDetailStore.getState().fetchArtist(artistId));
-      const albums = artistDetail?.artist?.album;
-      if (!albums?.length) {
-        processingOverlayStore.getState().showError(i18n.t('noSongsFoundByArtist', { artist: artistName }));
-        return;
-      }
-
-      // Fetch songs from each album (use cache where available)
-      const cachedAlbums = albumDetailStore.getState().albums;
-      const albumSongs = await Promise.all(
-        albums.map(async (album) => {
-          const cached = cachedAlbums[album.id]?.album?.song;
-          if (cached?.length) return cached;
-          const fetched = await getAlbum(album.id);
-          return fetched?.song ?? [];
-        }),
-      );
-
-      // Flatten and filter to only this artist's songs (handles compilations)
-      songs = albumSongs.flat().filter(
-        (s) => s.artistId === artistId || s.artist === artistName,
-      );
-
-      if (songs.length === 0) {
-        processingOverlayStore.getState().showError(i18n.t('noSongsFoundByArtist', { artist: artistName }));
-        return;
-      }
-      if (songs.length < MORE_BY_ARTIST_MIN) {
-        processingOverlayStore.getState().showError(i18n.t('notEnoughSongsByArtist', { artist: artistName }));
-        return;
-      }
+    if (songs.length < MORE_BY_ARTIST_MIN) {
+      const offline = offlineModeStore.getState().offlineMode;
+      const key = offline ? 'notEnoughOfflineSongsByArtist' : 'notEnoughSongsByArtist';
+      processingOverlayStore.getState().showError(i18n.t(key, { artist: artistName }));
+      return;
     }
 
     const queue = shuffleArray(songs).slice(0, layoutPreferencesStore.getState().listLength);
     await playTrack(queue[0], queue);
     processingOverlayStore.getState().showSuccess(i18n.t('playingArtistMix', { artist: artistName }));
+  } catch {
+    processingOverlayStore.getState().showError(i18n.t('failedToLoadArtistSongs', { artist: artistName }));
+  }
+}
+
+/**
+ * Play all songs by an artist. When shuffle is false, songs are ordered
+ * chronologically by album (year → disc → track). No song count cap.
+ */
+export async function playAllByArtist(
+  artistId: string,
+  artistName: string,
+  shuffle: boolean,
+): Promise<void> {
+  processingOverlayStore.getState().show(i18n.t('loading'));
+
+  try {
+    const songs = await fetchAllArtistSongs(artistId, artistName);
+    if (!songs) return;
+
+    let queue: Child[];
+    if (shuffle) {
+      queue = shuffleArray(songs);
+    } else {
+      // Sort by album year → disc → track for a natural listening order
+      queue = [...songs].sort((a, b) => {
+        const yearDiff = (a.year ?? 0) - (b.year ?? 0);
+        if (yearDiff !== 0) return yearDiff;
+        const discDiff = (a.discNumber ?? 1) - (b.discNumber ?? 1);
+        if (discDiff !== 0) return discDiff;
+        return (a.track ?? 0) - (b.track ?? 0);
+      });
+    }
+
+    await playTrack(queue[0], queue);
+    processingOverlayStore.getState().showSuccess(
+      i18n.t(shuffle ? 'shufflingAllSongsByArtist' : 'playingAllSongsByArtist', { artist: artistName }),
+    );
   } catch {
     processingOverlayStore.getState().showError(i18n.t('failedToLoadArtistSongs', { artist: artistName }));
   }
