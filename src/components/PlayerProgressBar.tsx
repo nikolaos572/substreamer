@@ -12,6 +12,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -63,6 +64,7 @@ export function PlayerProgressBar({
   retrying = false,
   onRetry,
 }: PlayerProgressBarProps) {
+  const { t } = useTranslation();
   const trackWidth = useRef(0);
   const trackPageX = useRef(0);
   const trackRef = useRef<View>(null);
@@ -268,7 +270,7 @@ export function PlayerProgressBar({
                 ]}
               >
                 <Text style={[styles.retryText, { color: colors.red }]}>
-                  Retry
+                  {t('retry')}
                 </Text>
               </Pressable>
             )}
@@ -284,7 +286,7 @@ export function PlayerProgressBar({
               { color: colors.textSecondary, opacity: isBuffering ? 1 : 0 },
             ]}
           >
-            Buffering…
+            {t('buffering')}
           </Text>
         )}
         <Text style={[styles.timeText, { color: colors.textSecondary }]}>
@@ -347,7 +349,6 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     fontSize: 12,
-    fontStyle: 'italic',
     flexShrink: 1,
   },
   retryButton: {

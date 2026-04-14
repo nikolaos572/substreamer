@@ -370,7 +370,7 @@ export function ExpandedPlayerView({
             >
               <Ionicons name="contract-outline" size={22} color={colors.textPrimary} />
               <Text style={[styles.collapseText, { color: colors.textPrimary }]}>
-                Now Playing
+                {t('nowPlaying')}
               </Text>
             </Pressable>
           </Animated.View>
@@ -537,7 +537,7 @@ export function ExpandedPlayerView({
                   {/* Queue header */}
                   <View style={styles.queueHeaderRow}>
                     <Text style={[styles.queueHeaderText, { color: colors.textPrimary }]}>
-                      Queue
+                      {t('queue')}
                     </Text>
                     <View style={styles.queueActions}>
                       <ShuffleButton
@@ -567,7 +567,7 @@ export function ExpandedPlayerView({
                         ]}
                       >
                         <Text style={[styles.clearButtonText, { color: colors.textPrimary }]}>
-                          Clear
+                          {t('clear')}
                         </Text>
                       </Pressable>
                     </View>
@@ -603,7 +603,7 @@ export function ExpandedPlayerView({
                 <View style={styles.lyricsPlaceholder}>
                   <MaterialCommunityIcons name="comment-quote-outline" size={48} color={colors.textSecondary} />
                   <Text style={[styles.lyricsPlaceholderText, { color: colors.textSecondary }]}>
-                    Lyrics coming soon
+                    {t('lyricsComingSoon')}
                   </Text>
                 </View>
               )}

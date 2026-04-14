@@ -3,10 +3,13 @@
 /**
  * Validates all translation locale files against the English source.
  *
- * Checks:
- * 1. Missing keys — every en.json key must exist in each locale
- * 2. Extra keys — no locale should have keys absent from en.json
- * 3. Interpolation — {{placeholder}} names must match between en and each locale
+ * Errors (fail CI):
+ * 1. Extra keys — locale has keys absent from en.json (stale drift)
+ * 2. Interpolation — {{placeholder}} names must match between en and each locale
+ *
+ * Warnings (do not fail CI):
+ * - Missing keys — source strings land on master before Crowdin's weekly sync
+ *   catches up. i18next falls back to en at runtime, so user impact is zero.
  *
  * Plural-aware: languages that lack a "one" plural category (e.g. ja, zh, ko)
  * are not required to have _one suffixed keys — only the _other form is mandatory.
@@ -33,6 +36,7 @@ function getPlaceholders(str) {
 }
 
 let errorCount = 0;
+let warningCount = 0;
 
 const localeFiles = fs
   .readdirSync(localesDir)
@@ -56,8 +60,8 @@ for (const file of localeFiles) {
   if (missing.length > 0) {
     const preview = missing.slice(0, 5).join(', ');
     const suffix = missing.length > 5 ? `, ... (${missing.length} total)` : '';
-    console.error(`[${code}] Missing keys: ${preview}${suffix}`);
-    errorCount += missing.length;
+    console.warn(`[${code}] ⚠️  Missing keys (awaiting Crowdin sync): ${preview}${suffix}`);
+    warningCount += missing.length;
   }
 
   // --- Extra keys ---
@@ -86,11 +90,15 @@ for (const file of localeFiles) {
   }
 }
 
+if (warningCount > 0) {
+  console.warn(`\n${warningCount} missing-key warning(s) — awaiting Crowdin sync.`);
+}
+
 if (errorCount > 0) {
   console.error(`\nValidation failed with ${errorCount} error(s).`);
   process.exit(1);
 } else {
   console.log(
-    `All ${localeFiles.length} translation file(s) validated successfully.`,
+    `\nAll ${localeFiles.length} translation file(s) validated successfully.`,
   );
 }

@@ -209,7 +209,7 @@ export function PlayerPanel() {
         <View style={styles.queueSection}>
           <View style={styles.queueHeaderRow}>
             <Text style={[styles.queueHeader, { color: colors.textPrimary }]}>
-              Queue
+              {t('queue')}
             </Text>
             <View style={styles.queueActions}>
               <ShuffleButton
@@ -239,7 +239,7 @@ export function PlayerPanel() {
                 ]}
               >
                 <Text style={[styles.clearButtonText, { color: colors.textPrimary }]}>
-                  Clear
+                  {t('clear')}
                 </Text>
               </Pressable>
             </View>

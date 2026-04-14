@@ -5,6 +5,9 @@
   "search": "Search",
   "settings": "Settings",
   "back": "Back",
+  "buffering": "buffering",
+  "retry": "Retry",
+  "noGenreDataAvailable": "No genre data available",
 
   "account": "Account",
   "activeShares": "Active shares",

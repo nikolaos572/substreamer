@@ -67,7 +67,7 @@ export const GenreChart = memo(function GenreChart({ data, totalPlays, colors }:
     return (
       <View style={styles.emptyContainer}>
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-          No genre data available
+          {t('noGenreDataAvailable')}
         </Text>
       </View>
     );

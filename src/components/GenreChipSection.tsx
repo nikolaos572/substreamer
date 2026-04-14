@@ -138,6 +138,7 @@ const GenreChip = memo(function GenreChip({ genre, index, colors }: GenreChipPro
 });
 
 const MixItUpChip = memo(function MixItUpChip({ colors }: { colors: ThemeColors }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const color = colors.primary;
 
@@ -206,7 +207,7 @@ const MixItUpChip = memo(function MixItUpChip({ colors }: { colors: ThemeColors 
           style={[styles.chipText, { color: colors.textPrimary }]}
           numberOfLines={1}
         >
-          Mix It Up
+          {t('mixItUp')}
         </Text>
         <Ionicons name="play" size={12} color={color} />
       </Pressable>
@@ -278,12 +279,12 @@ export const GenreChipSection = memo(function GenreChipSection({
             accessibilityLabel={t('openTunedIn')}
           >
             <Text style={[styles.title, { color: colors.textPrimary }]}>
-              Tuned In
+              {t('tunedIn')}
             </Text>
           </Pressable>
         ) : (
           <Text style={[styles.title, { color: colors.textPrimary, flex: 1 }]}>
-            Tuned In
+            {t('tunedIn')}
           </Text>
         )}
         {online && (
