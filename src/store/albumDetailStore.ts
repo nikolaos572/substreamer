@@ -9,7 +9,11 @@ import {
   getAlbum,
   type AlbumWithSongsID3,
 } from '../services/subsonicService';
+import { withTimeout } from '../utils/withTimeout';
 import { ratingStore } from './ratingStore';
+
+/** Hard budget for a single album-detail fetch. */
+const FETCH_TIMEOUT_MS = 15_000;
 
 export interface AlbumDetailEntry {
   album: AlbumWithSongsID3;
@@ -34,26 +38,30 @@ export const albumDetailStore = create<AlbumDetailState>()(
       albums: {},
 
       fetchAlbum: async (id: string) => {
-        await ensureCoverArtAuth();
-        const data = await getAlbum(id);
-        if (data) {
-          const ratingEntries: Array<{ id: string; serverRating: number }> = [
-            { id: data.id, serverRating: data.userRating ?? 0 },
-            ...(data.song ?? []).map((s) => ({ id: s.id, serverRating: s.userRating ?? 0 })),
-          ];
-          ratingStore.getState().reconcileRatings(ratingEntries);
-          set({
-            albums: {
-              ...get().albums,
-              [id]: { album: data, retrievedAt: Date.now() },
-            },
-          });
+        const result = await withTimeout(async () => {
+          await ensureCoverArtAuth();
+          const data = await getAlbum(id);
+          if (data) {
+            const ratingEntries: Array<{ id: string; serverRating: number }> = [
+              { id: data.id, serverRating: data.userRating ?? 0 },
+              ...(data.song ?? []).map((s) => ({ id: s.id, serverRating: s.userRating ?? 0 })),
+            ];
+            ratingStore.getState().reconcileRatings(ratingEntries);
+            set({
+              albums: {
+                ...get().albums,
+                [id]: { album: data, retrievedAt: Date.now() },
+              },
+            });
 
-          // Proactively cache cover art for new IDs so they survive offline
-          if (data.coverArt) cacheAllSizes(data.coverArt).catch(() => { /* non-critical */ });
-          if (data.song?.length) cacheEntityCoverArt(data.song);
-        }
-        return data;
+            // Proactively cache cover art for new IDs so they survive offline
+            if (data.coverArt) cacheAllSizes(data.coverArt).catch(() => { /* non-critical */ });
+            if (data.song?.length) cacheEntityCoverArt(data.song);
+          }
+          return data;
+        }, FETCH_TIMEOUT_MS);
+
+        return result === 'timeout' ? null : result;
       },
 
       clearAlbums: () => set({ albums: {} }),

@@ -642,3 +642,86 @@ describe('getAlbumDescription', () => {
     expect(await getAlbumDescription('A', 'B')).toBeNull();
   });
 });
+
+describe('AbortSignal forwarding', () => {
+  it('passes the signal through searchArtistMBID', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ artists: [] }) });
+    const ctrl = new AbortController();
+    await searchArtistMBID('x', ctrl.signal);
+    expect(mockFetch.mock.calls[0][1].signal).toBe(ctrl.signal);
+  });
+
+  it('passes the signal through searchArtists', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ artists: [] }) });
+    const ctrl = new AbortController();
+    await searchArtists('x', 5, ctrl.signal);
+    expect(mockFetch.mock.calls[0][1].signal).toBe(ctrl.signal);
+  });
+
+  it('passes the signal through getArtistBiography', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const ctrl = new AbortController();
+    await getArtistBiography('mbid', ctrl.signal);
+    expect(mockFetch.mock.calls[0][1].signal).toBe(ctrl.signal);
+  });
+
+  it('passes the signal through searchReleaseGroupMBID', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const ctrl = new AbortController();
+    await searchReleaseGroupMBID('a', 'b', ctrl.signal);
+    expect(mockFetch.mock.calls[0][1].signal).toBe(ctrl.signal);
+  });
+
+  it('passes the signal through searchReleaseGroups', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const ctrl = new AbortController();
+    await searchReleaseGroups('x', 'a', 5, ctrl.signal);
+    expect(mockFetch.mock.calls[0][1].signal).toBe(ctrl.signal);
+  });
+
+  it('passes the signal through getReleaseGroupIdForRelease', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const ctrl = new AbortController();
+    await getReleaseGroupIdForRelease('rel', ctrl.signal);
+    expect(mockFetch.mock.calls[0][1].signal).toBe(ctrl.signal);
+  });
+
+  it('passes the signal through getWikidataIdForReleaseGroup', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const ctrl = new AbortController();
+    await getWikidataIdForReleaseGroup('rg', ctrl.signal);
+    expect(mockFetch.mock.calls[0][1].signal).toBe(ctrl.signal);
+  });
+
+  it('passes the signal through getWikipediaExtractForAlbum', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const ctrl = new AbortController();
+    await getWikipediaExtractForAlbum('Q1', ctrl.signal);
+    expect(mockFetch.mock.calls[0][1].signal).toBe(ctrl.signal);
+  });
+
+  it('threads the signal through getAlbumDescription to every sub-fetch', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ 'release-group': { id: 'rg-1' } }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          relations: [{ type: 'wikidata', url: { resource: 'https://www.wikidata.org/wiki/Q99' } }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ entities: { Q99: { sitelinks: { enwiki: { title: 'X' } } } } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ extract: 'desc', content_urls: { desktop: { page: 'https://x' } } }),
+      });
+    const ctrl = new AbortController();
+    await getAlbumDescription('Artist', 'Album', 'rel-1', false, ctrl.signal);
+    // All 4 sub-fetches receive the same signal
+    for (const call of mockFetch.mock.calls) {
+      expect(call[1].signal).toBe(ctrl.signal);
+    }
+  });
+});

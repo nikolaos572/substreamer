@@ -46,6 +46,10 @@ export interface AlbumInfoContentProps {
   sanitizedNotes: string | null;
   notesAttributionUrl: string | null;
   albumInfoLoading: boolean;
+  /** Last fetch error for this album, if any. */
+  albumInfoError?: 'timeout' | 'error' | null;
+  /** Called when the user taps Retry after an error. */
+  onRetry?: () => void;
   refreshing: boolean;
   onRefresh: () => void;
   colors: {
@@ -69,6 +73,8 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
   sanitizedNotes,
   notesAttributionUrl,
   albumInfoLoading,
+  albumInfoError,
+  onRetry,
   refreshing,
   onRefresh,
   colors,
@@ -157,7 +163,37 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
         />
       }
     >
-      {(albumInfoLoading || refreshing) ? (
+      {albumInfoError && !albumInfoLoading && !refreshing ? (
+        <View style={styles.errorBlock}>
+          <Ionicons
+            name="cloud-offline-outline"
+            size={36}
+            color={colors.textSecondary}
+            style={styles.errorIcon}
+          />
+          <Text style={[styles.errorText, { color: colors.textSecondary }]}>
+            {albumInfoError === 'timeout'
+              ? t('albumInfoTimedOut')
+              : t('albumInfoFailedToLoad')}
+          </Text>
+          {onRetry && (
+            <Pressable
+              onPress={onRetry}
+              accessibilityRole="button"
+              accessibilityLabel={t('retry')}
+              style={({ pressed }) => [
+                styles.retryButton,
+                { borderColor: hexWithAlpha(colors.border, 0.5) },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.retryButtonText, { color: colors.textPrimary }]}>
+                {t('retry')}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      ) : (albumInfoLoading || refreshing) ? (
         /* Skeleton placeholder — mirrors the real layout */
         <View>
           {/* Hero block */}
@@ -538,5 +574,32 @@ const styles = StyleSheet.create({
 
   pressed: {
     opacity: 0.6,
+  },
+
+  /* Error state */
+  errorBlock: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  errorIcon: {
+    marginBottom: 4,
+  },
+  errorText: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  retryButton: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  retryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

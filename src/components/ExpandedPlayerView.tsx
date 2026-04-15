@@ -129,6 +129,7 @@ export function ExpandedPlayerView({
   const albumId = currentTrack?.albumId ?? null;
   const albumInfoEntry = albumInfoStore((s) => albumId ? s.entries[albumId] : undefined);
   const albumInfoLoading = albumInfoStore((s) => albumId ? (s.loading[albumId] ?? false) : false);
+  const albumInfoError = albumInfoStore((s) => albumId ? (s.errors[albumId] ?? null) : null);
   const fetchAttemptedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -176,6 +177,16 @@ export function ExpandedPlayerView({
     );
     await delay;
     setAlbumInfoRefreshing(false);
+  }, [albumId, currentTrack?.artist, currentTrack?.album]);
+
+  const handleRetryAlbumInfo = useCallback(() => {
+    if (!albumId) return;
+    fetchAttemptedRef.current = null;
+    albumInfoStore.getState().fetchAlbumInfo(
+      albumId,
+      currentTrack?.artist ?? undefined,
+      currentTrack?.album ?? undefined,
+    );
   }, [albumId, currentTrack?.artist, currentTrack?.album]);
 
   // Measure the art area so cover art fills available height
@@ -594,6 +605,8 @@ export function ExpandedPlayerView({
                   sanitizedNotes={sanitizedNotes}
                   notesAttributionUrl={notesAttributionUrl}
                   albumInfoLoading={albumInfoLoading}
+                  albumInfoError={albumInfoError}
+                  onRetry={handleRetryAlbumInfo}
                   refreshing={albumInfoRefreshing}
                   onRefresh={handleRefreshAlbumInfo}
                   colors={colors}

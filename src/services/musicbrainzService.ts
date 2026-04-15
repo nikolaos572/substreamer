@@ -61,7 +61,10 @@ interface WikipediaExtractResponse {
  * @param artistName  The artist name to search for.
  * @returns The MBID string, or `null` if no match is found or an error occurs.
  */
-export async function searchArtistMBID(artistName: string): Promise<string | null> {
+export async function searchArtistMBID(
+  artistName: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
   try {
     const query = `artist:${artistName}`;
     const url = `${API_BASE_URL}artist/?query=${encodeURIComponent(query)}&fmt=json&limit=1`;
@@ -71,6 +74,7 @@ export async function searchArtistMBID(artistName: string): Promise<string | nul
         'User-Agent': USER_AGENT,
         Accept: 'application/json',
       },
+      signal,
     });
 
     if (!response.ok) return null;
@@ -97,6 +101,7 @@ export async function searchArtistMBID(artistName: string): Promise<string | nul
 export async function searchArtists(
   query: string,
   limit = 10,
+  signal?: AbortSignal,
 ): Promise<MusicBrainzArtist[]> {
   try {
     const url = `${API_BASE_URL}artist/?query=${encodeURIComponent(`artist:${query}`)}&fmt=json&limit=${limit}`;
@@ -106,6 +111,7 @@ export async function searchArtists(
         'User-Agent': USER_AGENT,
         Accept: 'application/json',
       },
+      signal,
     });
 
     if (!response.ok) return [];
@@ -127,7 +133,10 @@ export async function searchArtists(
  * @param mbid  The MusicBrainz ID of the artist.
  * @returns The biography text, or `null` if unavailable or an error occurs.
  */
-export async function getArtistBiography(mbid: string): Promise<string | null> {
+export async function getArtistBiography(
+  mbid: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
   try {
     const url = encodeURI(`${WEB_BASE_URL}${mbid}/wikipedia-extract`);
 
@@ -136,6 +145,7 @@ export async function getArtistBiography(mbid: string): Promise<string | null> {
         'User-Agent': USER_AGENT,
         Accept: 'application/json',
       },
+      signal,
     });
 
     if (!response.ok) return null;
@@ -192,6 +202,7 @@ interface MusicBrainzReleaseGroupWithRels {
 export async function searchReleaseGroupMBID(
   artist: string,
   album: string,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   try {
     const query = `releasegroup:${album} AND artist:${artist}`;
@@ -199,6 +210,7 @@ export async function searchReleaseGroupMBID(
 
     const response = await fetch(url, {
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+      signal,
     });
 
     if (!response.ok) return null;
@@ -223,6 +235,7 @@ export async function searchReleaseGroups(
   query: string,
   artist?: string,
   limit = 10,
+  signal?: AbortSignal,
 ): Promise<MusicBrainzReleaseGroup[]> {
   try {
     const parts = [`releasegroup:${query}`];
@@ -231,6 +244,7 @@ export async function searchReleaseGroups(
 
     const response = await fetch(url, {
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+      signal,
     });
 
     if (!response.ok) return [];
@@ -254,12 +268,14 @@ export async function searchReleaseGroups(
  */
 export async function getReleaseGroupIdForRelease(
   releaseMbid: string,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   try {
     const url = `${API_BASE_URL}release/${encodeURIComponent(releaseMbid)}?inc=release-groups&fmt=json`;
 
     const response = await fetch(url, {
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+      signal,
     });
 
     if (!response.ok) return null;
@@ -279,12 +295,14 @@ export async function getReleaseGroupIdForRelease(
  */
 export async function getWikidataIdForReleaseGroup(
   mbid: string,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   try {
     const url = `${API_BASE_URL}release-group/${encodeURIComponent(mbid)}?inc=url-rels&fmt=json`;
 
     const response = await fetch(url, {
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+      signal,
     });
 
     if (!response.ok) return null;
@@ -312,6 +330,7 @@ export async function getWikidataIdForReleaseGroup(
  */
 export async function getWikipediaExtractForAlbum(
   wikidataId: string,
+  signal?: AbortSignal,
 ): Promise<{ extract: string; url: string } | null> {
   try {
     // Step 1: Resolve Wikipedia article title via Wikidata sitelinks
@@ -321,6 +340,7 @@ export async function getWikipediaExtractForAlbum(
 
     const wdResponse = await fetch(wdUrl, {
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+      signal,
     });
 
     if (!wdResponse.ok) return null;
@@ -335,6 +355,7 @@ export async function getWikipediaExtractForAlbum(
 
     const wpResponse = await fetch(wpUrl, {
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+      signal,
     });
 
     if (!wpResponse.ok) return null;
@@ -373,6 +394,7 @@ export async function getAlbumDescription(
   album: string,
   mbid?: string | null,
   isReleaseGroupId?: boolean,
+  signal?: AbortSignal,
 ): Promise<{ description: string; url: string } | null> {
   try {
     let releaseGroupId: string | null = null;
@@ -383,21 +405,21 @@ export async function getAlbumDescription(
         releaseGroupId = mbid;
       } else {
         // Server-provided MBIDs are release IDs — resolve to release-group
-        releaseGroupId = await getReleaseGroupIdForRelease(mbid);
+        releaseGroupId = await getReleaseGroupIdForRelease(mbid, signal);
       }
     }
 
     // Fall back to searching by artist + album name
     if (!releaseGroupId) {
-      releaseGroupId = await searchReleaseGroupMBID(artist, album);
+      releaseGroupId = await searchReleaseGroupMBID(artist, album, signal);
     }
 
     if (!releaseGroupId) return null;
 
-    const wikidataId = await getWikidataIdForReleaseGroup(releaseGroupId);
+    const wikidataId = await getWikidataIdForReleaseGroup(releaseGroupId, signal);
     if (!wikidataId) return null;
 
-    const result = await getWikipediaExtractForAlbum(wikidataId);
+    const result = await getWikipediaExtractForAlbum(wikidataId, signal);
     if (!result) return null;
 
     return { description: result.extract, url: result.url };

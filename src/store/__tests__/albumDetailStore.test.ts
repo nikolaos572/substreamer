@@ -110,4 +110,23 @@ describe('albumDetailStore', () => {
       expect(albumDetailStore.getState().albums).toEqual({});
     });
   });
+
+  describe('fetchAlbum — timeout', () => {
+    it('returns null when the fetch exceeds the 15s budget', async () => {
+      jest.useFakeTimers();
+      try {
+        mockGetAlbum.mockImplementation(
+          () => new Promise(() => { /* never resolves */ }),
+        );
+
+        const fetchPromise = albumDetailStore.getState().fetchAlbum('a1');
+        jest.advanceTimersByTime(15_000);
+        const result = await fetchPromise;
+
+        expect(result).toBeNull();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
 });

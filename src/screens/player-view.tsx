@@ -775,6 +775,7 @@ const AlbumInfoTab = memo(function AlbumInfoTab({
   const albumId = currentTrack.albumId ?? null;
   const albumInfoEntry = albumInfoStore((s) => albumId ? s.entries[albumId] : undefined);
   const albumInfoLoading = albumInfoStore((s) => albumId ? (s.loading[albumId] ?? false) : false);
+  const albumInfoError = albumInfoStore((s) => albumId ? (s.errors[albumId] ?? null) : null);
   const fetchAttemptedRef = useRef<string | null>(null);
 
   const [refreshing, setRefreshing] = useState(false);
@@ -824,6 +825,16 @@ const AlbumInfoTab = memo(function AlbumInfoTab({
     setRefreshing(false);
   }, [albumId, currentTrack.artist, currentTrack.album]);
 
+  const handleRetry = useCallback(() => {
+    if (!albumId) return;
+    fetchAttemptedRef.current = null;
+    albumInfoStore.getState().fetchAlbumInfo(
+      albumId,
+      currentTrack.artist ?? undefined,
+      currentTrack.album ?? undefined,
+    );
+  }, [albumId, currentTrack.artist, currentTrack.album]);
+
   return (
     <View style={styles.albumInfoContainer}>
       <AlbumInfoContent
@@ -833,6 +844,8 @@ const AlbumInfoTab = memo(function AlbumInfoTab({
         sanitizedNotes={sanitizedNotes}
         notesAttributionUrl={notesAttributionUrl}
         albumInfoLoading={albumInfoLoading}
+        albumInfoError={albumInfoError}
+        onRetry={handleRetry}
         refreshing={refreshing}
         onRefresh={handleRefresh}
         colors={colors}

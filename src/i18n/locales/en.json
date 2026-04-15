@@ -751,6 +751,8 @@
   "recentPlays": "Recent Plays",
   "noSongsFound": "No songs found",
   "failedToLoad": "Failed to load",
+  "albumInfoFailedToLoad": "Couldn't load album info.",
+  "albumInfoTimedOut": "Couldn't load album info — the server took too long to respond.",
   "buildAMix": "Build a Mix",
   "pickGenresDecadesMore": "Pick genres, decades & more",
   "searchGenresPlaceholder": "Search genres...",

@@ -82,11 +82,43 @@ describe('albumInfoStore', () => {
       expect(albumInfoStore.getState().loading['a1']).toBeUndefined();
     });
 
-    it('clears loading state on error', async () => {
+    it('records an error and clears loading when the server call rejects', async () => {
       mockGetAlbumInfo2.mockRejectedValue(new Error('Network error'));
 
-      await expect(albumInfoStore.getState().fetchAlbumInfo('a1')).rejects.toThrow('Network error');
+      const result = await albumInfoStore.getState().fetchAlbumInfo('a1');
+
+      expect(result).toBeNull();
       expect(albumInfoStore.getState().loading['a1']).toBeUndefined();
+      expect(albumInfoStore.getState().errors['a1']).toBe('error');
+    });
+
+    it('records a timeout error and clears loading when the fetch exceeds the budget', async () => {
+      jest.useFakeTimers();
+      try {
+        mockGetAlbumInfo2.mockImplementation(
+          () => new Promise<AlbumInfo | null>(() => { /* never resolves */ }),
+        );
+
+        const fetchPromise = albumInfoStore.getState().fetchAlbumInfo('a1');
+        jest.advanceTimersByTime(15_000);
+        const result = await fetchPromise;
+
+        expect(result).toBeNull();
+        expect(albumInfoStore.getState().loading['a1']).toBeUndefined();
+        expect(albumInfoStore.getState().errors['a1']).toBe('timeout');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('clears a prior error entry when a subsequent fetch succeeds', async () => {
+      mockGetAlbumInfo2.mockRejectedValueOnce(new Error('boom'));
+      await albumInfoStore.getState().fetchAlbumInfo('a1');
+      expect(albumInfoStore.getState().errors['a1']).toBe('error');
+
+      mockGetAlbumInfo2.mockResolvedValueOnce(sampleAlbumInfo);
+      await albumInfoStore.getState().fetchAlbumInfo('a1', 'Artist', 'Album');
+      expect(albumInfoStore.getState().errors['a1']).toBeUndefined();
     });
   });
 
@@ -100,7 +132,9 @@ describe('albumInfoStore', () => {
 
       const result = await albumInfoStore.getState().fetchAlbumInfo('a1', 'Artist', 'Album');
 
-      expect(mockGetAlbumDescription).toHaveBeenCalledWith('Artist', 'Album', 'mb-123', false);
+      expect(mockGetAlbumDescription).toHaveBeenCalledWith(
+        'Artist', 'Album', 'mb-123', false, expect.any(AbortSignal),
+      );
       expect(result?.enrichedNotes).toBe('A Wikipedia article about the album.');
       expect(result?.enrichedNotesUrl).toBe('https://en.wikipedia.org/wiki/Album');
     });
@@ -162,7 +196,9 @@ describe('albumInfoStore', () => {
 
       await albumInfoStore.getState().fetchAlbumInfo('a1', 'Artist', 'Album');
 
-      expect(mockGetAlbumDescription).toHaveBeenCalledWith('Artist', 'Album', 'override-mbid', true);
+      expect(mockGetAlbumDescription).toHaveBeenCalledWith(
+        'Artist', 'Album', 'override-mbid', true, expect.any(AbortSignal),
+      );
     });
 
     it('falls back to server MBID when no album override exists', async () => {
@@ -171,7 +207,9 @@ describe('albumInfoStore', () => {
 
       await albumInfoStore.getState().fetchAlbumInfo('a1', 'Artist', 'Album');
 
-      expect(mockGetAlbumDescription).toHaveBeenCalledWith('Artist', 'Album', 'mb-123', false);
+      expect(mockGetAlbumDescription).toHaveBeenCalledWith(
+        'Artist', 'Album', 'mb-123', false, expect.any(AbortSignal),
+      );
     });
   });
 

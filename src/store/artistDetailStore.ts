@@ -22,8 +22,12 @@ import {
   searchArtistMBID,
 } from '../services/musicbrainzService';
 import { sanitizeBiographyText } from '../utils/formatters';
+import { withTimeout } from '../utils/withTimeout';
 import { layoutPreferencesStore } from './layoutPreferencesStore';
 import { ratingStore } from './ratingStore';
+
+/** Hard budget for a single artist-detail fetch (server + MB enrichment). */
+const FETCH_TIMEOUT_MS = 15_000;
 
 export interface ArtistDetailEntry {
   artist: ArtistWithAlbumsID3;
@@ -55,86 +59,90 @@ export const artistDetailStore = create<ArtistDetailState>()(
       artists: {},
 
       fetchArtist: async (id: string) => {
-        await ensureCoverArtAuth();
+        const result = await withTimeout(async (signal) => {
+          await ensureCoverArtAuth();
 
-        const artistData = await getArtist(id);
-        if (!artistData) return null;
+          const artistData = await getArtist(id);
+          if (!artistData) return null;
 
-        // Various Artists: skip all remote enrichment, inject static data.
-        if (isVariousArtists(artistData.name)) {
+          // Various Artists: skip all remote enrichment, inject static data.
+          if (isVariousArtists(artistData.name)) {
+            const entry: ArtistDetailEntry = {
+              artist: {
+                ...artistData,
+                coverArt: VARIOUS_ARTISTS_COVER_ART_ID,
+              },
+              artistInfo: null,
+              topSongs: [],
+              biography: getVariousArtistsBio(),
+              resolvedMbid: null,
+              retrievedAt: Date.now(),
+            };
+            set({ artists: { ...get().artists, [id]: entry } });
+            return entry;
+          }
+
+          // Normal artist: fetch info and top songs in parallel.
+          const [infoData, topSongs] = await Promise.all([
+            getArtistInfo2(id),
+            getTopSongs(artistData.name, layoutPreferencesStore.getState().listLength).catch(() => [] as Child[]),
+          ]);
+
+          // Resolve biography: prefer Subsonic, fall back to MusicBrainz
+          let biography: string | null = null;
+          let resolvedMbid: string | null = null;
+          const subsonicBio = infoData?.biography ? sanitizeBiographyText(infoData.biography) : null;
+          if (subsonicBio && subsonicBio.length > 0) {
+            biography = subsonicBio;
+            resolvedMbid = getOverride(mbidOverrideStore.getState().overrides, 'artist', id)?.mbid
+              ?? infoData?.musicBrainzId
+              ?? null;
+          } else {
+            try {
+              const override = getOverride(mbidOverrideStore.getState().overrides, 'artist', id);
+              const mbid = override?.mbid
+                ?? infoData?.musicBrainzId
+                ?? (await searchArtistMBID(artistData.name, signal));
+              resolvedMbid = mbid;
+              if (mbid) {
+                const mbBio = await getArtistBiography(mbid, signal);
+                if (mbBio) biography = sanitizeBiographyText(mbBio);
+              }
+            } catch {
+              /* non-critical */
+            }
+          }
+
           const entry: ArtistDetailEntry = {
-            artist: {
-              ...artistData,
-              coverArt: VARIOUS_ARTISTS_COVER_ART_ID,
-            },
-            artistInfo: null,
-            topSongs: [],
-            biography: getVariousArtistsBio(),
-            resolvedMbid: null,
+            artist: artistData,
+            artistInfo: infoData,
+            topSongs,
+            biography,
+            resolvedMbid,
             retrievedAt: Date.now(),
           };
-          set({ artists: { ...get().artists, [id]: entry } });
+
+          const ratingEntries: Array<{ id: string; serverRating: number }> = [
+            { id, serverRating: artistData.userRating ?? 0 },
+            ...topSongs.map((s) => ({ id: s.id, serverRating: s.userRating ?? 0 })),
+            ...(artistData.album ?? []).map((a) => ({ id: a.id, serverRating: a.userRating ?? 0 })),
+          ];
+          ratingStore.getState().reconcileRatings(ratingEntries);
+
+          set({
+            artists: {
+              ...get().artists,
+              [id]: entry,
+            },
+          });
+
+          // Proactively cache cover art for new IDs so they survive offline
+          if (topSongs.length > 0) cacheEntityCoverArt(topSongs);
+
           return entry;
-        }
+        }, FETCH_TIMEOUT_MS);
 
-        // Normal artist: fetch info and top songs in parallel.
-        const [infoData, topSongs] = await Promise.all([
-          getArtistInfo2(id),
-          getTopSongs(artistData.name, layoutPreferencesStore.getState().listLength).catch(() => [] as Child[]),
-        ]);
-
-        // Resolve biography: prefer Subsonic, fall back to MusicBrainz
-        let biography: string | null = null;
-        let resolvedMbid: string | null = null;
-        const subsonicBio = infoData?.biography ? sanitizeBiographyText(infoData.biography) : null;
-        if (subsonicBio && subsonicBio.length > 0) {
-          biography = subsonicBio;
-          resolvedMbid = getOverride(mbidOverrideStore.getState().overrides, 'artist', id)?.mbid
-            ?? infoData?.musicBrainzId
-            ?? null;
-        } else {
-          try {
-            const override = getOverride(mbidOverrideStore.getState().overrides, 'artist', id);
-            const mbid = override?.mbid
-              ?? infoData?.musicBrainzId
-              ?? (await searchArtistMBID(artistData.name));
-            resolvedMbid = mbid;
-            if (mbid) {
-              const mbBio = await getArtistBiography(mbid);
-              if (mbBio) biography = sanitizeBiographyText(mbBio);
-            }
-          } catch {
-            /* non-critical */
-          }
-        }
-
-        const entry: ArtistDetailEntry = {
-          artist: artistData,
-          artistInfo: infoData,
-          topSongs,
-          biography,
-          resolvedMbid,
-          retrievedAt: Date.now(),
-        };
-
-        const ratingEntries: Array<{ id: string; serverRating: number }> = [
-          { id, serverRating: artistData.userRating ?? 0 },
-          ...topSongs.map((s) => ({ id: s.id, serverRating: s.userRating ?? 0 })),
-          ...(artistData.album ?? []).map((a) => ({ id: a.id, serverRating: a.userRating ?? 0 })),
-        ];
-        ratingStore.getState().reconcileRatings(ratingEntries);
-
-        set({
-          artists: {
-            ...get().artists,
-            [id]: entry,
-          },
-        });
-
-        // Proactively cache cover art for new IDs so they survive offline
-        if (topSongs.length > 0) cacheEntityCoverArt(topSongs);
-
-        return entry;
+        return result === 'timeout' ? null : result;
       },
 
       refreshTopSongs: async () => {

@@ -192,7 +192,7 @@ describe('fetchArtist — MusicBrainz biography fallback', () => {
 
     expect(entry!.biography).toBe('MusicBrainz bio from override.');
     expect(entry!.resolvedMbid).toBe('override-mbid');
-    expect(mockGetBio).toHaveBeenCalledWith('override-mbid');
+    expect(mockGetBio).toHaveBeenCalledWith('override-mbid', expect.any(AbortSignal));
   });
 
   it('uses server musicBrainzId when no override and no Subsonic bio', async () => {
@@ -219,7 +219,7 @@ describe('fetchArtist — MusicBrainz biography fallback', () => {
 
     const entry = await artistDetailStore.getState().fetchArtist('ar-1');
 
-    expect(mockSearchMBID).toHaveBeenCalledWith('Radiohead');
+    expect(mockSearchMBID).toHaveBeenCalledWith('Radiohead', expect.any(AbortSignal));
     expect(entry!.biography).toBe('Auto-searched bio.');
     expect(entry!.resolvedMbid).toBe('auto-mbid');
   });
@@ -420,5 +420,24 @@ describe('refreshTopSongs', () => {
 
     expect(mockGetTopSongs).not.toHaveBeenCalled();
     expect(artistDetailStore.getState().artists).toEqual({});
+  });
+});
+
+describe('fetchArtist — timeout', () => {
+  it('returns null when the fetch exceeds the 15s budget', async () => {
+    jest.useFakeTimers();
+    try {
+      mockGetArtist.mockImplementation(
+        () => new Promise(() => { /* never resolves */ }),
+      );
+
+      const fetchPromise = artistDetailStore.getState().fetchArtist('ar-1');
+      jest.advanceTimersByTime(15_000);
+      const result = await fetchPromise;
+
+      expect(result).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

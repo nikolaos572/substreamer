@@ -569,4 +569,109 @@ describe('AlbumInfoContent', () => {
     expect(getByText('Composer')).toBeTruthy();
     expect(getByText('J.S. Bach')).toBeTruthy();
   });
+
+  describe('error state', () => {
+    it('renders a timeout error message and retry button when albumInfoError is "timeout"', () => {
+      const onRetry = jest.fn();
+      const { getByText } = render(
+        <AlbumInfoContent
+          track={MOCK_TRACK}
+          albumInfo={null}
+          overrideMbid={null}
+          sanitizedNotes={null}
+          notesAttributionUrl={null}
+          albumInfoLoading={false}
+          albumInfoError="timeout"
+          onRetry={onRetry}
+          refreshing={false}
+          onRefresh={jest.fn()}
+          colors={COLORS}
+        />,
+      );
+
+      expect(getByText(/took too long/i)).toBeTruthy();
+      expect(getByText('Retry')).toBeTruthy();
+    });
+
+    it('renders a generic error message when albumInfoError is "error"', () => {
+      const { getByText } = render(
+        <AlbumInfoContent
+          track={MOCK_TRACK}
+          albumInfo={null}
+          overrideMbid={null}
+          sanitizedNotes={null}
+          notesAttributionUrl={null}
+          albumInfoLoading={false}
+          albumInfoError="error"
+          onRetry={jest.fn()}
+          refreshing={false}
+          onRefresh={jest.fn()}
+          colors={COLORS}
+        />,
+      );
+
+      expect(getByText(/Couldn't load album info/i)).toBeTruthy();
+    });
+
+    it('invokes onRetry when the retry button is pressed', () => {
+      const onRetry = jest.fn();
+      const { getByText } = render(
+        <AlbumInfoContent
+          track={MOCK_TRACK}
+          albumInfo={null}
+          overrideMbid={null}
+          sanitizedNotes={null}
+          notesAttributionUrl={null}
+          albumInfoLoading={false}
+          albumInfoError="timeout"
+          onRetry={onRetry}
+          refreshing={false}
+          onRefresh={jest.fn()}
+          colors={COLORS}
+        />,
+      );
+
+      fireEvent.press(getByText('Retry'));
+      expect(onRetry).toHaveBeenCalled();
+    });
+
+    it('omits the retry button when onRetry is not provided', () => {
+      const { queryByText } = render(
+        <AlbumInfoContent
+          track={MOCK_TRACK}
+          albumInfo={null}
+          overrideMbid={null}
+          sanitizedNotes={null}
+          notesAttributionUrl={null}
+          albumInfoLoading={false}
+          albumInfoError="error"
+          refreshing={false}
+          onRefresh={jest.fn()}
+          colors={COLORS}
+        />,
+      );
+
+      expect(queryByText('Retry')).toBeNull();
+    });
+
+    it('prefers the loading skeleton over the error state while loading', () => {
+      const { queryByText } = render(
+        <AlbumInfoContent
+          track={MOCK_TRACK}
+          albumInfo={null}
+          overrideMbid={null}
+          sanitizedNotes={null}
+          notesAttributionUrl={null}
+          albumInfoLoading
+          albumInfoError="timeout"
+          onRetry={jest.fn()}
+          refreshing={false}
+          onRefresh={jest.fn()}
+          colors={COLORS}
+        />,
+      );
+
+      expect(queryByText('Retry')).toBeNull();
+    });
+  });
 });
