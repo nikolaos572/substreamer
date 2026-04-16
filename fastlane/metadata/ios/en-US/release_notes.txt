@@ -1,3 +1,6 @@
+Trim release notes
+Validate store metadata after changelog generation
+
 Synced/unsynced lyrics
 Queue restored on restart
 MiniPlayer visible always

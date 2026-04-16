@@ -1,5 +1,11 @@
 # Changelog
 
+## [8.0.49] - 2026-04-16
+
+- docs: release notes
+- ci: update coverage badge [skip ci]
+- trim release notes
+- fix(release): validate store metadata after changelog generation
 ## [8.0.48] - 2026-04-16
 
 - ci: update coverage badge [skip ci]
