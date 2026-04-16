@@ -686,8 +686,10 @@ export default function RootLayout() {
       {/* Global processing overlay for async operations (delete, etc.) */}
       <ProcessingOverlay />
 
-      {/* Playback toast for detail screens without a MiniPlayer */}
-      <PlaybackToast />
+      {/* Playback toast — disabled now that MiniPlayerFooter is shown on every
+          non-tab screen. The component + store + service calls are kept so the
+          pill pattern can be reused for other notifications in the future. */}
+      {/* <PlaybackToast /> */}
 
       {/* Onboarding welcome guide shown once after first login */}
       <OnboardingGuide />
