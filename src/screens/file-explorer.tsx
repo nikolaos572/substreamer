@@ -23,14 +23,14 @@ import { useTheme } from '../hooks/useTheme';
 import { isViewableFile } from './file-viewer';
 
 interface RootEntry {
-  labelKey: string;
+  label: string;
   directory: Directory;
 }
 
 const ROOTS: RootEntry[] = [
-  { labelKey: 'documentDirectory', directory: Paths.document },
-  { labelKey: 'cacheDirectory', directory: Paths.cache },
-  { labelKey: 'bundleDirectory', directory: Paths.bundle },
+  { label: 'Document', directory: Paths.document },
+  { label: 'Cache', directory: Paths.cache },
+  { label: 'Bundle', directory: Paths.bundle },
 ];
 
 type Entry = {
@@ -115,8 +115,8 @@ export function FileExplorerScreen() {
     if (!path) return '';
     const root = ROOTS[Number(path[0])];
     if (!root) return '';
-    return [t(root.labelKey), ...path.slice(1)].join('/');
-  }, [path, t]);
+    return [root.label, ...path.slice(1)].join('/');
+  }, [path]);
 
   const handleBack = useCallback(() => {
     if (!path) return;
@@ -220,7 +220,7 @@ export function FileExplorerScreen() {
           <View style={[settingsStyles.card, { backgroundColor: colors.card }]}>
             {ROOTS.map((root, index) => (
               <Pressable
-                key={root.labelKey}
+                key={root.label}
                 onPress={() => handleRootPress(index)}
                 style={({ pressed }) => [
                   styles.row,
@@ -239,7 +239,7 @@ export function FileExplorerScreen() {
                 />
                 <View style={styles.rootText}>
                   <Text style={[styles.name, { color: colors.textPrimary }]}>
-                    {t(root.labelKey)}
+                    {root.label}
                   </Text>
                   <Text
                     style={[styles.subtitle, { color: colors.textSecondary }]}
