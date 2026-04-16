@@ -1,15 +1,15 @@
-Synced and unsynced lyrics support
-Queue persists across app restarts
-MiniPlayer visible on all screens
+Synced/unsynced lyrics
+Queue restored on restart
+MiniPlayer visible always
 Sleep timer
-Native share sheet with rich messages
-Expanded playback formats with custom format option
+Native shares
+playback formats with custom format option
 Artist top songs / all songs toggle
-Restructured settings pages
-Improved album and track info display
-Artist name navigable from album detail
-Role-aware admin functions
-Cover art caching and download resume improvements
-Tablet layout improvements
-Crash and stability fixes
+Update settings pages
+Improved album & track info
+Artist name clikable
+Gated admin functions
+Art caching, download resume fixes
+Tablet layout fixes
+Crash & stability fixes
 Translation updates
