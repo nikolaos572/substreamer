@@ -134,6 +134,24 @@ jest.mock('../../store/musicCacheStore', () => ({
 
 jest.mock('../subsonicService');
 
+const mockPersistQueue = jest.fn();
+const mockPersistPositionIfDue = jest.fn();
+const mockFlushPosition = jest.fn();
+const mockClearPersistedQueue = jest.fn();
+const mockGetPersistedQueue = jest.fn().mockReturnValue(null);
+const mockGetPersistedPosition = jest.fn().mockReturnValue(null);
+
+jest.mock('../queuePersistenceService', () => ({
+  persistQueue: (...args: unknown[]) => mockPersistQueue(...args),
+  persistPositionIfDue: (...args: unknown[]) => mockPersistPositionIfDue(...args),
+  flushPosition: (...args: unknown[]) => mockFlushPosition(...args),
+  clearPersistedQueue: () => mockClearPersistedQueue(),
+  getPersistedQueue: () => mockGetPersistedQueue(),
+  getPersistedPosition: () => mockGetPersistedPosition(),
+  resetPersistTimer: jest.fn(),
+  PERSIST_INTERVAL_MS: 10_000,
+}));
+
 import TrackPlayer, { Event, RepeatMode, State } from 'react-native-track-player';
 import { playbackSettingsStore } from '../../store/playbackSettingsStore';
 import { serverInfoStore } from '../../store/serverInfoStore';
@@ -252,6 +270,10 @@ beforeEach(async () => {
   // Restore default return values for subsonicService mocks.
   (getCoverArtUrl as jest.Mock).mockReturnValue('https://example.com/art.jpg');
   (getStreamUrl as jest.Mock).mockReturnValue('https://example.com/stream.mp3');
+
+  // Restore default persistence mocks.
+  mockGetPersistedQueue.mockReturnValue(null);
+  mockGetPersistedPosition.mockReturnValue(null);
 });
 
 describe('initPlayer', () => {
@@ -1390,6 +1412,227 @@ describe('recoverTranscodedStream (via PlaybackError)', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  recoverRawStream                                                   */
+/* ------------------------------------------------------------------ */
+
+describe('recoverRawStream (via PlaybackError)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('attempts raw stream recovery when error position > 5 and raw format', async () => {
+    await initPlayer();
+    const errorHandler = eventHandlers[Event.PlaybackError];
+
+    playbackSettingsStore.setState({ streamFormat: 'raw', maxBitRate: null } as any);
+
+    const mockState = defaultPlayerState();
+    mockState.currentTrack = { duration: 200 } as any;
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue(mockState);
+
+    const queue = [makeChild('t1', { duration: 200 })];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+    (playerStore.getState as jest.Mock).mockReturnValue(mockState);
+
+    const promise = errorHandler({ message: 'Stream error', position: 50 });
+    await promise;
+    // Flush microtasks so fire-and-forget recoverRawStream completes.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockTP.retry).toHaveBeenCalled();
+    expect(mockTP.seekTo).toHaveBeenCalledWith(50);
+    expect(mockTP.play).toHaveBeenCalled();
+    // Transparent recovery — no error/retrying state set.
+    expect(mockSetError).not.toHaveBeenCalled();
+    expect(mockSetRetrying).not.toHaveBeenCalled();
+  });
+
+  it('skips raw recovery when error position <= 5', async () => {
+    await initPlayer();
+    const errorHandler = eventHandlers[Event.PlaybackError];
+
+    playbackSettingsStore.setState({ streamFormat: 'raw', maxBitRate: null } as any);
+
+    const mockState = defaultPlayerState();
+    mockState.currentTrack = { duration: 200 } as any;
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue(mockState);
+
+    const promise = errorHandler({ message: 'Error', position: 3 });
+    jest.advanceTimersByTime(1500);
+    await promise;
+
+    // Falls through to normal retry — setRetrying is called.
+    expect(mockSetRetrying).toHaveBeenCalledWith(true);
+    expect(mockTP.retry).toHaveBeenCalled();
+  });
+
+  it('skips raw recovery when near end of track', async () => {
+    await initPlayer();
+    const errorHandler = eventHandlers[Event.PlaybackError];
+
+    playbackSettingsStore.setState({ streamFormat: 'raw', maxBitRate: null } as any);
+
+    const mockState = defaultPlayerState();
+    mockState.currentTrack = { duration: 200 } as any;
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue(mockState);
+
+    // adjustedPos (198) is NOT < metadataDuration - 5 (195)
+    const promise = errorHandler({ message: 'Error', position: 198 });
+    jest.advanceTimersByTime(1500);
+    await promise;
+
+    // Falls through to normal retry.
+    expect(mockSetRetrying).toHaveBeenCalledWith(true);
+  });
+
+  it('skips raw recovery when metadata duration is 0', async () => {
+    await initPlayer();
+    const errorHandler = eventHandlers[Event.PlaybackError];
+
+    playbackSettingsStore.setState({ streamFormat: 'raw', maxBitRate: null } as any);
+
+    const mockState = defaultPlayerState();
+    mockState.currentTrack = { duration: 0 } as any;
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue(mockState);
+
+    const promise = errorHandler({ message: 'Error', position: 50 });
+    jest.advanceTimersByTime(1500);
+    await promise;
+
+    // Falls through to normal retry.
+    expect(mockSetRetrying).toHaveBeenCalledWith(true);
+  });
+
+  it('prevents concurrent raw recovery via isRecoveringStream', async () => {
+    await initPlayer();
+    const errorHandler = eventHandlers[Event.PlaybackError];
+
+    playbackSettingsStore.setState({ streamFormat: 'raw', maxBitRate: null } as any);
+
+    const mockState = defaultPlayerState();
+    mockState.currentTrack = { duration: 200 } as any;
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue(mockState);
+
+    const queue = [makeChild('t1', { duration: 200 })];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+    (playerStore.getState as jest.Mock).mockReturnValue(mockState);
+
+    // Hold retry so first recovery stays in-flight.
+    let resolveRetry!: () => void;
+    mockTP.retry.mockReturnValueOnce(new Promise<void>((r) => { resolveRetry = r; }));
+
+    // First error triggers recovery.
+    const p1 = errorHandler({ message: 'Error 1', position: 50 });
+    await Promise.resolve();
+
+    // Second error while recovery is in-flight — should fall through to normal retry.
+    const p2 = errorHandler({ message: 'Error 2', position: 55 });
+    jest.advanceTimersByTime(1500);
+    await p2;
+
+    // Normal retry was triggered for the second error.
+    expect(mockSetRetrying).toHaveBeenCalledWith(true);
+
+    // Resolve first recovery.
+    resolveRetry();
+    await p1;
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // retry() was called twice: once for raw recovery, once for normal retry.
+    // But seekTo(50) was only called once (raw recovery path).
+    expect(mockTP.seekTo).toHaveBeenCalledTimes(1);
+    expect(mockTP.seekTo).toHaveBeenCalledWith(50);
+  });
+
+  it('clears isRecoveringStream on failure so next error can recover', async () => {
+    await initPlayer();
+    const errorHandler = eventHandlers[Event.PlaybackError];
+
+    playbackSettingsStore.setState({ streamFormat: 'raw', maxBitRate: null } as any);
+
+    const mockState = defaultPlayerState();
+    mockState.currentTrack = { duration: 200 } as any;
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue(mockState);
+
+    const queue = [makeChild('t1', { duration: 200 })];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+    (playerStore.getState as jest.Mock).mockReturnValue(mockState);
+
+    // First recovery fails.
+    mockTP.retry.mockRejectedValueOnce(new Error('retry failed'));
+
+    await errorHandler({ message: 'Error 1', position: 50 });
+    // Flush so catch/finally runs.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    jest.clearAllMocks();
+    (playerStore.getState as jest.Mock).mockReturnValue(mockState);
+
+    // Second error should trigger a new recovery attempt (flag was cleared).
+    await errorHandler({ message: 'Error 2', position: 60 });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockTP.retry).toHaveBeenCalled();
+    expect(mockTP.seekTo).toHaveBeenCalledWith(60);
+  });
+
+  it('still uses transcoded recovery when transcoding', async () => {
+    await initPlayer();
+    const errorHandler = eventHandlers[Event.PlaybackError];
+
+    playbackSettingsStore.setState({ streamFormat: 'mp3', maxBitRate: null } as any);
+
+    (serverInfoStore.getState as jest.Mock).mockReturnValue({
+      extensions: [{ name: 'transcodeOffset', versions: [1] }],
+    });
+
+    const queue = [makeChild('t1', { duration: 200 })];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    const mockState = defaultPlayerState();
+    mockState.currentTrack = { duration: 200 } as any;
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue(mockState);
+    (serverInfoStore.getState as jest.Mock).mockReturnValue({
+      extensions: [{ name: 'transcodeOffset', versions: [1] }],
+    });
+
+    mockTP.getActiveTrack.mockResolvedValue({ id: 't1', url: 'test' });
+    (getStreamUrl as jest.Mock).mockReturnValue('https://example.com/stream-offset.mp3');
+
+    await errorHandler({ message: 'Error', position: 50 });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Transcoded path uses load(), not retry().
+    expect(mockTP.load).toHaveBeenCalled();
+    expect(mockTP.retry).not.toHaveBeenCalled();
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /*  syncStoreFromNative (via AppState)                                 */
 /* ------------------------------------------------------------------ */
 
@@ -2061,5 +2304,244 @@ describe('queue format stamping', () => {
     const fmts = mockSetQueueFormats.mock.calls[0][0];
     expect(fmts.t1.suffix).toBe('mp3');
     expect(fmts.t1.bitRate).toBe(192);
+  });
+});
+
+describe('queue persistence integration', () => {
+  it('playTrack persists the queue', async () => {
+    const queue = [makeChild('t1'), makeChild('t2')];
+    await playTrack(queue[0], queue);
+
+    expect(mockPersistQueue).toHaveBeenCalledWith(queue, 0);
+  });
+
+  it('playTrack persists the correct startIndex', async () => {
+    const queue = [makeChild('t1'), makeChild('t2'), makeChild('t3')];
+    await playTrack(queue[1], queue);
+
+    expect(mockPersistQueue).toHaveBeenCalledWith(queue, 1);
+  });
+
+  it('addToQueue persists after appending tracks', async () => {
+    const queue = [makeChild('t1')];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    await addToQueue([makeChild('t2')]);
+    expect(mockPersistQueue).toHaveBeenCalled();
+  });
+
+  it('removeFromQueue persists after removal', async () => {
+    const queue = [makeChild('t1'), makeChild('t2'), makeChild('t3')];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(),
+      currentTrackIndex: 0,
+      queue,
+    });
+
+    await removeFromQueue(2);
+    expect(mockPersistQueue).toHaveBeenCalled();
+  });
+
+  it('shuffleQueue persists the shuffled queue', async () => {
+    const queue = [makeChild('t1'), makeChild('t2'), makeChild('t3')];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(),
+      currentTrack: queue[0],
+      currentTrackIndex: 0,
+      queue,
+    });
+
+    await shuffleQueue();
+    expect(mockPersistQueue).toHaveBeenCalled();
+  });
+
+  it('clearQueue calls clearPersistedQueue', async () => {
+    const queue = [makeChild('t1')];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    await clearQueue();
+    expect(mockClearPersistedQueue).toHaveBeenCalled();
+  });
+
+  it('PlaybackActiveTrackChanged persists queue on genuine track change', async () => {
+    const queue = [makeChild('t1'), makeChild('t2')];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    eventHandlers[Event.PlaybackActiveTrackChanged]({
+      track: { id: 't2' },
+      index: 1,
+    });
+
+    expect(mockPersistQueue).toHaveBeenCalled();
+  });
+
+  it('PlaybackProgressUpdated calls persistPositionIfDue', async () => {
+    const queue = [makeChild('t1')];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(),
+      currentTrack: queue[0],
+      currentTrackIndex: 0,
+    });
+
+    eventHandlers[Event.PlaybackProgressUpdated]({
+      position: 45,
+      duration: 200,
+      buffered: 60,
+    });
+
+    expect(mockPersistPositionIfDue).toHaveBeenCalledWith(45, 't1');
+  });
+
+  it('PlaybackProgressUpdated skips persist when position is 0', async () => {
+    const queue = [makeChild('t1')];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(),
+      currentTrack: queue[0],
+      currentTrackIndex: 0,
+    });
+
+    eventHandlers[Event.PlaybackProgressUpdated]({
+      position: 0,
+      duration: 200,
+      buffered: 0,
+    });
+
+    expect(mockPersistPositionIfDue).not.toHaveBeenCalled();
+  });
+
+  it('AppState background transition flushes position', async () => {
+    const queue = [makeChild('t1')];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(),
+      currentTrack: queue[0],
+      position: 55,
+    });
+
+    await appStateHandler('background');
+    expect(mockFlushPosition).toHaveBeenCalledWith(55, 't1');
+  });
+
+  it('AppState inactive transition flushes position', async () => {
+    const queue = [makeChild('t1')];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(),
+      currentTrack: queue[0],
+      position: 30,
+    });
+
+    await appStateHandler('inactive');
+    expect(mockFlushPosition).toHaveBeenCalledWith(30, 't1');
+  });
+
+  it('AppState background skips flush when no current track', async () => {
+    await appStateHandler('background');
+    expect(mockFlushPosition).not.toHaveBeenCalled();
+  });
+});
+
+describe('raw stream recovery retry cap', () => {
+  it('stops attempting raw recovery after 3 consecutive failures', async () => {
+    const queue = [makeChild('t1', { duration: 300 })];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(),
+      currentTrack: queue[0],
+      currentTrackIndex: 0,
+      duration: 300,
+    });
+
+    playbackSettingsStore.setState({ streamFormat: 'raw', maxBitRate: null } as any);
+
+    // Fire 3 errors — all should trigger raw recovery
+    for (let i = 0; i < 3; i++) {
+      await eventHandlers[Event.PlaybackError]({
+        message: 'stream error',
+        position: 50,
+      });
+      // Wait for async recovery to complete
+      await new Promise((r) => setTimeout(r, 10));
+    }
+
+    expect(mockTP.retry).toHaveBeenCalledTimes(3);
+    jest.clearAllMocks();
+
+    // 4th error should NOT trigger raw recovery (cap reached)
+    await eventHandlers[Event.PlaybackError]({
+      message: 'stream error',
+      position: 50,
+    });
+
+    // retry is called in normal error handling path, not raw recovery
+    expect(mockTP.seekTo).not.toHaveBeenCalled();
+  });
+
+  it('resets raw recovery counter when playback resumes', async () => {
+    const queue = [makeChild('t1', { duration: 300 })];
+    await playTrack(queue[0], queue);
+    jest.clearAllMocks();
+
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(),
+      currentTrack: queue[0],
+      currentTrackIndex: 0,
+      duration: 300,
+    });
+
+    playbackSettingsStore.setState({ streamFormat: 'raw', maxBitRate: null } as any);
+
+    // Fire 2 errors (not at cap yet)
+    for (let i = 0; i < 2; i++) {
+      await eventHandlers[Event.PlaybackError]({
+        message: 'stream error',
+        position: 50,
+      });
+      await new Promise((r) => setTimeout(r, 10));
+    }
+
+    // Simulate playback resuming (resets counter)
+    eventHandlers[Event.PlaybackState]({ state: State.Playing });
+    jest.clearAllMocks();
+
+    // Should be able to do 3 more recovery attempts
+    for (let i = 0; i < 3; i++) {
+      await eventHandlers[Event.PlaybackError]({
+        message: 'stream error',
+        position: 50,
+      });
+      await new Promise((r) => setTimeout(r, 10));
+    }
+
+    expect(mockTP.retry).toHaveBeenCalledTimes(3);
   });
 });

@@ -31,6 +31,14 @@ import { shuffleArray } from '../utils/arrayHelpers';
 import { addCompletedScrobble, sendNowPlaying } from './scrobbleService';
 import { getCachedImageUri } from './imageCacheService';
 import { getLocalTrackUri } from './musicCacheService';
+import {
+  persistQueue,
+  persistPositionIfDue,
+  flushPosition,
+  clearPersistedQueue,
+  getPersistedQueue,
+  getPersistedPosition,
+} from './queuePersistenceService';
 import { resolveEffectiveFormat } from '../utils/effectiveFormat';
 import {
   ensureCoverArtAuth,
@@ -181,6 +189,20 @@ let isShuffling = false;
  * Prevents intermediate tracks from being falsely scrobbled.
  */
 let isSettingQueue = false;
+/**
+ * True when the queue has been restored into the store from persistence
+ * but RNTP has not been loaded yet.  Cleared on the first play/skip
+ * action or when the queue is replaced via playTrack/clearQueue.
+ */
+let pendingHydration = false;
+/**
+ * Pending resume position from a persisted queue restore.  Consumed
+ * by the first togglePlayPause action to seek before playing.
+ */
+let pendingResumePosition: { trackId: string; position: number } | null = null;
+/** Consecutive raw stream recovery attempts for the current track. */
+let rawRecoveryAttempts = 0;
+const MAX_RAW_RECOVERY_ATTEMPTS = 3;
 
 
 /* ------------------------------------------------------------------ */
@@ -235,6 +257,39 @@ async function recoverTranscodedStream(adjustedPosition: number): Promise<void> 
   }
 }
 
+/**
+ * Retry the current raw (non-transcoded) stream after a playback error
+ * and verify the playback position is preserved.
+ *
+ * Unlike transcoded recovery (which reloads with a new timeOffset URL),
+ * raw streams use the native retry mechanism directly — the server
+ * serves the full file and the native player can seek freely.  The
+ * explicit seekTo() after retry() is a safety net: if the native layer
+ * lost position (stale lastPosition on iOS, failed byte-range on
+ * Android), we restore it.
+ */
+async function recoverRawStream(adjustedPosition: number): Promise<void> {
+  try {
+    console.warn(
+      '[Player] Attempting raw stream recovery at position',
+      adjustedPosition,
+    );
+
+    maxBufferedSeen = 0;
+    isFullyBuffered = false;
+
+    await TrackPlayer.retry();
+    await TrackPlayer.seekTo(adjustedPosition);
+    await TrackPlayer.play();
+
+    console.warn('[Player] Raw stream recovery completed');
+  } catch (e) {
+    console.warn('[Player] Raw stream recovery failed:', e);
+  } finally {
+    isRecoveringStream = false;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Init                                                               */
 /* ------------------------------------------------------------------ */
@@ -280,9 +335,9 @@ export async function initPlayer(): Promise<void> {
     store.setPlaybackState(mapState(state));
 
     if (state === State.Playing) {
-      // Clear any previous error and retrying state when playback resumes.
       if (store.error) store.setError(null);
       if (store.retrying) store.setRetrying(false);
+      rawRecoveryAttempts = 0;
     }
   });
 
@@ -305,6 +360,12 @@ export async function initPlayer(): Promise<void> {
         if (isTranscoding) {
           isRecoveringStream = true;
           recoverTranscodedStream(adjustedPos);
+          return;
+        }
+        if (rawRecoveryAttempts < MAX_RAW_RECOVERY_ATTEMPTS) {
+          rawRecoveryAttempts++;
+          isRecoveringStream = true;
+          recoverRawStream(adjustedPos);
           return;
         }
       }
@@ -382,6 +443,11 @@ export async function initPlayer(): Promise<void> {
 
     const adjustedPosition = position + positionOffset;
     playerStore.getState().setProgress(adjustedPosition, duration, maxBufferedSeen);
+
+    const currentTrack = playerStore.getState().currentTrack;
+    if (currentTrack?.id && adjustedPosition > 0) {
+      persistPositionIfDue(adjustedPosition, currentTrack.id);
+    }
   });
 
   TrackPlayer.addEventListener(Event.PlaybackSeekCompleted, (e) => {
@@ -461,8 +527,9 @@ export async function initPlayer(): Promise<void> {
     maxBufferedSeen = 0;
     isFullyBuffered = false;
 
-    // Reset transcoded stream recovery offset for genuine track changes.
+    // Reset recovery state for genuine track changes.
     positionOffset = 0;
+    rawRecoveryAttempts = 0;
 
     let resolvedChild: Child | null = null;
     if (track != null && track.id) {
@@ -479,6 +546,9 @@ export async function initPlayer(): Promise<void> {
 
     previousActiveChild = resolvedChild;
 
+    if (!isSettingQueue && !isShuffling && activeIndex != null) {
+      persistQueue(currentChildQueue, activeIndex);
+    }
   });
 
   // --- Sleep timer event listeners ---
@@ -523,11 +593,19 @@ export async function initPlayer(): Promise<void> {
   const handleAppState = async (next: AppStateStatus) => {
     if (next === 'active') {
       await syncStoreFromNative();
+    } else {
+      const { position, currentTrack } = playerStore.getState();
+      if (currentTrack?.id && position > 0) {
+        flushPosition(position, currentTrack.id);
+      }
     }
   };
   AppState.addEventListener('change', handleAppState);
 
   isPlayerReady = true;
+
+  // --- Restore persisted queue from previous session ---
+  restorePersistedQueue();
 }
 
 /* ------------------------------------------------------------------ */
@@ -580,6 +658,101 @@ async function syncStoreFromNative(): Promise<void> {
   }
 }
 
+/**
+ * Restore the persisted queue from a previous session.
+ * Called once at the end of initPlayer() while the splash screen is visible.
+ * Loads tracks into RNTP and seeks to the saved position but does NOT
+ * auto-play — the user must tap play to resume.
+ */
+/**
+ * Restore the persisted queue from a previous session.
+ * Called once at the end of initPlayer() while the splash screen is visible.
+ *
+ * Only populates the Zustand store and module-level arrays so the UI
+ * (MiniPlayer, queue view) reflects the previous session.  Does NOT
+ * load tracks into RNTP — the native player stays idle until the user
+ * explicitly taps play, at which point we hydrate RNTP and seek.
+ */
+function restorePersistedQueue(): void {
+  try {
+    const persisted = getPersistedQueue();
+    if (!persisted) return;
+
+    const { queue, currentTrackIndex } = persisted;
+    const clampedIndex = Math.min(currentTrackIndex, queue.length - 1);
+
+    currentChildQueue = queue;
+    playerStore.getState().setQueue(queue);
+
+    const formats: Record<string, EffectiveFormat> = {};
+    for (const child of queue) formats[child.id] = stampQueueFormat(child);
+    playerStore.getState().setQueueFormats(formats);
+
+    const currentChild = queue[clampedIndex] ?? null;
+    playerStore.getState().setCurrentTrack(currentChild, clampedIndex);
+
+    const persistedPosition = getPersistedPosition();
+    if (
+      persistedPosition &&
+      currentChild &&
+      persistedPosition.trackId === currentChild.id &&
+      persistedPosition.position > 0
+    ) {
+      playerStore.getState().setProgress(
+        persistedPosition.position,
+        currentChild.duration ?? 0,
+        0,
+      );
+      pendingResumePosition = {
+        trackId: persistedPosition.trackId,
+        position: persistedPosition.position,
+      };
+    }
+
+    pendingHydration = true;
+    previousActiveChild = currentChild;
+  } catch (e) {
+    console.warn('[Player] Failed to restore persisted queue:', e);
+  }
+}
+
+/**
+ * Load the restored queue into RNTP.
+ * Called lazily on the first user-initiated play/skip after a cold restore.
+ * Optionally overrides the start index (for skip-to-track).
+ */
+async function hydrateRestoredQueue(overrideIndex?: number): Promise<void> {
+  const resume = pendingResumePosition;
+  pendingHydration = false;
+  pendingResumePosition = null;
+
+  await ensureCoverArtAuth();
+
+  const rnTracks = currentChildQueue.map(childToTrack);
+  const storeIndex = playerStore.getState().currentTrackIndex ?? 0;
+  const startIndex = overrideIndex ?? storeIndex;
+
+  await TrackPlayer.add(rnTracks);
+
+  if (startIndex > 0) {
+    await TrackPlayer.skip(startIndex);
+  }
+
+  if (
+    overrideIndex == null &&
+    resume &&
+    currentChildQueue[startIndex]?.id === resume.trackId &&
+    resume.position > 0
+  ) {
+    await TrackPlayer.seekTo(resume.position);
+  }
+}
+
+/** True when the queue is only in the store, not yet loaded into RNTP. */
+function needsHydration(): boolean {
+  return pendingHydration && currentChildQueue.length > 0;
+}
+
 /** Reset scrobble coordination state (call before queue-level operations). */
 function resetScrobbleCoordination() {
   savedTrackForScrobble = null;
@@ -607,6 +780,8 @@ export async function playTrack(
   resetScrobbleCoordination();
   isSettingQueue = true;
   positionOffset = 0;
+  pendingHydration = false;
+  pendingResumePosition = null;
   playerStore.getState().setQueueLoading(true);
   playbackToastStore.getState().show();
 
@@ -637,6 +812,7 @@ export async function playTrack(
 
     await TrackPlayer.play();
     playbackToastStore.getState().succeed();
+    persistQueue(queue, startIndex > 0 ? startIndex : 0);
   } catch (e) {
     playbackToastStore.getState().fail(
       e instanceof Error ? e.message : i18n.t('playbackError'),
@@ -649,6 +825,12 @@ export async function playTrack(
 
 /** Toggle between play and pause. */
 export async function togglePlayPause(): Promise<void> {
+  if (needsHydration()) {
+    await hydrateRestoredQueue();
+    await TrackPlayer.play();
+    return;
+  }
+
   const state = await TrackPlayer.getPlaybackState();
   if (state.state === State.Playing) {
     await TrackPlayer.pause();
@@ -659,11 +841,23 @@ export async function togglePlayPause(): Promise<void> {
 
 /** Skip to the next track in the queue. */
 export async function skipToNext(): Promise<void> {
+  if (needsHydration()) {
+    const idx = (playerStore.getState().currentTrackIndex ?? 0) + 1;
+    await hydrateRestoredQueue(idx < currentChildQueue.length ? idx : 0);
+    await TrackPlayer.play();
+    return;
+  }
   await TrackPlayer.skipToNext();
 }
 
 /** Skip to the previous track in the queue. */
 export async function skipToPrevious(): Promise<void> {
+  if (needsHydration()) {
+    const idx = (playerStore.getState().currentTrackIndex ?? 0) - 1;
+    await hydrateRestoredQueue(idx >= 0 ? idx : currentChildQueue.length - 1);
+    await TrackPlayer.play();
+    return;
+  }
   await TrackPlayer.skipToPrevious();
 }
 
@@ -735,6 +929,11 @@ export async function seekTo(position: number): Promise<void> {
 
 /** Skip to a specific track in the queue by index. */
 export async function skipToTrack(index: number): Promise<void> {
+  if (needsHydration()) {
+    await hydrateRestoredQueue(index);
+    await TrackPlayer.play();
+    return;
+  }
   await TrackPlayer.skip(index);
   await TrackPlayer.play();
 }
@@ -802,6 +1001,9 @@ export async function retryPlayback(): Promise<void> {
 export async function clearQueue(): Promise<void> {
   resetScrobbleCoordination();
   positionOffset = 0;
+  rawRecoveryAttempts = 0;
+  pendingHydration = false;
+  pendingResumePosition = null;
   maxBufferedSeen = 0;
   isFullyBuffered = false;
   isRecoveringStream = false;
@@ -810,6 +1012,7 @@ export async function clearQueue(): Promise<void> {
   trackPlaylistMap.clear();
 
   await TrackPlayer.reset();
+  clearPersistedQueue();
 
   const store = playerStore.getState();
   store.setCurrentTrack(null);
@@ -856,6 +1059,7 @@ export async function addToQueue(
 
   currentChildQueue = [...currentChildQueue, ...tracks];
   playerStore.getState().setQueue(currentChildQueue);
+  persistQueue(currentChildQueue, playerStore.getState().currentTrackIndex ?? 0);
 }
 
 /**
@@ -892,6 +1096,7 @@ export async function removeFromQueue(index: number): Promise<void> {
       currentTrackIndex - 1,
     );
   }
+  persistQueue(currentChildQueue, playerStore.getState().currentTrackIndex ?? 0);
 }
 
 /**
@@ -977,6 +1182,7 @@ export async function shuffleQueue(): Promise<void> {
     await TrackPlayer.setQueue(shuffled.map(childToTrack));
     await TrackPlayer.skip(0);
     await TrackPlayer.play();
+    persistQueue(shuffled, 0);
   } finally {
     isSettingQueue = false;
     isShuffling = false;
