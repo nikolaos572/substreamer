@@ -17,6 +17,7 @@ import { completedScrobbleStore } from '../store/completedScrobbleStore';
 import { mbidOverrideStore, type MbidOverride } from '../store/mbidOverrideStore';
 import { musicCacheStore } from '../store/musicCacheStore';
 import { playbackSettingsStore } from '../store/playbackSettingsStore';
+import { localeStore } from '../store/localeStore';
 import { sqliteStorage } from '../store/sqliteStorage';
 import { type EffectiveFormat } from '../types/audio';
 
@@ -463,6 +464,42 @@ const MIGRATION_TASKS: MigrationTask[] = [
       await sqliteStorage.setItem('substreamer-music-cache', JSON.stringify(parsed));
       musicCacheStore.setState({ downloadedFormats: formats });
       log(`Backfilled format for ${count} cached track(s).`);
+    },
+  },
+
+  {
+    id: 11,
+    name: 'Migrate legacy zh locale to zh-Hans',
+    run: async (log) => {
+      // Users who explicitly picked Chinese before the Simplified/Traditional
+      // split had locale === 'zh'. That code is no longer in the supported
+      // list, so left unchanged it would fall back to English on next launch.
+      // Remap to 'zh-Hans' to preserve their previous (Simplified) experience.
+      const raw = await sqliteStorage.getItem('substreamer-locale');
+      if (!raw) {
+        log('No persisted locale — skipping.');
+        return;
+      }
+      let parsed: any;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        log('Failed to parse locale — skipping.');
+        return;
+      }
+      const state = parsed?.state;
+      if (!state) {
+        log('No state in persisted locale — skipping.');
+        return;
+      }
+      if (state.locale !== 'zh') {
+        log(`Stored locale is ${state.locale ?? 'null'} — no remap needed.`);
+        return;
+      }
+      state.locale = 'zh-Hans';
+      await sqliteStorage.setItem('substreamer-locale', JSON.stringify(parsed));
+      localeStore.setState({ locale: 'zh-Hans' });
+      log('Remapped legacy "zh" locale preference to "zh-Hans".');
     },
   },
 

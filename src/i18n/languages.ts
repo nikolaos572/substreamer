@@ -11,7 +11,8 @@ export const SUPPORTED_LANGUAGES: Language[] = [
   { code: 'es', name: 'Spanish', nativeName: 'Español' },
   { code: 'it', name: 'Italian', nativeName: 'Italiano' },
   { code: 'ru', name: 'Russian', nativeName: 'Русский' },
-  { code: 'zh', name: 'Chinese', nativeName: '中文' },
+  { code: 'zh-Hans', name: 'Chinese (Simplified)', nativeName: '简体中文' },
+  { code: 'zh-Hant', name: 'Chinese (Traditional)', nativeName: '繁體中文' },
   // Future: add languages as Crowdin translations are ready
   // { code: 'ja', name: 'Japanese', nativeName: '日本語' },
   // { code: 'pt', name: 'Portuguese', nativeName: 'Português' },

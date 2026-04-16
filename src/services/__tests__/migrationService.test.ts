@@ -654,6 +654,63 @@ describe('Task 10 – Backfill downloaded track formats', () => {
   });
 });
 
+describe('Task 11 – Migrate legacy zh locale to zh-Hans', () => {
+  function seedLocale(locale: string | null) {
+    sqliteStorage.setItem('substreamer-locale', JSON.stringify({
+      state: { locale },
+    }));
+  }
+
+  it('remaps "zh" to "zh-Hans"', async () => {
+    seedLocale('zh');
+    await runMigrations(10);
+
+    const raw = sqliteStorage.getItem('substreamer-locale') as string;
+    expect(JSON.parse(raw).state.locale).toBe('zh-Hans');
+
+    const logContent = mockFileWrite.mock.calls[0][0] as string;
+    expect(logContent).toContain('Remapped legacy "zh" locale preference to "zh-Hans"');
+  });
+
+  it('leaves non-zh locales unchanged', async () => {
+    seedLocale('ru');
+    await runMigrations(10);
+
+    const raw = sqliteStorage.getItem('substreamer-locale') as string;
+    expect(JSON.parse(raw).state.locale).toBe('ru');
+
+    const logContent = mockFileWrite.mock.calls[0][0] as string;
+    expect(logContent).toContain('no remap needed');
+  });
+
+  it('leaves null (device-default) unchanged', async () => {
+    seedLocale(null);
+    await runMigrations(10);
+
+    const raw = sqliteStorage.getItem('substreamer-locale') as string;
+    expect(JSON.parse(raw).state.locale).toBeNull();
+
+    const logContent = mockFileWrite.mock.calls[0][0] as string;
+    expect(logContent).toContain('no remap needed');
+  });
+
+  it('skips when no persisted locale exists', async () => {
+    sqliteStorage.removeItem('substreamer-locale');
+    await runMigrations(10);
+
+    const logContent = mockFileWrite.mock.calls[0][0] as string;
+    expect(logContent).toContain('No persisted locale');
+  });
+
+  it('skips when persisted locale is unparseable', async () => {
+    sqliteStorage.setItem('substreamer-locale', '{bad json');
+    await runMigrations(10);
+
+    const logContent = mockFileWrite.mock.calls[0][0] as string;
+    expect(logContent).toContain('Failed to parse locale');
+  });
+});
+
 describe('runMigrations resilience', () => {
   it('breaks loop and persists partial progress when a task throws', async () => {
     // Seed unparseable shares so Task 4 doesn't throw (it catches JSON errors),

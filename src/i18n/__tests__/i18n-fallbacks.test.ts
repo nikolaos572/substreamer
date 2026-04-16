@@ -46,7 +46,7 @@ describe('getDeviceLocale fallback', () => {
     expect(i18n.language).toBe('en');
   });
 
-  it('falls back to "en" when getLocales returns locale without languageCode', () => {
+  it('falls back to "en" when getLocales returns locale without languageCode or languageTag', () => {
     jest.doMock('expo-localization', () => ({
       getLocales: () => [{}],
     }));
@@ -56,10 +56,58 @@ describe('getDeviceLocale fallback', () => {
 
   it('falls back to "en" when device locale is not in supported list', () => {
     jest.doMock('expo-localization', () => ({
-      getLocales: () => [{ languageCode: 'xx' }],
+      getLocales: () => [{ languageCode: 'xx', languageTag: 'xx-XX' }],
     }));
     const i18n = require('../i18n').default;
     expect(i18n.language).toBe('en');
+  });
+
+  it('resolves Simplified Chinese (zh-Hans-CN) to zh-Hans', () => {
+    jest.doMock('expo-localization', () => ({
+      getLocales: () => [{ languageCode: 'zh', languageTag: 'zh-Hans-CN' }],
+    }));
+    const i18n = require('../i18n').default;
+    expect(i18n.language).toBe('zh-Hans');
+  });
+
+  it('resolves Traditional Chinese (zh-Hant-TW) to zh-Hant', () => {
+    jest.doMock('expo-localization', () => ({
+      getLocales: () => [{ languageCode: 'zh', languageTag: 'zh-Hant-TW' }],
+    }));
+    const i18n = require('../i18n').default;
+    expect(i18n.language).toBe('zh-Hant');
+  });
+
+  it('resolves Hong Kong Chinese (zh-HK) to zh-Hant', () => {
+    jest.doMock('expo-localization', () => ({
+      getLocales: () => [{ languageCode: 'zh', languageTag: 'zh-HK' }],
+    }));
+    const i18n = require('../i18n').default;
+    expect(i18n.language).toBe('zh-Hant');
+  });
+
+  it('resolves Macau Chinese (zh-MO) to zh-Hant', () => {
+    jest.doMock('expo-localization', () => ({
+      getLocales: () => [{ languageCode: 'zh', languageTag: 'zh-MO' }],
+    }));
+    const i18n = require('../i18n').default;
+    expect(i18n.language).toBe('zh-Hant');
+  });
+
+  it('defaults bare "zh" to zh-Hans', () => {
+    jest.doMock('expo-localization', () => ({
+      getLocales: () => [{ languageCode: 'zh', languageTag: 'zh' }],
+    }));
+    const i18n = require('../i18n').default;
+    expect(i18n.language).toBe('zh-Hans');
+  });
+
+  it('routes Singapore Chinese (zh-SG) to zh-Hans', () => {
+    jest.doMock('expo-localization', () => ({
+      getLocales: () => [{ languageCode: 'zh', languageTag: 'zh-SG' }],
+    }));
+    const i18n = require('../i18n').default;
+    expect(i18n.language).toBe('zh-Hans');
   });
 });
 
@@ -110,7 +158,8 @@ describe('eager-loaded locale resources', () => {
     expect(i18n.hasResourceBundle('es', 'translation')).toBe(true);
     expect(i18n.hasResourceBundle('it', 'translation')).toBe(true);
     expect(i18n.hasResourceBundle('ru', 'translation')).toBe(true);
-    expect(i18n.hasResourceBundle('zh', 'translation')).toBe(true);
+    expect(i18n.hasResourceBundle('zh-Hans', 'translation')).toBe(true);
+    expect(i18n.hasResourceBundle('zh-Hant', 'translation')).toBe(true);
   });
 
   it('translates keys in non-English locale', () => {

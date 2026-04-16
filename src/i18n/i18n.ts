@@ -54,7 +54,8 @@ import de from './locales/de.json';
 import es from './locales/es.json';
 import it from './locales/it.json';
 import ru from './locales/ru.json';
-import zh from './locales/zh.json';
+import zhHans from './locales/zh-Hans.json';
+import zhHant from './locales/zh-Hant.json';
 
 import { SUPPORTED_LOCALE_CODES } from './languages';
 import { localeStore } from '../store/localeStore';
@@ -67,14 +68,50 @@ const localeResources: Record<string, { translation: Record<string, string> }> =
   es: { translation: es },
   it: { translation: it },
   ru: { translation: ru },
-  zh: { translation: zh },
+  'zh-Hans': { translation: zhHans },
+  'zh-Hant': { translation: zhHant },
   // Add new entries here when enabling a language
 };
+
+/** Regions that use Traditional Chinese by convention. */
+const ZH_HANT_REGIONS = new Set(['TW', 'HK', 'MO']);
+
+/**
+ * Resolve a BCP-47 language tag (e.g. "zh-Hans-CN", "ru-RU", "en-US") to the
+ * supported app locale code. Handles the Simplified vs Traditional Chinese
+ * split explicitly; other languages fall through to their 2-letter code.
+ */
+export function resolveAppLocale(tag: string | undefined | null): string | null {
+  if (!tag) return null;
+  const parts = tag.split('-');
+  const language = parts[0]?.toLowerCase();
+  if (!language) return null;
+
+  if (language === 'zh') {
+    // Inspect subtags after the language code for script / region hints.
+    const subtags = parts.slice(1);
+    const script = subtags.find((p) => p.length === 4);
+    const region = subtags.find((p) => p.length === 2)?.toUpperCase();
+    if (script) {
+      if (script === 'Hant') return 'zh-Hant';
+      if (script === 'Hans') return 'zh-Hans';
+    }
+    if (region && ZH_HANT_REGIONS.has(region)) return 'zh-Hant';
+    return 'zh-Hans';
+  }
+
+  return language;
+}
 
 function getDeviceLocale(): string {
   try {
     const locales = getLocales();
-    return locales[0]?.languageCode ?? 'en';
+    const first = locales[0];
+    if (!first) return 'en';
+    // Prefer the full BCP-47 tag so we can distinguish zh-Hans vs zh-Hant.
+    // Fall back to languageCode for older expo-localization runtimes.
+    const tag = first.languageTag ?? first.languageCode ?? null;
+    return resolveAppLocale(tag) ?? 'en';
   } catch {
     return 'en';
   }
