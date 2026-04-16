@@ -629,6 +629,29 @@ describe('fetchMixSongs', () => {
     expect(mockGetOfflineSongsByGenre).toHaveBeenCalledWith('Rock');
   });
 
+  it('limits offline with genre to listLength', async () => {
+    const manySongs = Array.from({ length: 100 }, (_, i) => makeSong({ id: `s${i}` }));
+    mockGetOfflineSongsByGenre.mockReturnValue(manySongs);
+    const result = await fetchMixSongs({ type: 'offline', genre: 'Rock' }, 30);
+    expect(result.length).toBe(30);
+  });
+
+  it('limits multiGenreBlend to listLength', async () => {
+    const genreA = Array.from({ length: 15 }, (_, i) => makeSong({ id: `a${i}` }));
+    const genreB = Array.from({ length: 15 }, (_, i) => makeSong({ id: `b${i}` }));
+    mockGetRandomSongsFiltered
+      .mockResolvedValueOnce(genreA)
+      .mockResolvedValueOnce(genreB);
+    const result = await fetchMixSongs({
+      type: 'multiGenreBlend',
+      genres: [
+        { name: 'Rock', size: 15 },
+        { name: 'Jazz', size: 15 },
+      ],
+    }, 20);
+    expect(result.length).toBe(20);
+  });
+
   it('handles offline without genre', async () => {
     mockGetOfflineSongsAll.mockReturnValue(songs);
     const result = await fetchMixSongs({ type: 'offline' });
@@ -759,6 +782,16 @@ describe('fetchCustomMix', () => {
     mockGetOfflineSongsByGenre.mockReturnValue(manySongs);
     const result = await fetchCustomMix(['Rock'], undefined, undefined, false, 50);
     expect(result.length).toBe(50);
+  });
+
+  it('limits online multi-genre results to listLength', async () => {
+    const genreA = Array.from({ length: 10 }, (_, i) => makeSong({ id: `a${i}` }));
+    const genreB = Array.from({ length: 10 }, (_, i) => makeSong({ id: `b${i}` }));
+    mockGetRandomSongsFiltered
+      .mockResolvedValueOnce(genreA)
+      .mockResolvedValueOnce(genreB);
+    const result = await fetchCustomMix(['Rock', 'Jazz'], undefined, undefined, true, 15);
+    expect(result.length).toBe(15);
   });
 });
 

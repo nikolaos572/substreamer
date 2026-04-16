@@ -25,6 +25,7 @@ import { playTrack } from '../services/playerService';
 import { shuffleArray } from '../utils/arrayHelpers';
 import { connectivityStore } from '../store/connectivityStore';
 import { genreStore } from '../store/genreStore';
+import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
 import { offlineModeStore } from '../store/offlineModeStore';
 import { selectionAsync } from '../utils/haptics';
 import { VIZ_PALETTE } from '../constants/vizColors';
@@ -50,13 +51,14 @@ function isOnline(): boolean {
 }
 
 async function playGenre(genre: string): Promise<boolean> {
+  const { listLength } = layoutPreferencesStore.getState();
   let songs: Child[] | null;
 
   if (isOnline()) {
-    songs = await getRandomSongs(20, genre);
+    songs = await getRandomSongs(listLength, genre);
   } else {
     songs = getOfflineSongsByGenre(genre);
-    if (songs) songs = shuffleArray(songs);
+    if (songs) songs = shuffleArray(songs).slice(0, listLength);
   }
 
   if (!songs || songs.length === 0) return false;
@@ -169,12 +171,13 @@ const MixItUpChip = memo(function MixItUpChip({ colors }: { colors: ThemeColors 
     selectionAsync();
     setLoading(true);
     try {
+      const { listLength } = layoutPreferencesStore.getState();
       let songs: Child[] | null;
       if (isOnline()) {
-        songs = await getRandomSongs(20);
+        songs = await getRandomSongs(listLength);
       } else {
         songs = getOfflineSongsAll();
-        if (songs) songs = shuffleArray(songs).slice(0, 20);
+        if (songs) songs = shuffleArray(songs).slice(0, listLength);
       }
       if (songs && songs.length > 0) {
         await playTrack(songs[0], songs);

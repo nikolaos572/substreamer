@@ -435,7 +435,7 @@ export async function fetchMixSongs(strategy: FetchStrategy, listLength = 20): P
           const songs = await getRandomSongsFiltered({ size: g.size, genre: g.name });
           if (songs) results.push(...songs);
         }
-        return shuffleArray(results);
+        return shuffleArray(results).slice(0, listLength);
       }
       case 'random': {
         return (await getRandomSongs(strategy.size)) ?? [];
@@ -446,7 +446,7 @@ export async function fetchMixSongs(strategy: FetchStrategy, listLength = 20): P
       case 'offline': {
         if (strategy.genre) {
           const songs = getOfflineSongsByGenre(strategy.genre);
-          return shuffleArray([...songs]);
+          return shuffleArray([...songs]).slice(0, listLength);
         }
         // No genre filter — get all offline songs and shuffle
         const songs = getOfflineSongsAll();
@@ -505,7 +505,7 @@ export async function fetchCustomMix(
     });
     if (songs) results.push(...songs);
   }
-  return shuffleArray(results);
+  return shuffleArray(results).slice(0, listLength);
 }
 
 /* ------------------------------------------------------------------ */
