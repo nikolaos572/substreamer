@@ -18,6 +18,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 
 import { FormatBadge } from './FormatBadge';
@@ -117,7 +118,7 @@ export const AlbumInfoContent = memo(function AlbumInfoContent({
     }
     if (track.created) {
       const d = typeof track.created === 'string' ? new Date(track.created) : track.created;
-      phrases.push(t('metaAdded', { date: d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' }) }));
+      phrases.push(t('metaAdded', { date: d.toLocaleDateString(i18next.language, { year: 'numeric', month: 'short' }) }));
     }
     return phrases;
   }, [track, t]);

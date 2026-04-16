@@ -5,6 +5,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 
 import { BottomSheet } from './BottomSheet';
@@ -33,7 +34,7 @@ function formatSize(bytes: number): string {
 
 function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(i18next.language, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',

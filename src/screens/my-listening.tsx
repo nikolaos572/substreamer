@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { HeaderHeightContext } from '@react-navigation/elements';
-import { useCallback, useContext, useState } from 'react';
+import i18next from 'i18next';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -30,10 +31,14 @@ const PERIODS: { key: TimePeriod; labelKey: string }[] = [
   { key: 'all', labelKey: 'periodAll' },
 ];
 
-const HOUR_LABELS = [
-  '12am', '', '', '3am', '', '', '6am', '', '', '9am', '', '',
-  '12pm', '', '', '3pm', '', '', '6pm', '', '', '9pm', '', '',
-];
+function buildHourLabels(locale: string): string[] {
+  const fmt = new Intl.DateTimeFormat(locale, { hour: 'numeric' });
+  return Array.from({ length: 24 }, (_, h) => {
+    if (h % 3 !== 0) return '';
+    const d = new Date(2000, 0, 1, h);
+    return fmt.format(d);
+  });
+}
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -43,9 +48,11 @@ function formatDuration(seconds: number): string {
 }
 
 function formatHour(hour: number): string {
-  if (hour === 0) return '12 AM';
-  if (hour === 12) return '12 PM';
-  return hour < 12 ? `${hour} AM` : `${hour - 12} PM`;
+  const d = new Date(2000, 0, 1, hour);
+  return new Intl.DateTimeFormat(i18next.language, {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(d);
 }
 
 
@@ -58,6 +65,7 @@ export function MyListeningScreen() {
   const [period, setPeriod] = useState<TimePeriod>('30d');
   const [refreshing, setRefreshing] = useState(false);
 
+  const hourLabels = useMemo(() => buildHourLabels(i18next.language), []);
   const completedScrobbles = completedScrobbleStore((s) => s.completedScrobbles);
   const pendingScrobbles = pendingScrobbleStore((s) => s.pendingScrobbles);
   const aggregates = completedScrobbleStore((s) => s.aggregates);
@@ -115,7 +123,7 @@ export function MyListeningScreen() {
 
   const hourlyBarData = analytics.hourlyDistribution.map((count, i) => ({
     value: count,
-    label: HOUR_LABELS[i],
+    label: hourLabels[i],
   }));
 
   const recentScrobbles = [...completedScrobbles]
@@ -167,7 +175,7 @@ export function MyListeningScreen() {
         <View style={styles.statsRow}>
           <StatCard
             icon="musical-notes"
-            value={analytics.totalPlays.toLocaleString()}
+            value={analytics.totalPlays.toLocaleString(i18next.language)}
             label={t('totalPlays')}
             colors={colors}
             index={0}
@@ -183,14 +191,14 @@ export function MyListeningScreen() {
         <View style={styles.statsRow}>
           <StatCard
             icon="people-outline"
-            value={analytics.uniqueArtists.toLocaleString()}
+            value={analytics.uniqueArtists.toLocaleString(i18next.language)}
             label={t('uniqueArtists')}
             colors={colors}
             index={2}
           />
           <StatCard
             icon="flame-outline"
-            value={`${analytics.currentStreak}d`}
+            value={t('streakDays', { count: analytics.currentStreak })}
             label={analytics.longestStreak > analytics.currentStreak ? t('streakWithBest', { best: analytics.longestStreak }) : t('streak')}
             colors={colors}
             index={3}

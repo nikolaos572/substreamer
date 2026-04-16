@@ -5,6 +5,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
 import { useTheme } from '../hooks/useTheme';
 import { imageCacheStore } from '../store/imageCacheStore';
@@ -25,6 +26,7 @@ const MUSIC_COLOR_FALLBACK = '#1D9BF0';
 
 export const StorageUsageBar = memo(function StorageUsageBar() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   const imageBytes = imageCacheStore((s) => s.totalBytes);
   const musicBytes = musicCacheStore((s) => s.totalBytes);
@@ -70,10 +72,10 @@ export const StorageUsageBar = memo(function StorageUsageBar() {
 
   const budgetLabel = useMemo(() => {
     if (limitMode === 'fixed' && maxCacheSizeGB > 0) {
-      return `${maxCacheSizeGB} GB limit`;
+      return t('storageGbLimit', { gb: maxCacheSizeGB });
     }
-    return 'No limit';
-  }, [limitMode, maxCacheSizeGB]);
+    return t('storageNoLimit');
+  }, [limitMode, maxCacheSizeGB, t]);
 
   return (
     <View style={styles.container}>
@@ -91,19 +93,19 @@ export const StorageUsageBar = memo(function StorageUsageBar() {
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: IMAGE_COLOR }]} />
           <Text style={[styles.legendText, { color: colors.textSecondary }]}>
-            Images {formatBytes(imageBytes)}
+            {t('storageLegendImages')} {formatBytes(imageBytes)}
           </Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: musicColor }]} />
           <Text style={[styles.legendText, { color: colors.textSecondary }]}>
-            Music {formatBytes(musicBytes)}
+            {t('storageLegendMusic')} {formatBytes(musicBytes)}
           </Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: colors.inputBg }]} />
           <Text style={[styles.legendText, { color: colors.textSecondary }]}>
-            Free {formatBytes(freeBytes)}
+            {t('storageLegendFree')} {formatBytes(freeBytes)}
           </Text>
         </View>
       </View>

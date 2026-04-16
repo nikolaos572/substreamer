@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { HeaderHeightContext } from '@react-navigation/elements';
 import { useRouter } from 'expo-router';
+import i18next from 'i18next';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -237,7 +238,7 @@ export function SettingsServerScreen() {
             value={
               scanScanning
                 ? scanCount > 0
-                  ? t('scanningWithCount', { count: scanCount.toLocaleString() })
+                  ? t('scanningWithCount', { count: scanCount.toLocaleString(i18next.language) })
                   : t('scanning')
                 : t('idle')
             }
@@ -248,7 +249,7 @@ export function SettingsServerScreen() {
           {scanCount > 0 && (
             <InfoRow
               label={t('trackCount')}
-              value={scanCount.toLocaleString()}
+              value={scanCount.toLocaleString(i18next.language)}
               labelColor={colors.textPrimary}
               valueColor={colors.textSecondary}
               borderColor={colors.border}
@@ -257,7 +258,7 @@ export function SettingsServerScreen() {
           {scanLastScan != null && (
             <InfoRow
               label={t('lastScan')}
-              value={new Date(scanLastScan).toLocaleString()}
+              value={new Date(scanLastScan).toLocaleString(i18next.language)}
               labelColor={colors.textPrimary}
               valueColor={colors.textSecondary}
               borderColor={colors.border}

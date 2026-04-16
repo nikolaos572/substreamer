@@ -870,5 +870,14 @@
   "monthDec": "Dec",
   "dayMon": "Mon",
   "dayWed": "Wed",
-  "dayFri": "Fri"
+  "dayFri": "Fri",
+  "streakDays_one": "{{count}}d",
+  "streakDays_few": "{{count}}d",
+  "streakDays_many": "{{count}}d",
+  "streakDays_other": "{{count}}d",
+  "storageGbLimit": "{{gb}} GB limit",
+  "storageNoLimit": "No limit",
+  "storageLegendImages": "Images",
+  "storageLegendMusic": "Music",
+  "storageLegendFree": "Free"
 }

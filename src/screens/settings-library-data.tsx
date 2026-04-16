@@ -20,6 +20,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 
 import { GradientBackground } from '../components/GradientBackground';
@@ -59,7 +60,7 @@ function formatDate(date: Date | string | undefined | null): string {
   if (!date) return '—';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(i18next.language, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -70,7 +71,7 @@ function formatDateTime(date: Date | string | undefined | null): string {
   if (!date) return '—';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return '—';
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(i18next.language, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -200,7 +201,7 @@ export function SettingsLibraryDataScreen() {
     if (entry.scrobbleExclusionCount > 0) {
       parts.push(t('backupExclusionCount', { count: entry.scrobbleExclusionCount }));
     }
-    const dateStr = new Date(entry.createdAt).toLocaleString(undefined, {
+    const dateStr = new Date(entry.createdAt).toLocaleString(i18next.language, {
       dateStyle: 'medium',
       timeStyle: 'short',
     });
@@ -421,7 +422,7 @@ export function SettingsLibraryDataScreen() {
             <Text style={[settingsStyles.infoLabel, { color: colors.textPrimary }]}>{t('lastBackup')}</Text>
             <Text style={[settingsStyles.infoValue, { color: colors.textSecondary }]}>
               {lastBackupTime
-                ? new Date(lastBackupTime).toLocaleString(undefined, {
+                ? new Date(lastBackupTime).toLocaleString(i18next.language, {
                     dateStyle: 'medium',
                     timeStyle: 'short',
                   })
@@ -556,7 +557,7 @@ export function SettingsLibraryDataScreen() {
           <>
             {restoreBackupsList.map((entry) => {
               const isSelected = selectedBackup?.stem === entry.stem;
-              const dateStr = new Date(entry.createdAt).toLocaleString(undefined, {
+              const dateStr = new Date(entry.createdAt).toLocaleString(i18next.language, {
                 dateStyle: 'medium',
                 timeStyle: 'short',
               });
@@ -615,7 +616,7 @@ export function SettingsLibraryDataScreen() {
                 </Pressable>
                 {otherExpanded && otherBackups.map((entry) => {
                   const isSelected = selectedBackup?.stem === entry.stem;
-                  const dateStr = new Date(entry.createdAt).toLocaleString(undefined, {
+                  const dateStr = new Date(entry.createdAt).toLocaleString(i18next.language, {
                     dateStyle: 'medium',
                     timeStyle: 'short',
                   });

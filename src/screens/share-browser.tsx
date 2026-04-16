@@ -22,6 +22,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
+import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 
 import { EditShareSheet } from '../components/EditShareSheet';
@@ -43,7 +44,7 @@ function formatDate(date: Date | string | undefined | null): string {
   if (!date) return '—';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(i18next.language, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -54,7 +55,7 @@ function formatDateTime(date: Date | string | undefined | null): string {
   if (!date) return '—';
   const d = typeof date === 'string' ? new Date(date) : date;
   if (isNaN(d.getTime())) return '—';
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(i18next.language, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

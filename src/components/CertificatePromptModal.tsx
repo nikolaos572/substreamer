@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useCallback } from 'react';
+import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 import {
   Pressable,
@@ -223,7 +224,7 @@ function formatDate(isoString: string): string {
   if (isoString === 'Unknown') return isoString;
   try {
     const date = new Date(isoString);
-    return date.toLocaleDateString(undefined, {
+    return date.toLocaleDateString(i18next.language, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

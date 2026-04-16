@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 
 import { CachedImage } from '../components/CachedImage';
@@ -41,7 +42,7 @@ type RowStatus = 'idle' | 'refreshing' | 'success' | 'error';
 
 function formatDate(timestamp: number): string {
   const d = new Date(timestamp);
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(i18next.language, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

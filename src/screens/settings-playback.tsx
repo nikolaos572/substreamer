@@ -353,7 +353,7 @@ export function SettingsPlaybackScreen() {
                 <Text style={[styles.label, { color: colors.textPrimary }]}>{t('skipBackward')}</Text>
                 <View style={styles.dropdownRight}>
                   <Text style={[styles.label, { color: colors.textSecondary }]}>
-                    {skipBackwardInterval}s
+                    {t('secondsValue', { count: skipBackwardInterval })}
                   </Text>
                   <Ionicons
                     name={backwardOpen ? 'chevron-up' : 'chevron-down'}
@@ -403,7 +403,7 @@ export function SettingsPlaybackScreen() {
                 <Text style={[styles.label, { color: colors.textPrimary }]}>{t('skipForward')}</Text>
                 <View style={styles.dropdownRight}>
                   <Text style={[styles.label, { color: colors.textSecondary }]}>
-                    {skipForwardInterval}s
+                    {t('secondsValue', { count: skipForwardInterval })}
                   </Text>
                   <Ionicons
                     name={forwardOpen ? 'chevron-up' : 'chevron-down'}
