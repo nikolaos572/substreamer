@@ -1,5 +1,114 @@
 # Changelog
 
+## [8.0.48] - 2026-04-16
+
+- ci: update coverage badge [skip ci]
+- i18n(de): replace Song/Songs with Titel throughout German translations
+- ci: update coverage badge [skip ci]
+- i18n: remove directory path labels from translations
+- ci: update coverage badge [skip ci]
+- revert: remove --import-eq-suggestions from Crowdin upload
+- i18n: complete fr/de/es/it translations, fill plural variants, enable eq suggestions
+- ci: update coverage badge [skip ci]
+- i18n: restore fr/de/es/it translations overwritten by Crowdin download
+- ci: update coverage badge [skip ci]
+- Merge pull request #113 from ghenry22/crowdin-translations
+- i18n: update translations from Crowdin
+- ci: update coverage badge [skip ci]
+- i18n: add fr/de/es/it translations for lyrics, storage, and streak keys
+- ci: update coverage badge [skip ci]
+- feat(player): persist queue across restarts, recover raw streams on error
+- fix(i18n): simplify crowdin.yml Chinese mapping to avoid export collision
+- ci: update coverage badge [skip ci]
+- i18n: translate hardcoded chrome strings, localize Intl calls
+- feat(i18n): distinguish Simplified (zh-Hans) and Traditional (zh-Hant) Chinese
+- feat(i18n): add _few/_many plural variants for Russian/Ukrainian
+- ci: update coverage badge [skip ci]
+- chore: disable PlaybackToast now that MiniPlayer is visible on all screens
+- feat: show MiniPlayer as footer on detail, settings, and browser screens
+- feat: add MiniPlayerFooter wrapper for non-tab screens
+- ci: update coverage badge [skip ci]
+- feat(lyrics): show breathing dots during instrumental gaps over 5s
+- feat(lyrics): synthesize fake timings for eligible unsynced tracks
+- feat(lyrics): add synced lyrics view with auto-scroll and tap-to-seek
+- feat(lyrics): wire LyricsContent into phone and tablet players
+- feat(lyrics): add lyrics data model, service, and store
+- fix(subsonic-api): correct getLyricsBySongId response type
+- ci: update coverage badge [skip ci]
+- fix(player): bound album/artist/album-info fetches with timeouts
+- feat(i18n): enable Russian and Simplified Chinese
+- i18n: update translations from Crowdin (#107)
+- ci: update coverage badge [skip ci]
+- i18n: fill German, French, Italian, Spanish translations to 100%
+- i18n: update translations from Crowdin (#104)
+- ci: update coverage badge [skip ci]
+- chore(i18n): translate missed strings, downgrade missing-key validation to warning
+- fix(player): align album info skeleton with new layout
+- fix(android): crash on startup when System appearance is selected
+- style: normalize typography, spacing, and colors for UX consistency
+- feat(home): add suffix prop to AnimatedNumber, show streak in days
+- refactor(settings): restructure settings, add library-data and share-browser screens
+- feat(server): fetch user roles via getUser, add role-aware capability helpers
+- feat(theme): add green/orange semantic colors and shared viz palette
+- ci: update coverage badge [skip ci]
+- Merge pull request #94 from ghenry22/crowdin-translations
+- i18n: update translations from Crowdin
+- feat(artist): add play mode toggle for top songs vs all songs
+- fix(i18n): translate hardcoded 'Current Queue' in share sheet
+- feat: add native share sheet for share links with rich messages
+- fix: restore swipe-left actions in cache browser screens
+- fix: proactively cache cover art after store refreshes
+- ui: redesign album info panel with centered hero layout and inline metadata
+- docs: add plan persistence as non-negotiable project rule
+- ui: redesign track info panel with format badge, genre pills, quick stats
+- subsonic-api: add OpenSubsonic audio precision fields to Child
+- audio: add effective format capture for downloads and queue
+- fix(album): make artist name navigable from album detail
+- fix(albums): refresh full library when new albums surface
+- lists: update re-orderable lists away from deprecated library
+- player: defer SkipIntervalButton SVG mount until transition completes (U21)
+- refresh-control: bump key once after first mount (U22)
+- auto-offline: retry stale cold-start NetInfo result (U19)
+- scrobble: re-trigger queue processing on app foreground (U17)
+- BottomSheet: defer programmatic close by one frame (U8)
+- patch: react-native-screens fragmentWrapper memory leak (U7)
+- RNTP fork: U6 sibling — Android coroutine + force-unwrap hardening
+- expo-* iOS: replace force-unwraps with guarded fallbacks (U6 hygiene)
+- RNTP iOS: replace as!-force-casts with safe rejects (U6 root cause)
+- RNTP iOS: wrap TurboModule methods in NSException safe-call shim
+- android: enable useLegacyPackaging to mitigate SoLoader startup crash
+- eas: pin EXPO_USE_PRECOMPILED_MODULES=0 for production builds
+- expo: bump expo, expo-router, expo-modules-core to latest 55.x patches
+- docs: add non-negotiable commit message rule
+- banners: drive expand/collapse with Reanimated instead of LayoutAnimation
+- i18n: route consumers through local singleton to ensure Intl polyfills load
+- android: harden migration runner against rehydration races and task failures
+- android: harden backupService and backupStore against startup failures
+- ci: update coverage badge [skip ci]
+- RNTP fork: second-pass crash hardening from native module audit
+- android: native module audit fixes, SSL trust resilience, init hardening
+- audio: add some more playback base formats and server transcoding guides to support them
+- ci: update coverage badge [skip ci]
+- audio: add more streaming and download formats, allow for custom formats that users define.
+- ci: update coverage badge [skip ci]
+- player: tablet sleep timer parity + fix empty panel on first play
+- ci: update coverage badge [skip ci]
+- player: move sleep timer countdown to floating capsule on cover art
+- android: crash and ANR hardening for SDK 36 / large libraries
+- ci: reset changelogs
+- ci: update coverage badge [skip ci]
+- ci: fix tests
+- player: missed some test updates for the sleep timer.
+- player: sleep stop timer, configurable in settings to display or not on the player. Implemented at native level in RNTP fork.
+- ci: update coverage badge [skip ci]
+- publishing: add MiniMediaServer
+- ci: update coverage badge [skip ci]
+- Merge pull request #66 from ghenry22/crowdin-translations
+- i18n: update translations from Crowdin
+- ci: update coverage badge [skip ci]
+- Publishing: add translation info to the repo and website
+- ci: integrate Crowdin for community translations
+- ci: update coverage badge [skip ci]
 ## [8.0.47] - 2026-04-05
 
 - publishing: change log too long

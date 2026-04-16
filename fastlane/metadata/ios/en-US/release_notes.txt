@@ -1,0 +1,73 @@
+Replace Song/Songs with Titel throughout German translations
+Remove directory path labels from translations
+Remove --import-eq-suggestions from Crowdin upload
+Complete fr/de/es/it translations, fill plural variants, enable eq suggestions
+Restore fr/de/es/it translations overwritten by Crowdin download
+Merge pull request #113 from ghenry22/crowdin-translations
+Update translations from Crowdin
+Add fr/de/es/it translations for lyrics, storage, and streak keys
+Persist queue across restarts, recover raw streams on error
+Simplify crowdin.yml Chinese mapping to avoid export collision
+Translate hardcoded chrome strings, localize Intl calls
+Distinguish Simplified (zh-Hans) and Traditional (zh-Hant) Chinese
+Add _few/_many plural variants for Russian/Ukrainian
+Show MiniPlayer as footer on detail, settings, and browser screens
+Add MiniPlayerFooter wrapper for non-tab screens
+Show breathing dots during instrumental gaps over 5s
+Synthesize fake timings for eligible unsynced tracks
+Add synced lyrics view with auto-scroll and tap-to-seek
+Wire LyricsContent into phone and tablet players
+Add lyrics data model, service, and store
+Correct getLyricsBySongId response type
+Bound album/artist/album-info fetches with timeouts
+Enable Russian and Simplified Chinese
+Update translations from Crowdin (#107)
+Fill German, French, Italian, Spanish translations to 100%
+Update translations from Crowdin (#104)
+Translate missed strings, downgrade missing-key validation to warning
+Align album info skeleton with new layout
+Crash on startup when System appearance is selected
+Add suffix prop to AnimatedNumber, show streak in days
+Restructure settings, add library-data and share-browser screens
+Fetch user roles via getUser, add role-aware capability helpers
+Add green/orange semantic colors and shared viz palette
+Merge pull request #94 from ghenry22/crowdin-translations
+Add play mode toggle for top songs vs all songs
+Translate hardcoded 'Current Queue' in share sheet
+Add native share sheet for share links with rich messages
+Restore swipe-left actions in cache browser screens
+Proactively cache cover art after store refreshes
+Redesign album info panel with centered hero layout and inline metadata
+Redesign track info panel with format badge, genre pills, quick stats
+Add OpenSubsonic audio precision fields to Child
+Add effective format capture for downloads and queue
+Make artist name navigable from album detail
+Refresh full library when new albums surface
+Update re-orderable lists away from deprecated library
+Defer SkipIntervalButton SVG mount until transition completes (U21)
+Bump key once after first mount (U22)
+Retry stale cold-start NetInfo result (U19)
+Re-trigger queue processing on app foreground (U17)
+Defer programmatic close by one frame (U8)
+React-native-screens fragmentWrapper memory leak (U7)
+U6 sibling — Android coroutine + force-unwrap hardening
+Replace force-unwraps with guarded fallbacks (U6 hygiene)
+Replace as!-force-casts with safe rejects (U6 root cause)
+Wrap TurboModule methods in NSException safe-call shim
+Enable useLegacyPackaging to mitigate SoLoader startup crash
+Pin EXPO_USE_PRECOMPILED_MODULES=0 for production builds
+Bump expo, expo-router, expo-modules-core to latest 55.x patches
+Drive expand/collapse with Reanimated instead of LayoutAnimation
+Route consumers through local singleton to ensure Intl polyfills load
+Harden migration runner against rehydration races and task failures
+Harden backupService and backupStore against startup failures
+Second-pass crash hardening from native module audit
+Native module audit fixes, SSL trust resilience, init hardening
+Add some more playback base formats and server transcoding guides to support them
+Add more streaming and download formats, allow for custom formats that users define.
+Tablet sleep timer parity + fix empty panel on first play
+Move sleep timer countdown to floating capsule on cover art
+Crash and ANR hardening for SDK 36 / large libraries
+Missed some test updates for the sleep timer.
+Sleep stop timer, configurable in settings to display or not on the player. Implemented at native level in RNTP fork.
+Merge pull request #66 from ghenry22/crowdin-translations
