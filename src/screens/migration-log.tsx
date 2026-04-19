@@ -116,7 +116,7 @@ export function MigrationLogScreen() {
             >
               <Ionicons name="share-outline" size={18} color={diagLogSize != null ? colors.primary : colors.textSecondary} />
               <Text style={[styles.actionButtonText, { color: diagLogSize != null ? colors.primary : colors.textSecondary }]}>
-                {t('shareAudioLog')}
+                {t('share')}
               </Text>
             </Pressable>
             <Pressable
@@ -131,7 +131,7 @@ export function MigrationLogScreen() {
             >
               <Ionicons name="trash-outline" size={18} color={diagLogSize != null ? colors.red : colors.textSecondary} />
               <Text style={[styles.actionButtonText, { color: diagLogSize != null ? colors.red : colors.textSecondary }]}>
-                {t('clearAudioLog')}
+                {t('clear')}
               </Text>
             </Pressable>
           </View>
@@ -167,7 +167,7 @@ export function MigrationLogScreen() {
             >
               <Ionicons name="share-outline" size={18} color={content ? colors.primary : colors.textSecondary} />
               <Text style={[styles.actionButtonText, { color: content ? colors.primary : colors.textSecondary }]}>
-                {t('shareMigrationLog')}
+                {t('share')}
               </Text>
             </Pressable>
             <Pressable
@@ -182,7 +182,7 @@ export function MigrationLogScreen() {
             >
               <Ionicons name="trash-outline" size={18} color={content ? colors.red : colors.textSecondary} />
               <Text style={[styles.actionButtonText, { color: content ? colors.red : colors.textSecondary }]}>
-                {t('clearMigrationLog')}
+                {t('clear')}
               </Text>
             </Pressable>
           </View>
