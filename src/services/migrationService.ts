@@ -1043,14 +1043,12 @@ const MIGRATION_TASKS: MigrationTask[] = [
       // See `migrateMusicCacheFromBlob` for the full migration body.
       await migrateMusicCacheFromBlob(log);
 
-      // The v1 blob deletion is COMMENTED OUT for now. Keeping the blob on
-      // disk lets us re-test migration 14 end-to-end on the same device
-      // and compare against the retained source data if anything surprises
-      // us. Before beta, uncomment the line below so the blob is cleaned
-      // up once the per-row tables are canonical.
-      // TODO: uncomment for beta — removes the retained v1 blob.
-      // await sqliteStorage.removeItem('substreamer-music-cache');
-      log('v1 blob retained (will be removed before beta by uncommenting the delete).');
+      // Per-row tables are the canonical source of truth from here on.
+      // Remove the v1 blob so a later migration can't resurrect stale
+      // data after a `Clear All` / logout, and so the `storage` table
+      // isn't carrying dead weight.
+      await sqliteStorage.removeItem('substreamer-music-cache');
+      log('v1 blob removed — per-row tables are the sole source of truth.');
     },
   },
   // -------------------------------------------------------------------

@@ -954,14 +954,12 @@ describe('Task 14 – Move music cache to per-row SQLite tables and album-rooted
     expect(settings).not.toBeNull();
     expect(JSON.parse(settings as string)).toEqual({ maxConcurrentDownloads: 3 });
 
-    // Task 14 retains the v1 blob: the cleanup call is currently commented
-    // out so we can re-test migration end-to-end on the same device. Will
-    // be uncommented before beta.
-    expect(sqliteStorage.getItem('substreamer-music-cache')).not.toBeNull();
+    // Task 14 removes the v1 blob once per-row tables hold canonical state.
+    expect(sqliteStorage.getItem('substreamer-music-cache')).toBeNull();
 
     const logContent = mockFileWrite.mock.calls[0][0] as string;
     expect(logContent).toContain('Migrated 1 item(s), 2 song(s), 2 edge(s), 0 queue item(s)');
-    expect(logContent).toContain('v1 blob retained');
+    expect(logContent).toContain('v1 blob removed');
   });
 
   it('resolves album_id for playlist tracks via v1 album items; falls back to _unknown otherwise', async () => {
@@ -1285,16 +1283,15 @@ describe('Task 14 – Move music cache to per-row SQLite tables and album-rooted
 
     await runMigrations(13);
     expect(mockBulkReplace).toHaveBeenCalledTimes(1);
-    // Blob is RETAINED (cleanup call is commented out pending beta).
-    expect(sqliteStorage.getItem('substreamer-music-cache')).not.toBeNull();
+    // Task 14 removes the v1 blob once per-row tables hold canonical state.
+    expect(sqliteStorage.getItem('substreamer-music-cache')).toBeNull();
 
     mockBulkReplace.mockClear();
     mockFileWrite.mockClear();
-    // Second runMigrations(13): Task 14 re-runs (blob still present) and
-    // bulkReplace is invoked again with identical input. UPSERT makes this
-    // a safe idempotent no-op at the SQL level.
+    // Second runMigrations(13): blob is gone, Task 14 returns early with
+    // "nothing to migrate" — no second bulkReplace call.
     await runMigrations(13);
-    expect(mockBulkReplace).toHaveBeenCalledTimes(1);
+    expect(mockBulkReplace).not.toHaveBeenCalled();
   });
 
   describe('filesystem migration', () => {
@@ -1531,8 +1528,8 @@ describe('Task 14 – Move music cache to per-row SQLite tables and album-rooted
       const logContent = mockFileWrite.mock.calls[0][0] as string;
       expect(logContent).toContain('0 moved, 0 duplicate(s) deleted, 1 missing');
       expect(mockBulkReplace).toHaveBeenCalledTimes(1);
-      // Blob is RETAINED (cleanup call is commented out pending beta).
-      expect(sqliteStorage.getItem('substreamer-music-cache')).not.toBeNull();
+      // Task 14 removes the v1 blob once per-row tables hold canonical state.
+      expect(sqliteStorage.getItem('substreamer-music-cache')).toBeNull();
     });
 
     it('no filesystem work when the cache directory does not exist', async () => {
@@ -1560,8 +1557,8 @@ describe('Task 14 – Move music cache to per-row SQLite tables and album-rooted
       expect(mockListDirectoryAsync).not.toHaveBeenCalled();
       // SQL side of the migration still ran.
       expect(mockBulkReplace).toHaveBeenCalledTimes(1);
-      // Blob is RETAINED (cleanup call is commented out pending beta).
-      expect(sqliteStorage.getItem('substreamer-music-cache')).not.toBeNull();
+      // Task 14 removes the v1 blob once per-row tables hold canonical state.
+      expect(sqliteStorage.getItem('substreamer-music-cache')).toBeNull();
       const logContent = mockFileWrite.mock.calls[0][0] as string;
       // The filesystem-migration log line is absent when the branch is skipped.
       expect(logContent).not.toContain('Filesystem migration:');
