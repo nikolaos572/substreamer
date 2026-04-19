@@ -162,7 +162,11 @@ export const OnboardingGuide = memo(function OnboardingGuide() {
             <Text style={[styles.skipText, { color: colors.textSecondary }]}>{t('skip')}</Text>
           </Pressable>
 
-          {/* Slides */}
+          {/* Slides — uses RN FlatList deliberately (bounded 4-slide static
+              carousel). The project-wide rule is FlashList v2 everywhere, but
+              the virtualization win is zero here and FlashList's recycling
+              doesn't pair cleanly with horizontal paging on a fixed list. See
+              .claude/rules/react-components.md for the documented carveout. */}
           <FlatList
             ref={listRef}
             data={SLIDES}

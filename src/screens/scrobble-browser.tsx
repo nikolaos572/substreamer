@@ -125,6 +125,21 @@ export function ScrobbleBrowserScreen() {
   const segmentHeight = 52;
   const contentInsetTop = headerHeight + segmentHeight;
 
+  const completedContentContainerStyle = useMemo(
+    () => ({
+      paddingTop: contentInsetTop,
+      ...(completedReversed.length === 0 ? { flexGrow: 1 } : undefined),
+    }),
+    [contentInsetTop, completedReversed.length],
+  );
+  const pendingContentContainerStyle = useMemo(
+    () => ({
+      paddingTop: contentInsetTop,
+      ...(pendingReversed.length === 0 ? { flexGrow: 1 } : undefined),
+    }),
+    [contentInsetTop, pendingReversed.length],
+  );
+
   return (
     <GradientBackground style={styles.container} scrollable>
       <View style={styles.content}>
@@ -134,10 +149,7 @@ export function ScrobbleBrowserScreen() {
             keyExtractor={keyExtractor}
             renderItem={renderItem}
             ListEmptyComponent={completedEmpty}
-            contentContainerStyle={{
-              paddingTop: contentInsetTop,
-              ...(completedReversed.length === 0 ? { flexGrow: 1 } : undefined),
-            }}
+            contentContainerStyle={completedContentContainerStyle}
           />
         )}
         {activeSegment === 'pending' && (
@@ -146,10 +158,7 @@ export function ScrobbleBrowserScreen() {
             keyExtractor={keyExtractor}
             renderItem={renderItem}
             ListEmptyComponent={pendingEmpty}
-            contentContainerStyle={{
-              paddingTop: contentInsetTop,
-              ...(pendingReversed.length === 0 ? { flexGrow: 1 } : undefined),
-            }}
+            contentContainerStyle={pendingContentContainerStyle}
           />
         )}
       </View>

@@ -1023,39 +1023,6 @@ describe('PlaybackErrorLog event handler', () => {
   });
 });
 
-describe('PlaybackBufferEmpty event handler', () => {
-  it('logs buffer empty without throwing', async () => {
-    await initPlayer();
-    const handlers = eventHandlers;
-    const bufferEmptyHandler = handlers[Event.PlaybackBufferEmpty];
-
-    const logSpy = jest.spyOn(console, 'log').mockImplementation();
-    bufferEmptyHandler({ isEmpty: true });
-
-    expect(logSpy).toHaveBeenCalledWith('[Player] Buffer empty:', true);
-    logSpy.mockRestore();
-  });
-});
-
-describe('PlaybackSeekCompleted event handler', () => {
-  it('logs seek completion without throwing', async () => {
-    await initPlayer();
-    const handlers = eventHandlers;
-    const seekCompletedHandler = handlers[Event.PlaybackSeekCompleted];
-
-    const logSpy = jest.spyOn(console, 'log').mockImplementation();
-    seekCompletedHandler({ position: 30, didFinish: true });
-
-    expect(logSpy).toHaveBeenCalledWith(
-      '[Player] Seek completed: position',
-      30,
-      'didFinish',
-      true,
-    );
-    logSpy.mockRestore();
-  });
-});
-
 /* ------------------------------------------------------------------ */
 /*  seekTo edge branches                                               */
 /* ------------------------------------------------------------------ */

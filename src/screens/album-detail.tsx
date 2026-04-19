@@ -190,6 +190,23 @@ export function AlbumDetailScreen() {
     return items;
   }, [allSongs]);
 
+  const androidHeaderInset = insets.top + HEADER_BAR_HEIGHT;
+  const listContentContainerStyle = useMemo(
+    () => ({
+      paddingBottom: 32,
+      ...(Platform.OS !== 'ios' ? { paddingTop: androidHeaderInset } : undefined),
+    }),
+    [androidHeaderInset],
+  );
+  const listContentInset = useMemo(
+    () => (Platform.OS === 'ios' ? { top: androidHeaderInset } : undefined),
+    [androidHeaderInset],
+  );
+  const listContentOffset = useMemo(
+    () => (Platform.OS === 'ios' ? { x: 0, y: -androidHeaderInset } : undefined),
+    [androidHeaderInset],
+  );
+
   const renderItem = useCallback(
     ({ item, index }: { item: AlbumListItem; index: number }) => {
       if (item.type === 'disc-header') {
@@ -408,12 +425,9 @@ export function AlbumDetailScreen() {
           ListEmptyComponent={listEmpty}
           onScrollBeginDrag={closeOpenRow}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingBottom: 32,
-            ...(Platform.OS !== 'ios' ? { paddingTop: insets.top + HEADER_BAR_HEIGHT } : undefined),
-          }}
-          contentInset={Platform.OS === 'ios' ? { top: insets.top + HEADER_BAR_HEIGHT } : undefined}
-          contentOffset={Platform.OS === 'ios' ? { x: 0, y: -(insets.top + HEADER_BAR_HEIGHT) } : undefined}
+          contentContainerStyle={listContentContainerStyle}
+          contentInset={listContentInset}
+          contentOffset={listContentOffset}
           refreshControl={
             offlineMode ? undefined : (
               <RefreshControl

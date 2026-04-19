@@ -75,6 +75,10 @@ export function PlayerPanel() {
   const { colors } = useTheme();
   const { alert, alertProps } = useThemedAlert();
   const insets = useSafeAreaInsets();
+  const queueContentContainerStyle = useMemo(
+    () => ({ paddingBottom: insets.bottom + 16 }),
+    [insets.bottom],
+  );
   const currentTrack = playerStore((s) => s.currentTrack);
   const currentTrackIndex = playerStore((s) => s.currentTrackIndex);
   const queue = playerStore((s) => s.queue);
@@ -256,7 +260,7 @@ export function PlayerPanel() {
           onScrollBeginDrag={closeOpenRow}
           drawDistance={200}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+          contentContainerStyle={queueContentContainerStyle}
         />
       </View>
 

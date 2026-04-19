@@ -4,6 +4,7 @@ import {
   removeTrustedCertificate as nativeRemoveTrustedCertificate,
 } from '../../modules/expo-ssl-trust/src';
 import { sslCertStore } from '../store/sslCertStore';
+import { fireAndForget } from '../utils/fireAndForget';
 
 let initialized = false;
 let nativeInstalled = false;
@@ -33,9 +34,12 @@ export function initSslTrustStore(): void {
   }
 
   // Persisted certs present — install eagerly and sync them.
-  void ensureNativeTrustStoreInstalled().then((ok) => {
-    if (ok) void syncToNative();
-  });
+  fireAndForget(
+    ensureNativeTrustStoreInstalled().then((ok) => {
+      if (ok) fireAndForget(syncToNative(), 'sslTrust.syncToNative');
+    }),
+    'sslTrust.ensureInstalled',
+  );
 }
 
 /**

@@ -118,6 +118,11 @@ export function FileExplorerScreen() {
     return [root.label, ...path.slice(1)].join('/');
   }, [path]);
 
+  const rootScrollContentContainerStyle = useMemo(
+    () => ({ paddingTop: headerHeight + 16 }),
+    [headerHeight],
+  );
+
   const handleBack = useCallback(() => {
     if (!path) return;
     if (path.length <= 1) {
@@ -216,7 +221,7 @@ export function FileExplorerScreen() {
   if (!path) {
     return (
       <GradientBackground style={styles.container} scrollable>
-        <ScrollView contentContainerStyle={{ paddingTop: headerHeight + 16 }}>
+        <ScrollView contentContainerStyle={rootScrollContentContainerStyle}>
           <View style={[settingsStyles.card, { backgroundColor: colors.card }]}>
             {ROOTS.map((root, index) => (
               <Pressable

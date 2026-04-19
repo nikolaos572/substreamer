@@ -496,7 +496,15 @@ export function MoreOptionsSheet() {
                 processingOverlayStore.getState().showSuccess(t('playlistDeleted'));
 
                 if (onDetailView) {
-                  setTimeout(() => router.back(), 800);
+                  // The sheet has already unmounted by this point, so a
+                  // useEffect cleanup can't cancel this timer. Guard with
+                  // canGoBack + a live pathname check so we never pop a
+                  // stack the user navigated into during the success-
+                  // overlay window.
+                  setTimeout(() => {
+                    if (!router.canGoBack()) return;
+                    router.back();
+                  }, 800);
                 }
               } catch {
                 processingOverlayStore.getState().showError(t('failedToDeletePlaylist'));

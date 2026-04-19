@@ -198,6 +198,18 @@ export function initMusicCache(): void {
 }
 
 /**
+ * Unregister the AppState listener and clear the cached directory handle.
+ * Called from `resetAllStores()` on logout so a background→foreground
+ * transition while logged out doesn't fire recovery against a reset store.
+ * The next login re-arms the listener via `initMusicCache()`.
+ */
+export function teardownMusicCache(): void {
+  appStateSubscription?.remove();
+  appStateSubscription = null;
+  cacheDir = null;
+}
+
+/**
  * Deferred post-splash init: populate the in-memory maps from SQL state,
  * reconcile any drift between SQL and the filesystem, then recover any
  * stalled downloads.

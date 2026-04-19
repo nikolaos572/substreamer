@@ -16,6 +16,10 @@ jest.mock('../../services/scrobbleService', () => ({}));
 jest.mock('../../services/imageCacheService', () => ({
   cacheAllSizes: jest.fn().mockResolvedValue(undefined),
   cacheEntityCoverArt: jest.fn(),
+  teardownImageCache: jest.fn(),
+}));
+jest.mock('../../services/musicCacheService', () => ({
+  teardownMusicCache: jest.fn(),
 }));
 jest.mock('../persistence/detailTables', () => ({
   clearDetailTables: jest.fn(),

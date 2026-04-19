@@ -343,6 +343,16 @@ export function ImageCacheBrowserScreen() {
   const [chromeHeight, setChromeHeight] = useState(0);
   const contentInsetTop = headerHeight + chromeHeight;
 
+  const listContentContainerStyle = useMemo(
+    () => ({
+      paddingTop: contentInsetTop,
+      paddingHorizontal: 16,
+      paddingBottom: 32,
+      ...((loading || filteredEntries.length === 0) ? { flex: 1 } : undefined),
+    }),
+    [contentInsetTop, loading, filteredEntries.length],
+  );
+
   return (
     <>
     <GradientBackground style={settingsStyles.container} scrollable>
@@ -364,12 +374,7 @@ export function ImageCacheBrowserScreen() {
               />
             )
           }
-          contentContainerStyle={{
-            paddingTop: contentInsetTop,
-            paddingHorizontal: 16,
-            paddingBottom: 32,
-            ...((loading || filteredEntries.length === 0) ? { flex: 1 } : undefined),
-          }}
+          contentContainerStyle={listContentContainerStyle}
           ListEmptyComponent={listEmpty}
         />
       </View>

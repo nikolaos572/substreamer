@@ -104,6 +104,11 @@ export function ScrobbleExclusionBrowserScreen() {
     [],
   );
 
+  const contentContainerStyle = useMemo(
+    () => ({ paddingTop: headerHeight, paddingBottom: 32 }),
+    [headerHeight],
+  );
+
   if (data.length === 0) {
     return (
       <GradientBackground style={styles.container}>
@@ -123,7 +128,7 @@ export function ScrobbleExclusionBrowserScreen() {
         data={data}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: 32 }}
+        contentContainerStyle={contentContainerStyle}
       />
       <MiniPlayerFooter />
     </GradientBackground>

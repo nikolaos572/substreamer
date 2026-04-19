@@ -107,6 +107,8 @@ const renderGridItem = ({ item, index }: { item: AlbumID3; index: number }) => {
 
 `ReorderableList` is built natively for the New Architecture on Reanimated worklets. Drag is initiated via the `useReorderableDrag()` hook called inside the row component (not threaded as a `drag` prop) and wired to a dedicated drag-handle `Pressable` so the rest of the row body still scrolls normally. Reorder events fire as `{ from, to }` indices; use the exported `reorderItems(data, from, to)` helper to apply the move to local state.
 
+**Exception:** Bounded, static, single-digit-item horizontal carousels may use RN `FlatList` with `getItemLayout`. Example: `src/components/OnboardingGuide.tsx` (4-slide onboarding carousel). FlashList's virtualization adds zero value below ~20 items, and its recycling doesn't pair cleanly with horizontal paging on a fixed list. Always document the carveout with an inline comment.
+
 ## Modals and Bottom Sheets
 
 Use RN `Modal` with transparent backdrop for bottom sheets:

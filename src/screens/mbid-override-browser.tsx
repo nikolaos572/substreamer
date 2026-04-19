@@ -147,6 +147,11 @@ export function MbidOverrideBrowserScreen() {
 
   const keyExtractor = useCallback((item: MbidOverride) => `${item.type}:${item.entityId}`, []);
 
+  const contentContainerStyle = useMemo(
+    () => ({ paddingTop: headerHeight, paddingBottom: 32 }),
+    [headerHeight],
+  );
+
   return (
     <GradientBackground style={styles.container} scrollable>
       <FlashList
@@ -165,7 +170,7 @@ export function MbidOverrideBrowserScreen() {
             subtitle={selectedType === 'artist' ? t('artistOverridesAppearHere') : t('albumOverridesAppearHere')}
           />
         }
-        contentContainerStyle={{ paddingTop: headerHeight, paddingBottom: 32 }}
+        contentContainerStyle={contentContainerStyle}
       />
       <MiniPlayerFooter />
     </GradientBackground>

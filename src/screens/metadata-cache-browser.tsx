@@ -342,6 +342,16 @@ export function MetadataCacheBrowserScreen() {
     [colors, filter, handleFilterChange],
   );
 
+  const listContentContainerStyle = useMemo(
+    () => ({
+      paddingTop: headerHeight,
+      paddingHorizontal: 16,
+      paddingBottom: 32,
+      ...(filteredEntries.length === 0 ? { flex: 1 } : undefined),
+    }),
+    [headerHeight, filteredEntries.length],
+  );
+
   return (
     <>
     <GradientBackground style={settingsStyles.container} scrollable>
@@ -360,12 +370,7 @@ export function MetadataCacheBrowserScreen() {
             progressViewOffset={headerHeight}
           />
         }
-        contentContainerStyle={{
-          paddingTop: headerHeight,
-          paddingHorizontal: 16,
-          paddingBottom: 32,
-          ...(filteredEntries.length === 0 ? { flex: 1 } : undefined),
-        }}
+        contentContainerStyle={listContentContainerStyle}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={listEmpty}
       />

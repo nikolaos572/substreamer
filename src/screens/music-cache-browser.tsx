@@ -443,6 +443,16 @@ export function MusicCacheBrowserScreen() {
     [colors, filter],
   );
 
+  const listContentContainerStyle = useMemo(
+    () => ({
+      paddingTop: headerHeight,
+      paddingHorizontal: 16,
+      paddingBottom: 32,
+      ...((!transitionComplete || entries.length === 0) ? { flex: 1 } : undefined),
+    }),
+    [headerHeight, transitionComplete, entries.length],
+  );
+
   return (
     <>
     <GradientBackground style={settingsStyles.container} scrollable>
@@ -453,12 +463,7 @@ export function MusicCacheBrowserScreen() {
         extraData={expandedId}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={listEmpty}
-        contentContainerStyle={{
-          paddingTop: headerHeight,
-          paddingHorizontal: 16,
-          paddingBottom: 32,
-          ...((!transitionComplete || entries.length === 0) ? { flex: 1 } : undefined),
-        }}
+        contentContainerStyle={listContentContainerStyle}
         onScrollBeginDrag={closeOpenRow}
       />
       <MiniPlayerFooter />

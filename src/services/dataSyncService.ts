@@ -25,6 +25,7 @@ import { scanStatusStore } from '../store/scanStatusStore';
 import { authStore } from '../store/authStore';
 import { serverInfoStore } from '../store/serverInfoStore';
 import { syncStatusStore, type SyncScope } from '../store/syncStatusStore';
+import { fireAndForget } from '../utils/fireAndForget';
 import { runPool } from '../utils/promisePool';
 import { minDelay } from '../utils/stringHelpers';
 import { registerMusicCacheOnAlbumReferencedHook } from './musicCacheService';
@@ -82,7 +83,10 @@ async function performScope(scope: SyncScope): Promise<void> {
       await genreStore.getState().fetchGenres();
       return;
     case 'all':
-      await Promise.all([
+      // `allSettled` so that if any scope fetcher is ever refactored to
+      // throw (today they all swallow their own errors), the remaining
+      // scopes still run to completion rather than silently skipping.
+      await Promise.allSettled([
         performScope('home'),
         performScope('albums'),
         performScope('artists'),
@@ -234,15 +238,18 @@ async function startupOrResumeFlow(): Promise<void> {
         // probe) and surface any new albums + their details before
         // running the full walk. Detect errors are swallowed — fire the
         // walk either way.
-        void detectChanges().then(({ changedAlbumIds }) => {
-          if (changedAlbumIds.length > 0) {
-            // Routed through onScanCompleted which already handles upsert
-            // + detail fetch for changed IDs.
-            void onScanCompleted();
-          }
-        });
+        fireAndForget(
+          detectChanges().then(({ changedAlbumIds }) => {
+            if (changedAlbumIds.length > 0) {
+              // Routed through onScanCompleted which already handles upsert
+              // + detail fetch for changed IDs.
+              fireAndForget(onScanCompleted(), 'sync.onScanCompleted');
+            }
+          }),
+          'sync.detectChanges',
+        );
         // Fire-and-forget — walk progress is visible via the pill banner.
-        void runFullAlbumDetailSync();
+        fireAndForget(runFullAlbumDetailSync(), 'sync.runFullAlbumDetailSync');
       }
     }, 1500);
   });
@@ -335,7 +342,7 @@ export async function onAlbumReferenced(albumId: string): Promise<void> {
   if (libState.albums.some((a) => a.id === albumId)) return;
   // Fire-and-forget — reconciliation on the fresh library (via the hook
   // registered at module load) will pick up the new album's detail too.
-  void libState.fetchAllAlbums();
+  fireAndForget(libState.fetchAllAlbums(), 'sync.onAlbumReferenced');
 }
 
 /** Bounded concurrency for the playlist-detail prefetch (smaller than the
@@ -372,10 +379,13 @@ export function reconcilePlaylistLibrary(
     const detail = playlistDetailStore.getState();
     // Fire-and-forget with a small pool; playlist detail fetches are
     // individually large so we keep concurrency lower than the album walk.
-    void runPool(
-      added,
-      async (id) => detail.fetchPlaylist(id),
-      { concurrency: PLAYLIST_PREFETCH_CONCURRENCY },
+    fireAndForget(
+      runPool(
+        added,
+        async (id) => detail.fetchPlaylist(id),
+        { concurrency: PLAYLIST_PREFETCH_CONCURRENCY },
+      ),
+      'sync.playlistDetailPrefetch',
     );
   }
 }
@@ -418,7 +428,7 @@ export function reconcileAlbumLibrary(
 
   if (addedCount > 0 && !offlineModeStore.getState().offlineMode) {
     // Fire-and-forget — walk is async and in-flight dedup-safe.
-    void runFullAlbumDetailSync();
+    fireAndForget(runFullAlbumDetailSync(), 'sync.reconcileAlbumLibrary');
   }
 }
 
@@ -758,11 +768,17 @@ export function cancelAllSyncs(reason: 'logout' | 'force-resync' | 'server-switc
 // orchestration entry points here. This avoids those services importing
 // dataSyncService (which would transitively pull the entire store graph
 // into any test that mocks them).
-registerScrobbleBatchCompletedHook(() => { void onScrobbleCompleted(); });
-registerScanCompletedHook(() => { void onScanCompleted(); });
+registerScrobbleBatchCompletedHook(() => {
+  fireAndForget(onScrobbleCompleted(), 'sync.hook.scrobbleBatch');
+});
+registerScanCompletedHook(() => {
+  fireAndForget(onScanCompleted(), 'sync.hook.scanCompleted');
+});
 registerAlbumLibraryReconcileHook((oldIds, newIds) => reconcileAlbumLibrary(oldIds, newIds));
 registerPlaylistLibraryReconcileHook((oldIds, newIds) => reconcilePlaylistLibrary(oldIds, newIds));
-registerMusicCacheOnAlbumReferencedHook((albumId) => { void onAlbumReferenced(albumId); });
+registerMusicCacheOnAlbumReferencedHook((albumId) => {
+  fireAndForget(onAlbumReferenced(albumId), 'sync.hook.onAlbumReferenced');
+});
 
 // Retire the legacy `albumListsStore` → `albumLibraryStore` subscribe by
 // reimplementing it here: when `recentlyAdded` surfaces an id the library
@@ -776,7 +792,7 @@ albumListsStore.subscribe((state, prev) => {
   const knownIds = new Set(libState.albums.map((a) => a.id));
   for (const album of state.recentlyAdded) {
     if (!knownIds.has(album.id)) {
-      void onAlbumReferenced(album.id);
+      fireAndForget(onAlbumReferenced(album.id), 'sync.recentlyAddedReferenced');
       return; // one fetch covers all new ids via reconciliation
     }
   }

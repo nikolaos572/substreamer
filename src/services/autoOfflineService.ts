@@ -36,7 +36,6 @@ function handleNetworkChange(state: NetInfoState): void {
   }
 
   const isHome = homeSSIDs.includes(ssid);
-  console.log(`[AutoOffline] WiFi SSID "${ssid}" ${isHome ? 'matches' : 'does not match'} home networks → ${isHome ? 'online' : 'offline'}`);
   offlineModeStore.getState().setOfflineMode(!isHome);
 }
 

@@ -424,12 +424,7 @@ export async function initPlayer(): Promise<void> {
     }
   });
 
-  TrackPlayer.addEventListener(Event.PlaybackBufferEmpty, (e) => {
-    console.log('[Player] Buffer empty:', e.isEmpty);
-  });
-
   TrackPlayer.addEventListener(Event.PlaybackBufferFull, (e) => {
-    console.log('[Player] Buffer full:', e.isFull);
     if (e.isFull) {
       isFullyBuffered = true;
     }
@@ -458,25 +453,7 @@ export async function initPlayer(): Promise<void> {
     }
   });
 
-  TrackPlayer.addEventListener(Event.PlaybackSeekCompleted, (e) => {
-    console.log(
-      '[Player] Seek completed: position',
-      e.position,
-      'didFinish',
-      e.didFinish
-    );
-  });
-
   TrackPlayer.addEventListener(Event.PlaybackEndedWithReason, (e) => {
-    console.log(
-      '[Player] Playback ended: reason',
-      e.reason,
-      'track',
-      e.track,
-      'position',
-      e.position
-    );
-
     // During queue-setup operations, skip scrobble coordination entirely.
     if (isSettingQueue || isShuffling) return;
 

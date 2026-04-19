@@ -10,6 +10,8 @@ import { clearDetailTables } from './persistence/detailTables';
 import { clearAllCachedImages } from './persistence/imageCacheTable';
 import { clearScrobbles } from './persistence/scrobbleTable';
 import { clearMusicCacheTables } from './musicCacheStore';
+import { teardownMusicCache } from '../services/musicCacheService';
+import { teardownImageCache } from '../services/imageCacheService';
 
 // Persisted stores
 import { albumDetailStore } from './albumDetailStore';
@@ -117,6 +119,11 @@ const allStores = [
 ];
 
 export function resetAllStores(): void {
+  // Unregister cache-service AppState listeners before clearing state so a
+  // background→foreground transition while logged out can't fire stalled-
+  // download recovery against a reset store. The next login re-arms them.
+  teardownMusicCache();
+  teardownImageCache();
   clearKvStorage();
   // Clear the per-row SQLite tables used by albumDetailStore + songIndexStore.
   // These live in a separate connection (`detailTables.ts`) from the generic

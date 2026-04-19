@@ -144,6 +144,18 @@ export function initImageCache(): void {
 }
 
 /**
+ * Unregister the AppState listener and clear cached module state.
+ * Called from `resetAllStores()` on logout so a background→foreground
+ * transition while logged out doesn't fire recovery against a reset store.
+ * The next login re-arms the listener via `initImageCache()`.
+ */
+export function teardownImageCache(): void {
+  appStateSubscription?.remove();
+  appStateSubscription = null;
+  cacheDir = null;
+}
+
+/**
  * Run the expensive post-launch work that was split out of
  * {@link initImageCache} to avoid blocking app startup. Should be called
  * once after the first React frame renders.

@@ -90,6 +90,10 @@ const TAB_FADE_DURATION = 300;
 const TAB_FADE_EASING = Easing.out(Easing.cubic);
 const TAB_SLIDE_DISTANCE = 12;
 
+/** Static content inset for the queue list — module-scope so FlashList isn't
+ *  handed a fresh object on every parent re-render. */
+const QUEUE_CONTENT_CONTAINER_STYLE = { paddingBottom: 12 } as const;
+
 export function PlayerView() {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -393,7 +397,7 @@ export function PlayerView() {
                 onScrollBeginDrag={closeOpenRow}
                 drawDistance={200}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 12 }}
+                contentContainerStyle={QUEUE_CONTENT_CONTAINER_STYLE}
               />
             )}
           </Animated.View>
