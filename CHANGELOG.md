@@ -1,5 +1,9 @@
 # Changelog
 
+## [8.0.51] - 2026-04-19
+
+- fix(sync): skip cover prefetch during library sync; surface offline pause
+- ci: update coverage badge [skip ci]
 ## [8.0.50] - 2026-04-19
 
 - fix(release): stop clobbering curated store release notes
