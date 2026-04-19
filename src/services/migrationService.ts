@@ -38,6 +38,10 @@ import {
   type DownloadQueueRow,
 } from '../store/persistence/musicCacheTables';
 import { replaceAllScrobbles } from '../store/persistence/scrobbleTable';
+import {
+  bulkInsertCachedImages,
+  countCachedImages as countCachedImagesRow,
+} from '../store/persistence/imageCacheTable';
 import { kvStorage } from '../store/persistence';
 
 /* ------------------------------------------------------------------ */
@@ -1049,6 +1053,98 @@ const MIGRATION_TASKS: MigrationTask[] = [
       // isn't carrying dead weight.
       await kvStorage.removeItem('substreamer-music-cache');
       log('v1 blob removed — per-row tables are the sole source of truth.');
+    },
+  },
+
+  {
+    id: 16,
+    name: 'Index on-disk image cache into per-row SQLite table',
+    run: async (log) => {
+      // imageCacheStore moved off the monolithic aggregate blob. This task
+      // walks the existing `{image-cache}/{coverArtId}/{size}.{ext}` tree
+      // once, inserts one row per variant into `cached_images`, and removes
+      // the legacy aggregates blob. Subsequent launches skip the walk and
+      // read everything from SQL.
+      //
+      // Idempotent: uses UPSERT on (cover_art_id, size). Re-running is a
+      // no-op against a populated table.
+      const imageCacheDir = new Directory(Paths.document, 'image-cache');
+      if (!imageCacheDir.exists) {
+        log('No image-cache directory on disk — nothing to index.');
+        await kvStorage.removeItem('substreamer-image-cache-stats');
+        return;
+      }
+
+      const SIZE_FILE_RE = /^(50|150|300|600)\.(jpg|png|webp)$/;
+      const rows: Array<{
+        coverArtId: string;
+        size: number;
+        ext: string;
+        bytes: number;
+        cachedAt: number;
+      }> = [];
+
+      let topLevelNames: string[] = [];
+      try {
+        const listed = await listDirectoryAsync(imageCacheDir.uri);
+        topLevelNames = Array.isArray(listed) ? listed : [];
+      } catch {
+        /* best-effort */
+      }
+
+      const now = Date.now();
+      let skippedTmp = 0;
+      let skippedUnknown = 0;
+      for (const coverArtId of topLevelNames) {
+        if (!coverArtId) continue;
+        const subDir = new Directory(imageCacheDir, coverArtId);
+        if (!subDir.exists) continue;
+        let fileNames: string[] = [];
+        try {
+          const listed = await listDirectoryAsync(subDir.uri);
+          fileNames = Array.isArray(listed) ? listed : [];
+        } catch {
+          continue;
+        }
+        for (const name of fileNames) {
+          if (!name) continue;
+          if (name.endsWith('.tmp')) {
+            skippedTmp++;
+            continue;
+          }
+          const match = SIZE_FILE_RE.exec(name);
+          if (!match) {
+            skippedUnknown++;
+            continue;
+          }
+          const file = new File(subDir, name);
+          if (!file.exists) continue;
+          rows.push({
+            coverArtId,
+            size: Number(match[1]),
+            ext: match[2],
+            bytes: file.size ?? 0,
+            // expo-file-system doesn't expose mtime reliably across
+            // platforms; use a fixed baseline so ORDER BY cached_at stays
+            // sensible even before any new downloads happen.
+            cachedAt: now,
+          });
+        }
+      }
+
+      if (rows.length > 0) {
+        bulkInsertCachedImages(rows);
+      }
+      const persisted = countCachedImagesRow();
+      const uniqueCovers = new Set(rows.map((r) => r.coverArtId)).size;
+      log(
+        `Indexed ${uniqueCovers} cover art item(s), ${rows.length} variant file(s) ` +
+          `(skipped ${skippedTmp} .tmp, ${skippedUnknown} unrecognised). ` +
+          `cached_images row count after migrate: ${persisted}.`,
+      );
+
+      // Aggregate blob from the pre-migration era is no longer used.
+      await kvStorage.removeItem('substreamer-image-cache-stats');
     },
   },
   // -------------------------------------------------------------------

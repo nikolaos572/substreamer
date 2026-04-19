@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
-import { useNavigation } from 'expo-router';
+import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { HeaderHeightContext } from '@react-navigation/elements';
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { EmptyState } from '../components/EmptyState';
 import { GradientBackground } from '../components/GradientBackground';
 import { MiniPlayerFooter } from '../components/MiniPlayerFooter';
+import { SegmentControl, type Segment } from '../components/SegmentControl';
 import { settingsStyles } from '../styles/settingsStyles';
 import { SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
 import { useRefreshControlKey } from '../hooks/useRefreshControlKey';
@@ -88,6 +89,22 @@ const CacheRow = memo(function CacheRow({
           >
             {entry.coverArtId}
           </Text>
+          {!entry.complete && (
+            <Pressable
+              onPress={handleRefreshAction}
+              hitSlop={4}
+              style={({ pressed }) => [
+                styles.repairBadge,
+                { backgroundColor: colors.red + '22', borderColor: colors.red },
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="warning" size={12} color={colors.red} />
+              <Text style={[styles.repairBadgeText, { color: colors.red }]}>
+                {t('incompleteTapToRepair')}
+              </Text>
+            </Pressable>
+          )}
           {entry.files.map((f) => (
             <Text
               key={f.fileName}
@@ -132,7 +149,19 @@ export function ImageCacheBrowserScreen() {
   const transitionComplete = useTransitionComplete();
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
   const refreshControlKey = useRefreshControlKey();
-  const [entries, setEntries] = useState<CachedImageEntry[]>([]);
+  // Route param `filter=incomplete` (passed from the settings-storage
+  // warning row) preselects the incomplete segment on mount. Default to
+  // `complete` — it's the expected state for the vast majority of covers
+  // and makes "incomplete" a meaningful quick-toggle.
+  const params = useLocalSearchParams<{ filter?: string }>();
+  type BrowserSegment = 'complete' | 'incomplete';
+  const initialStatusFilter: BrowserSegment =
+    params.filter === 'incomplete' ? 'incomplete' : 'complete';
+  const [statusFilter, setStatusFilter] = useState<BrowserSegment>(initialStatusFilter);
+  // `allEntries` holds the complete list exactly once; status-filter switches
+  // are a pure in-memory filter against it so the UI stays responsive even on
+  // libraries with thousands of covers.
+  const [allEntries, setAllEntries] = useState<CachedImageEntry[]>([]);
   const [filter, setFilter] = useState('');
   const listRef = useRef<FlashListRef<CachedImageEntry>>(null);
 
@@ -147,7 +176,7 @@ export function ImageCacheBrowserScreen() {
           style: 'destructive',
           onPress: async () => {
             await clearImageCache();
-            setEntries([]);
+            setAllEntries([]);
           },
         },
       ],
@@ -156,19 +185,19 @@ export function ImageCacheBrowserScreen() {
 
   useEffect(() => {
     navigation.setOptions({
-      headerRight: entries.length > 0
+      headerRight: allEntries.length > 0
         ? () => (
             <Pressable
               onPress={handleClearAll}
               hitSlop={8}
               style={({ pressed }) => pressed && styles.pressed}
             >
-              <Text style={[styles.clearButton, { color: colors.primary }]}>{t('clear')}</Text>
+              <Text style={[styles.clearButton, { color: colors.textPrimary }]}>{t('clear')}</Text>
             </Pressable>
           )
         : undefined,
     });
-  }, [navigation, entries.length, handleClearAll, colors.primary]);
+  }, [navigation, allEntries.length, handleClearAll, colors.textPrimary]);
 
   const handleFilterChange = useCallback((text: string) => {
     setFilter(text);
@@ -182,22 +211,30 @@ export function ImageCacheBrowserScreen() {
   const [loading, setLoading] = useState(true);
   const [statusMap, setStatusMap] = useState<Map<string, RowStatus>>(new Map());
 
+  // Derived list: status-filter switches are instant (no SQL, no re-render
+  // of the whole service layer), text-filter runs against the narrowed set.
   const filteredEntries = useMemo(() => {
     const query = filter.trim().toLowerCase();
-    if (query.length === 0) return entries;
-    return entries.filter(
+    const statusFiltered = allEntries.filter((e) =>
+      statusFilter === 'complete' ? e.complete : !e.complete,
+    );
+    if (query.length === 0) return statusFiltered;
+    return statusFiltered.filter(
       (e) =>
         e.coverArtId.toLowerCase().includes(query) ||
         e.files.some((f) => f.fileName.toLowerCase().includes(query)),
     );
-  }, [entries, filter]);
+  }, [allEntries, filter, statusFilter]);
 
   useEffect(() => {
     if (!transitionComplete) return;
     let cancelled = false;
-    listCachedImagesAsync().then((result) => {
+    // Fetch the full list once — 'all' returns every row, and the
+    // complete/incomplete filter is applied in JS above. This keeps
+    // segment-toggles responsive even at tens of thousands of rows.
+    listCachedImagesAsync('all').then((result) => {
       if (!cancelled) {
-        setEntries(result);
+        setAllEntries(result);
         setLoading(false);
       }
     });
@@ -208,8 +245,8 @@ export function ImageCacheBrowserScreen() {
 
   const handlePullRefresh = useCallback(async () => {
     setRefreshing(true);
-    const result = await listCachedImagesAsync();
-    setEntries(result);
+    const result = await listCachedImagesAsync('all');
+    setAllEntries(result);
     setRefreshing(false);
   }, []);
 
@@ -221,9 +258,9 @@ export function ImageCacheBrowserScreen() {
     (coverArtId: string) => {
       setItemStatus(coverArtId, 'refreshing');
       refreshCachedImage(coverArtId)
-        .then(() => listCachedImagesAsync())
+        .then(() => listCachedImagesAsync('all'))
         .then((result) => {
-          setEntries(result);
+          setAllEntries(result);
           setItemStatus(coverArtId, 'success');
           setTimeout(() => setItemStatus(coverArtId, 'idle'), 3000);
         })
@@ -247,7 +284,7 @@ export function ImageCacheBrowserScreen() {
             style: 'destructive',
             onPress: async () => {
               await deleteCachedImage(coverArtId);
-              setEntries((prev) =>
+              setAllEntries((prev) =>
                 prev.filter((e) => e.coverArtId !== coverArtId),
               );
             },
@@ -255,7 +292,7 @@ export function ImageCacheBrowserScreen() {
         ],
       );
     },
-    [],
+    [alert, t],
   );
 
   const statusMapRef = useRef(statusMap);
@@ -295,9 +332,51 @@ export function ImageCacheBrowserScreen() {
     [loading, emptyMessage, emptySubtitle, colors.primary],
   );
 
-  const listHeader = useMemo(
-    () => (
-      <View style={settingsStyles.filterContainer}>
+  const filterSegments: ReadonlyArray<Segment<BrowserSegment>> = useMemo(
+    () => [
+      { key: 'complete', label: t('filterComplete') },
+      { key: 'incomplete', label: t('filterIncomplete') },
+    ],
+    [t],
+  );
+
+  const [chromeHeight, setChromeHeight] = useState(0);
+  const contentInsetTop = headerHeight + chromeHeight;
+
+  return (
+    <>
+    <GradientBackground style={settingsStyles.container} scrollable>
+      <View style={styles.listWrap}>
+        <FlashList
+          ref={listRef}
+          data={loading ? [] : filteredEntries}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          extraData={statusMap}
+          refreshControl={
+            loading ? undefined : (
+              <RefreshControl
+                key={refreshControlKey}
+                refreshing={refreshing}
+                onRefresh={handlePullRefresh}
+                tintColor={colors.primary}
+                progressViewOffset={contentInsetTop}
+              />
+            )
+          }
+          contentContainerStyle={{
+            paddingTop: contentInsetTop,
+            paddingHorizontal: 16,
+            paddingBottom: 32,
+            ...((loading || filteredEntries.length === 0) ? { flex: 1 } : undefined),
+          }}
+          ListEmptyComponent={listEmpty}
+        />
+      </View>
+      <View
+        style={[styles.chromeOverlay, { top: headerHeight }]}
+        onLayout={(e) => setChromeHeight(e.nativeEvent.layout.height)}
+      >
         <View style={[settingsStyles.filterPill, { backgroundColor: colors.inputBg }]}>
           <Ionicons name="search" size={18} color={colors.textSecondary} style={settingsStyles.filterIcon} />
           <TextInput
@@ -312,40 +391,12 @@ export function ImageCacheBrowserScreen() {
             editable={!loading}
           />
         </View>
+        <SegmentControl
+          segments={filterSegments}
+          selected={statusFilter}
+          onSelect={setStatusFilter}
+        />
       </View>
-    ),
-    [colors, filter, handleFilterChange, loading],
-  );
-
-  return (
-    <>
-    <GradientBackground style={settingsStyles.container} scrollable>
-      <FlashList
-        ref={listRef}
-        data={loading ? [] : filteredEntries}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        extraData={statusMap}
-        refreshControl={
-          loading ? undefined : (
-            <RefreshControl
-              key={refreshControlKey}
-              refreshing={refreshing}
-              onRefresh={handlePullRefresh}
-              tintColor={colors.primary}
-              progressViewOffset={headerHeight}
-            />
-          )
-        }
-        contentContainerStyle={{
-          paddingTop: headerHeight,
-          paddingHorizontal: 16,
-          paddingBottom: 32,
-          ...((loading || filteredEntries.length === 0) ? { flex: 1 } : undefined),
-        }}
-        ListHeaderComponent={listHeader}
-        ListEmptyComponent={listEmpty}
-      />
       <MiniPlayerFooter />
     </GradientBackground>
     <ThemedAlert {...alertProps} />
@@ -354,6 +405,19 @@ export function ImageCacheBrowserScreen() {
 }
 
 const styles = StyleSheet.create({
+  listWrap: {
+    flex: 1,
+  },
+  chromeOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+    gap: 8,
+    zIndex: 1,
+  },
   center: {
     flex: 1,
     alignItems: 'center',
@@ -407,5 +471,20 @@ const styles = StyleSheet.create({
   clearButton: {
     fontSize: 16,
     fontWeight: '400',
+  },
+  repairBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  repairBadgeText: {
+    fontSize: 11,
+    fontWeight: '500',
   },
 });

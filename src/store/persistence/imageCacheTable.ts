@@ -1,0 +1,368 @@
+/**
+ * Per-row SQLite persistence for the image cache — query helpers only.
+ *
+ * Every cover-art ID cached to disk is represented by up to four rows, one
+ * per size variant (50 / 150 / 300 / 600). The source is always 600px, with
+ * an `ext` that matches the Content-Type from the Subsonic fetch (`jpg` /
+ * `png` / `webp`). The smaller variants are always derived locally as JPEG,
+ * so for those `ext === 'jpg'`.
+ *
+ * A row must only be written AFTER the corresponding file has been renamed
+ * to its final name on disk. That ordering, combined with the idempotent
+ * `ON CONFLICT` upsert below, makes a mid-generation crash safe: the
+ * partially-cached directory simply has fewer rows in the table, and the
+ * next `cacheAllSizes()` / reconciliation pass regenerates what's missing.
+ */
+import { getDb, type InternalDb } from './db';
+
+export interface CachedImageRow {
+  coverArtId: string;
+  size: number; // 50 | 150 | 300 | 600
+  ext: string; // 'jpg' | 'png' | 'webp' (variants are always 'jpg')
+  bytes: number;
+  cachedAt: number; // ms epoch
+}
+
+interface RawRow {
+  cover_art_id: string;
+  size: number;
+  ext: string;
+  bytes: number;
+  cached_at: number;
+}
+
+function mapRow(row: RawRow): CachedImageRow {
+  return {
+    coverArtId: row.cover_art_id,
+    size: row.size,
+    ext: row.ext,
+    bytes: row.bytes,
+    cachedAt: row.cached_at,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Aggregate read — powers `imageCacheStore` on hydrate               */
+/* ------------------------------------------------------------------ */
+
+export interface ImageCacheAggregates {
+  /** Sum of every variant file's size in bytes. */
+  totalBytes: number;
+  /** COUNT(*) — total variant files on disk. */
+  fileCount: number;
+  /** COUNT(DISTINCT cover_art_id) — unique logical images. */
+  imageCount: number;
+  /** Count of cover_art_ids with fewer than 4 variants. */
+  incompleteCount: number;
+}
+
+const EMPTY_AGGREGATES: ImageCacheAggregates = {
+  totalBytes: 0,
+  fileCount: 0,
+  imageCount: 0,
+  incompleteCount: 0,
+};
+
+/**
+ * Single-query derivation of every aggregate the store needs. Replaces the
+ * two-walk `getImageCacheStats()` filesystem scan on every launch.
+ */
+export function hydrateImageCacheAggregates(): ImageCacheAggregates {
+  const db = getDb();
+  if (db === null) return { ...EMPTY_AGGREGATES };
+  try {
+    const totals = db.getFirstSync<{
+      total_bytes: number | null;
+      file_count: number;
+      image_count: number;
+    }>(
+      `SELECT
+         COALESCE(SUM(bytes), 0) AS total_bytes,
+         COUNT(*) AS file_count,
+         COUNT(DISTINCT cover_art_id) AS image_count
+       FROM cached_images;`,
+    );
+    const incomplete = db.getFirstSync<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM (
+         SELECT cover_art_id FROM cached_images
+           GROUP BY cover_art_id HAVING COUNT(*) < 4
+       );`,
+    );
+    return {
+      totalBytes: totals?.total_bytes ?? 0,
+      fileCount: totals?.file_count ?? 0,
+      imageCount: totals?.image_count ?? 0,
+      incompleteCount: incomplete?.c ?? 0,
+    };
+  } catch {
+    return { ...EMPTY_AGGREGATES };
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Single-variant writes                                              */
+/* ------------------------------------------------------------------ */
+
+function upsertCachedImageInternal(db: InternalDb, row: CachedImageRow): void {
+  db.runSync(
+    `INSERT INTO cached_images (cover_art_id, size, ext, bytes, cached_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(cover_art_id, size) DO UPDATE SET
+         ext = excluded.ext,
+         bytes = excluded.bytes,
+         cached_at = excluded.cached_at;`,
+    [row.coverArtId, row.size, row.ext, row.bytes, row.cachedAt],
+  );
+}
+
+/**
+ * Record a variant as cached on disk. Must be called AFTER the file has
+ * been renamed from its `.tmp` to its final name.
+ */
+export function upsertCachedImage(row: CachedImageRow): void {
+  const db = getDb();
+  if (db === null) return;
+  if (!row.coverArtId || !row.size) return;
+  try {
+    upsertCachedImageInternal(db, row);
+  } catch {
+    /* dropped */
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Deletion                                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Delete every row for a cover_art_id. Returns the freed bytes/count so
+ * the in-memory aggregates can be updated incrementally.
+ */
+export function deleteCachedImagesForCoverArt(
+  coverArtId: string,
+): { bytes: number; count: number } {
+  const db = getDb();
+  if (db === null || !coverArtId) return { bytes: 0, count: 0 };
+  try {
+    const totals = db.getFirstSync<{
+      total_bytes: number | null;
+      file_count: number;
+    }>(
+      `SELECT COALESCE(SUM(bytes), 0) AS total_bytes, COUNT(*) AS file_count
+         FROM cached_images WHERE cover_art_id = ?;`,
+      [coverArtId],
+    );
+    db.runSync('DELETE FROM cached_images WHERE cover_art_id = ?;', [
+      coverArtId,
+    ]);
+    return {
+      bytes: totals?.total_bytes ?? 0,
+      count: totals?.file_count ?? 0,
+    };
+  } catch {
+    return { bytes: 0, count: 0 };
+  }
+}
+
+/**
+ * Delete a single variant row. Used by the SQL-side of reconciliation when
+ * a DB row's file has vanished from disk.
+ */
+export function deleteCachedImageVariant(
+  coverArtId: string,
+  size: number,
+): void {
+  const db = getDb();
+  if (db === null) return;
+  try {
+    db.runSync(
+      'DELETE FROM cached_images WHERE cover_art_id = ? AND size = ?;',
+      [coverArtId, size],
+    );
+  } catch {
+    /* dropped */
+  }
+}
+
+/** Remove every row. Used on logout / clearImageCache via resetAllStores. */
+export function clearAllCachedImages(): void {
+  const db = getDb();
+  if (db === null) return;
+  try {
+    db.runSync('DELETE FROM cached_images;');
+  } catch {
+    /* dropped */
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Point reads                                                        */
+/* ------------------------------------------------------------------ */
+
+export function hasCachedImage(coverArtId: string, size: number): boolean {
+  const db = getDb();
+  if (db === null) return false;
+  try {
+    const row = db.getFirstSync<{ c: number }>(
+      'SELECT 1 AS c FROM cached_images WHERE cover_art_id = ? AND size = ? LIMIT 1;',
+      [coverArtId, size],
+    );
+    return !!row;
+  } catch {
+    return false;
+  }
+}
+
+/** All variants for a single cover-art id, ordered by size ascending. */
+export function getCachedImagesForCoverArt(
+  coverArtId: string,
+): CachedImageRow[] {
+  const db = getDb();
+  if (db === null) return [];
+  try {
+    const rows = db.getAllSync<RawRow>(
+      `SELECT cover_art_id, size, ext, bytes, cached_at
+         FROM cached_images WHERE cover_art_id = ? ORDER BY size ASC;`,
+      [coverArtId],
+    );
+    return rows.map(mapRow);
+  } catch {
+    return [];
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Incomplete detection                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Every cover_art_id whose row count is < 4. One SQL query replaces the
+ * whole-tree disk walk that used to feed `recoverStalledImageDownloadsAsync`.
+ */
+export function findIncompleteCovers(): string[] {
+  const db = getDb();
+  if (db === null) return [];
+  try {
+    const rows = db.getAllSync<{ cover_art_id: string }>(
+      `SELECT cover_art_id FROM cached_images
+         GROUP BY cover_art_id HAVING COUNT(*) < 4
+         ORDER BY cover_art_id ASC;`,
+    );
+    return rows.map((r) => r.cover_art_id);
+  } catch {
+    return [];
+  }
+}
+
+export function countIncompleteCovers(): number {
+  const db = getDb();
+  if (db === null) return 0;
+  try {
+    const row = db.getFirstSync<{ c: number }>(
+      `SELECT COUNT(*) AS c FROM (
+         SELECT cover_art_id FROM cached_images
+           GROUP BY cover_art_id HAVING COUNT(*) < 4
+       );`,
+    );
+    return row?.c ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Browser listing                                                    */
+/* ------------------------------------------------------------------ */
+
+export interface CachedImageEntry {
+  coverArtId: string;
+  files: Array<{ size: number; ext: string; bytes: number; cachedAt: number }>;
+  /** Convenience: true when every size variant (50/150/300/600) is present. */
+  complete: boolean;
+}
+
+export type CacheBrowserFilter = 'all' | 'complete' | 'incomplete';
+
+const EXPECTED_VARIANTS = 4;
+
+/**
+ * List every cached image grouped by cover_art_id, with an optional
+ * complete/incomplete filter. Drives the image-cache-browser screen —
+ * replaces the whole-tree `listCachedImagesAsync()` disk walk with a
+ * single indexed SQL scan.
+ */
+export function listCachedImagesForBrowser(
+  filter: CacheBrowserFilter = 'all',
+): CachedImageEntry[] {
+  const db = getDb();
+  if (db === null) return [];
+  try {
+    const rows = db.getAllSync<RawRow>(
+      `SELECT cover_art_id, size, ext, bytes, cached_at
+         FROM cached_images ORDER BY cover_art_id ASC, size ASC;`,
+    );
+    const entries: CachedImageEntry[] = [];
+    let current: CachedImageEntry | null = null;
+    for (const row of rows) {
+      if (!current || current.coverArtId !== row.cover_art_id) {
+        if (current) {
+          current.complete = current.files.length === EXPECTED_VARIANTS;
+          entries.push(current);
+        }
+        current = { coverArtId: row.cover_art_id, files: [], complete: false };
+      }
+      current.files.push({
+        size: row.size,
+        ext: row.ext,
+        bytes: row.bytes,
+        cachedAt: row.cached_at,
+      });
+    }
+    if (current) {
+      current.complete = current.files.length === EXPECTED_VARIANTS;
+      entries.push(current);
+    }
+    if (filter === 'complete') return entries.filter((e) => e.complete);
+    if (filter === 'incomplete') return entries.filter((e) => !e.complete);
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Bulk insert — used by the migration and by reconciliation          */
+/* ------------------------------------------------------------------ */
+
+export function bulkInsertCachedImages(rows: readonly CachedImageRow[]): void {
+  const db = getDb();
+  if (db === null) return;
+  if (rows.length === 0) return;
+  try {
+    db.withTransactionSync(() => {
+      for (const row of rows) {
+        if (!row.coverArtId || !row.size) continue;
+        upsertCachedImageInternal(db, row);
+      }
+    });
+  } catch {
+    /* dropped */
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Diagnostic                                                         */
+/* ------------------------------------------------------------------ */
+
+export function countCachedImages(): number {
+  const db = getDb();
+  if (db === null) return 0;
+  try {
+    const row = db.getFirstSync<{ c: number }>(
+      'SELECT COUNT(*) AS c FROM cached_images;',
+    );
+    return row?.c ?? 0;
+  } catch {
+    return 0;
+  }
+}

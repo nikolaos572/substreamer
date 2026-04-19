@@ -1,3 +1,15 @@
+// `persistence/db.ts` imports `expo-sqlite` at module load; stub it so the
+// import doesn't hit the native bridge during tests.
+jest.mock('expo-sqlite', () => ({
+  openDatabaseSync: () => ({
+    getFirstSync: () => undefined,
+    getAllSync: () => [],
+    runSync: () => {},
+    execSync: () => {},
+    withTransactionSync: (fn: () => void) => fn(),
+  }),
+}));
+
 const mockListDirectoryAsync = jest.fn();
 const mockGetDirectorySizeAsync = jest.fn();
 
@@ -81,19 +93,98 @@ jest.mock('react-native', () => ({
   },
 }));
 
-const mockAddFile = jest.fn();
-const mockRemoveFiles = jest.fn();
 const mockReset = jest.fn();
+const mockRecalculateFromDb = jest.fn();
 
 jest.mock('../../store/imageCacheStore', () => ({
   imageCacheStore: {
     getState: jest.fn(() => ({
       maxConcurrentImageDownloads: 3,
-      addFile: mockAddFile,
-      removeFiles: mockRemoveFiles,
+      recalculateFromDb: mockRecalculateFromDb,
       reset: mockReset,
     })),
   },
+}));
+
+// The service now reads stats + browser listings from `cached_images` via
+// these helpers; tests drive the in-memory fake below.
+type CacheDbRow = { coverArtId: string; size: number; ext: string; bytes: number; cachedAt: number };
+const mockDbRows = new Map<string, CacheDbRow>();
+const mockDbKey = (id: string, size: number) => `${id}::${size}`;
+const mockUpsertCachedImage = jest.fn((row: CacheDbRow) => {
+  mockDbRows.set(mockDbKey(row.coverArtId, row.size), row);
+});
+const mockDeleteCachedImagesForCoverArt = jest.fn((id: string) => {
+  let bytes = 0;
+  let count = 0;
+  for (const [k, row] of [...mockDbRows]) {
+    if (row.coverArtId === id) {
+      bytes += row.bytes;
+      count++;
+      mockDbRows.delete(k);
+    }
+  }
+  return { bytes, count };
+});
+const mockDeleteCachedImageVariant = jest.fn((id: string, size: number) => {
+  mockDbRows.delete(mockDbKey(id, size));
+});
+const mockClearAllCachedImages = jest.fn(() => {
+  mockDbRows.clear();
+});
+const mockHasCachedImage = jest.fn((id: string, size: number) => mockDbRows.has(mockDbKey(id, size)));
+const mockFindIncompleteCovers = jest.fn(() => {
+  const byCover = new Map<string, number>();
+  for (const row of mockDbRows.values()) byCover.set(row.coverArtId, (byCover.get(row.coverArtId) ?? 0) + 1);
+  return [...byCover.entries()].filter(([, n]) => n < 4).map(([id]) => id);
+});
+const mockHydrateImageCacheAggregates = jest.fn(() => {
+  let totalBytes = 0;
+  const covers = new Set<string>();
+  const byCover = new Map<string, number>();
+  for (const row of mockDbRows.values()) {
+    totalBytes += row.bytes;
+    covers.add(row.coverArtId);
+    byCover.set(row.coverArtId, (byCover.get(row.coverArtId) ?? 0) + 1);
+  }
+  let incompleteCount = 0;
+  for (const n of byCover.values()) if (n < 4) incompleteCount++;
+  return { totalBytes, fileCount: mockDbRows.size, imageCount: covers.size, incompleteCount };
+});
+const mockListCachedImagesForBrowser = jest.fn((filter: 'all' | 'complete' | 'incomplete' = 'all') => {
+  const byCover = new Map<string, CacheDbRow[]>();
+  for (const row of mockDbRows.values()) {
+    const list = byCover.get(row.coverArtId) ?? [];
+    list.push(row);
+    byCover.set(row.coverArtId, list);
+  }
+  const entries = [...byCover.entries()].map(([coverArtId, files]) => ({
+    coverArtId,
+    files: files.sort((a, b) => a.size - b.size).map((f) => ({ size: f.size, ext: f.ext, bytes: f.bytes, cachedAt: f.cachedAt })),
+    complete: files.length === 4,
+  }));
+  entries.sort((a, b) => a.coverArtId.localeCompare(b.coverArtId));
+  if (filter === 'complete') return entries.filter((e) => e.complete);
+  if (filter === 'incomplete') return entries.filter((e) => !e.complete);
+  return entries;
+});
+const mockBulkInsertCachedImages = jest.fn((rows: readonly CacheDbRow[]) => {
+  for (const row of rows) mockDbRows.set(mockDbKey(row.coverArtId, row.size), row);
+});
+
+jest.mock('../../store/persistence/imageCacheTable', () => ({
+  upsertCachedImage: (row: CacheDbRow) => mockUpsertCachedImage(row),
+  deleteCachedImagesForCoverArt: (id: string) => mockDeleteCachedImagesForCoverArt(id),
+  deleteCachedImageVariant: (id: string, size: number) => mockDeleteCachedImageVariant(id, size),
+  clearAllCachedImages: () => mockClearAllCachedImages(),
+  hasCachedImage: (id: string, size: number) => mockHasCachedImage(id, size),
+  findIncompleteCovers: () => mockFindIncompleteCovers(),
+  hydrateImageCacheAggregates: () => mockHydrateImageCacheAggregates(),
+  listCachedImagesForBrowser: (filter?: 'all' | 'complete' | 'incomplete') => mockListCachedImagesForBrowser(filter),
+  bulkInsertCachedImages: (rows: readonly CacheDbRow[]) => mockBulkInsertCachedImages(rows),
+  getCachedImagesForCoverArt: jest.fn(() => []),
+  countCachedImages: jest.fn(() => mockDbRows.size),
+  countIncompleteCovers: jest.fn(() => mockFindIncompleteCovers().length),
 }));
 
 jest.mock('../subsonicService');
@@ -140,17 +231,40 @@ function fileMockName(coverArtId: string, fileName: string): string {
 beforeEach(() => {
   mockFileExistsMap.clear();
   mockDirExistsMap.clear();
+  mockDbRows.clear();
   mockListDirectoryAsync.mockReset();
   mockGetDirectorySizeAsync.mockReset();
-  mockAddFile.mockClear();
-  mockRemoveFiles.mockClear();
+  mockUpsertCachedImage.mockClear();
+  mockDeleteCachedImagesForCoverArt.mockClear();
+  mockDeleteCachedImageVariant.mockClear();
+  mockClearAllCachedImages.mockClear();
+  mockHasCachedImage.mockClear();
+  mockFindIncompleteCovers.mockClear();
+  mockHydrateImageCacheAggregates.mockClear();
+  mockListCachedImagesForBrowser.mockClear();
+  mockBulkInsertCachedImages.mockClear();
+  mockRecalculateFromDb.mockClear();
   mockReset.mockClear();
   mockFetch.mockClear();
   mockImageManipulator.manipulate.mockClear();
   (getCoverArtUrl as jest.Mock).mockReturnValue('https://example.com/cover.jpg');
   (stripCoverArtSuffix as jest.Mock).mockImplementation((id: string) => id.replace(/_[0-9a-f]+$/, ''));
+  // Default: empty directory walks for reconcile + recover passes.
+  mockListDirectoryAsync.mockResolvedValue([]);
   initImageCache();
 });
+
+// Helper: seed a row directly into the in-memory DB fake so tests can assert
+// against the new SQL-backed read paths without hand-wiring file existence.
+function seedDbRow(row: Partial<CacheDbRow> & { coverArtId: string; size: number }): void {
+  mockDbRows.set(mockDbKey(row.coverArtId, row.size), {
+    coverArtId: row.coverArtId,
+    size: row.size,
+    ext: row.ext ?? 'jpg',
+    bytes: row.bytes ?? 100,
+    cachedAt: row.cachedAt ?? Date.now(),
+  });
+}
 
 describe('IMAGE_SIZES', () => {
   it('contains the four standard sizes', () => {
@@ -246,83 +360,110 @@ describe('cacheAllSizes', () => {
 });
 
 describe('getImageCacheStats', () => {
-  it('returns total bytes and image count', async () => {
-    mockGetDirectorySizeAsync.mockResolvedValue(5000);
-    mockListDirectoryAsync.mockResolvedValue(['img1', 'img2', 'img3']);
+  it('returns total bytes, unique image count, file count, and incomplete count', async () => {
+    // Three covers: two complete (4 variants each), one incomplete (2 variants).
+    // Total bytes: 4*100 + 4*100 + 2*100 = 1000
+    for (const id of ['img1', 'img2']) {
+      for (const size of [50, 150, 300, 600]) {
+        seedDbRow({ coverArtId: id, size, bytes: 100 });
+      }
+    }
+    seedDbRow({ coverArtId: 'img3', size: 50, bytes: 100 });
+    seedDbRow({ coverArtId: 'img3', size: 150, bytes: 100 });
 
     const stats = await getImageCacheStats();
-    expect(stats.totalBytes).toBe(5000);
+    expect(stats.totalBytes).toBe(1000);
     expect(stats.imageCount).toBe(3);
+    expect(stats.fileCount).toBe(10);
+    expect(stats.incompleteCount).toBe(1);
   });
 
-  it('returns 0 count on listing error', async () => {
-    mockGetDirectorySizeAsync.mockResolvedValue(0);
-    mockListDirectoryAsync.mockRejectedValue(new Error('ENOENT'));
-
+  it('returns all-zero aggregates when DB is empty', async () => {
     const stats = await getImageCacheStats();
+    expect(stats.totalBytes).toBe(0);
     expect(stats.imageCount).toBe(0);
+    expect(stats.fileCount).toBe(0);
+    expect(stats.incompleteCount).toBe(0);
   });
 });
 
 describe('listCachedImagesAsync', () => {
-  it('returns empty array when no subdirectories', async () => {
-    mockListDirectoryAsync.mockResolvedValue([]);
+  it('returns empty array when DB has no rows', async () => {
     const result = await listCachedImagesAsync();
     expect(result).toEqual([]);
   });
 
-  it('returns empty array on listing error', async () => {
-    mockListDirectoryAsync.mockRejectedValue(new Error('ENOENT'));
-    const result = await listCachedImagesAsync();
-    expect(result).toEqual([]);
-  });
-
-  it('parses valid size filenames and sorts', async () => {
-    mockListDirectoryAsync
-      .mockResolvedValueOnce(['art-1'])
-      .mockResolvedValueOnce(['300.jpg', '50.png', '600.webp', 'invalid.txt']);
-
-    const subDirKey = `file:///document/image-cache/art-1`;
-    mockDirExistsMap.set(subDirKey, true);
+  it('returns variants sorted by size from DB rows', async () => {
+    seedDbRow({ coverArtId: 'art-1', size: 50, ext: 'png' });
+    seedDbRow({ coverArtId: 'art-1', size: 300, ext: 'jpg' });
+    seedDbRow({ coverArtId: 'art-1', size: 600, ext: 'webp' });
 
     const result = await listCachedImagesAsync();
     expect(result).toHaveLength(1);
     expect(result[0].coverArtId).toBe('art-1');
+    expect(result[0].complete).toBe(false);
     expect(result[0].files).toHaveLength(3);
     expect(result[0].files[0].size).toBe(50);
     expect(result[0].files[1].size).toBe(300);
     expect(result[0].files[2].size).toBe(600);
+  });
+
+  it('filters by complete vs incomplete status', async () => {
+    for (const size of [50, 150, 300, 600]) seedDbRow({ coverArtId: 'complete-art', size });
+    seedDbRow({ coverArtId: 'partial-art', size: 600 });
+
+    const complete = await listCachedImagesAsync('complete');
+    const incomplete = await listCachedImagesAsync('incomplete');
+    expect(complete.map((e) => e.coverArtId)).toEqual(['complete-art']);
+    expect(incomplete.map((e) => e.coverArtId)).toEqual(['partial-art']);
   });
 });
 
 describe('deleteCachedImage', () => {
   it('does nothing for empty coverArtId', async () => {
     await deleteCachedImage('');
-    expect(mockRemoveFiles).not.toHaveBeenCalled();
+    expect(mockDeleteCachedImagesForCoverArt).not.toHaveBeenCalled();
+    expect(mockRecalculateFromDb).not.toHaveBeenCalled();
   });
 
-  it('removes files and updates store', async () => {
+  it('removes on-disk subdirectory, drops DB rows, and recalculates store', async () => {
     const id = 'del-test';
-    const subDirKey = `file:///document/image-cache/${id}`;
-    mockDirExistsMap.set(subDirKey, true);
-
-    mockListDirectoryAsync.mockResolvedValue(['300.jpg', '600.jpg']);
-    mockGetDirectorySizeAsync.mockResolvedValue(2000);
+    mockDirExistsMap.set(subDirName(id), true);
+    seedDbRow({ coverArtId: id, size: 300, bytes: 1000 });
+    seedDbRow({ coverArtId: id, size: 600, bytes: 1000 });
 
     await deleteCachedImage(id);
 
-    expect(mockRemoveFiles).toHaveBeenCalledWith(2, 2000);
+    expect(mockDeleteCachedImagesForCoverArt).toHaveBeenCalledWith(id);
+    expect(mockRecalculateFromDb).toHaveBeenCalled();
+    expect(mockDbRows.size).toBe(0);
+  });
+
+  it('still cleans up DB rows when the subdirectory is already gone', async () => {
+    const id = 'orphan-rows';
+    mockDirExistsMap.set(subDirName(id), false);
+    seedDbRow({ coverArtId: id, size: 300, bytes: 1000 });
+
+    await deleteCachedImage(id);
+
+    expect(mockDeleteCachedImagesForCoverArt).toHaveBeenCalledWith(id);
+    expect(mockRecalculateFromDb).toHaveBeenCalled();
+    expect(mockDbRows.size).toBe(0);
   });
 });
 
 describe('clearImageCache', () => {
-  it('clears all cached data and resets store', async () => {
-    mockGetDirectorySizeAsync.mockResolvedValue(10000);
+  it('returns total bytes from SQL aggregate and resets store', async () => {
+    seedDbRow({ coverArtId: 'a', size: 50, bytes: 2500 });
+    seedDbRow({ coverArtId: 'a', size: 150, bytes: 2500 });
+    seedDbRow({ coverArtId: 'b', size: 300, bytes: 5000 });
 
     const freedBytes = await clearImageCache();
 
     expect(freedBytes).toBe(10000);
+    expect(mockClearAllCachedImages).toHaveBeenCalled();
     expect(mockReset).toHaveBeenCalled();
+    expect(mockDbRows.size).toBe(0);
   });
 });
 
@@ -419,7 +560,7 @@ describe('download pipeline — cacheAllSizes + processQueue', () => {
     // fetch was called for the 600px source
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/cover.jpg');
     // addFile was called for the source + 3 resized variants
-    expect(mockAddFile).toHaveBeenCalled();
+    expect(mockUpsertCachedImage).toHaveBeenCalled();
   });
 
   it('resolves the promise even when download fails', async () => {
@@ -444,7 +585,7 @@ describe('downloadSourceImage — response.ok === false', () => {
     await cacheAllSizes(id);
 
     // addFile should not have been called (no successful download)
-    expect(mockAddFile).not.toHaveBeenCalled();
+    expect(mockUpsertCachedImage).not.toHaveBeenCalled();
   });
 });
 
@@ -461,7 +602,7 @@ describe('downloadSourceImage — catch path cleans up .tmp', () => {
     await cacheAllSizes(id);
 
     // The download failed, addFile should not be called
-    expect(mockAddFile).not.toHaveBeenCalled();
+    expect(mockUpsertCachedImage).not.toHaveBeenCalled();
   });
 });
 
@@ -486,7 +627,7 @@ describe('generateResizedVariant — success and catch paths', () => {
 
     // ImageManipulator.manipulate was called for each of the 3 resize sizes (300, 150, 50)
     expect(mockImageManipulator.manipulate).toHaveBeenCalledTimes(3);
-    expect(mockAddFile).toHaveBeenCalled();
+    expect(mockUpsertCachedImage).toHaveBeenCalled();
   });
 
   it('continues processing when resize throws an error', async () => {
@@ -514,21 +655,20 @@ describe('recoverStalledImageDownloadsAsync', () => {
     const sdName = subDirName(id);
     mockDirExistsMap.set(sdName, true);
 
-    // First listDirectoryAsync call: top-level dirs
-    // Second listDirectoryAsync call: files in the subdir
-    mockListDirectoryAsync
-      .mockResolvedValueOnce([id])
-      .mockResolvedValueOnce(['600.jpg', '300.jpg.tmp']);
-
-    // Set up the .tmp file to exist so it can be deleted
-    mockFileExistsMap.set(fileMockName(id, '300.jpg.tmp'), true);
-
-    // When processQueue runs for the re-queued item, fetch will be called
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      headers: { get: () => 'image/jpeg' },
-      arrayBuffer: () => Promise.resolve(new ArrayBuffer(512)),
+    // Both reconcile + recover walk the dir tree; return the same layout each
+    // time so either walk order works.
+    mockListDirectoryAsync.mockImplementation(async (uri: string) => {
+      if (uri.endsWith('image-cache')) return [id];
+      return ['600.jpg', '300.jpg.tmp'];
     });
+
+    // Seed one variant so findIncompleteCovers() surfaces this coverArtId
+    // (less than 4 variants ⇒ incomplete).
+    seedDbRow({ coverArtId: id, size: 600, ext: 'jpg' });
+
+    // Pre-cache the source URI so the re-queue doesn't actually download.
+    mockFileExistsMap.set(fileMockName(id, '600.jpg'), true);
+    mockFileExistsMap.set(fileMockName(id, '300.jpg.tmp'), true);
 
     const mockSaveAsync = jest.fn().mockResolvedValue({ uri: 'file:///tmp/resized.jpg' });
     mockImageManipulator.manipulate.mockReturnValue({
@@ -538,14 +678,17 @@ describe('recoverStalledImageDownloadsAsync', () => {
 
     await deferredImageCacheInit();
 
-    // listDirectoryAsync was called for the cache dir and the subdir
-    expect(mockListDirectoryAsync).toHaveBeenCalledTimes(2);
+    // Both walks ran — at minimum the top-level dir and one subdir per walk.
+    expect(mockListDirectoryAsync).toHaveBeenCalled();
+    expect(mockFindIncompleteCovers).toHaveBeenCalled();
   });
 
   it('handles listDirectoryAsync failure gracefully', async () => {
+    // First call rejects (reconcile's top-level walk); subsequent calls fall
+    // back to the beforeEach default of []. deferredImageCacheInit must not
+    // propagate the rejection.
     mockListDirectoryAsync.mockRejectedValueOnce(new Error('I/O error'));
 
-    // Should not throw
     await expect(deferredImageCacheInit()).resolves.toBeUndefined();
   });
 });
@@ -555,10 +698,9 @@ describe('refreshCachedImage', () => {
     const id = 'refresh-me';
     const sdName = subDirName(id);
     mockDirExistsMap.set(sdName, true);
-
-    // deleteCachedImage will call listDirectoryAsync + getDirectorySizeAsync
-    mockListDirectoryAsync.mockResolvedValueOnce(['300.jpg', '600.jpg']);
-    mockGetDirectorySizeAsync.mockResolvedValueOnce(5000);
+    // Seed DB rows that represent the existing cached variants being refreshed.
+    seedDbRow({ coverArtId: id, size: 300, bytes: 2500 });
+    seedDbRow({ coverArtId: id, size: 600, bytes: 2500 });
 
     // After deletion, cacheAllSizes triggers download
     mockFetch.mockResolvedValueOnce({
@@ -575,8 +717,8 @@ describe('refreshCachedImage', () => {
 
     await refreshCachedImage(id);
 
-    // deleteCachedImage should have called removeFiles
-    expect(mockRemoveFiles).toHaveBeenCalledWith(2, 5000);
+    // deleteCachedImage should have dropped the DB rows for this coverArtId.
+    expect(mockDeleteCachedImagesForCoverArt).toHaveBeenCalledWith(id);
     // Then cacheAllSizes should have triggered a fresh download
     expect(mockFetch).toHaveBeenCalled();
   });
@@ -636,17 +778,23 @@ describe('AppState listener (lines 114-115)', () => {
 
 describe('recoverStalledImageDownloadsAsync — inner listDirectoryAsync failure (line 182)', () => {
   it('continues to next subdir when inner listing fails', async () => {
-    mockListDirectoryAsync
-      .mockResolvedValueOnce(['ok-dir', 'fail-dir'])
-      .mockResolvedValueOnce(['50.jpg', '150.jpg', '300.jpg', '600.jpg'])
-      .mockRejectedValueOnce(new Error('Permission denied'));
+    // reconcile + recover each walk top-level once then each subdir once.
+    // Make the top-level always report two dirs; the bad-dir always rejects,
+    // the good-dir always resolves. Exercises the per-subdir try/catch branch.
+    mockListDirectoryAsync.mockImplementation(async (uri: string) => {
+      if (uri.endsWith('image-cache')) return ['ok-dir', 'fail-dir'];
+      if (uri.includes('ok-dir')) return ['50.jpg', '150.jpg', '300.jpg', '600.jpg'];
+      throw new Error('Permission denied');
+    });
 
     mockDirExistsMap.set(subDirName('ok-dir'), true);
     mockDirExistsMap.set(subDirName('fail-dir'), true);
 
-    await deferredImageCacheInit();
-
-    expect(mockListDirectoryAsync).toHaveBeenCalledTimes(3);
+    await expect(deferredImageCacheInit()).resolves.toBeUndefined();
+    // The `fail-dir` subdir listing was attempted (and rejected) without
+    // tanking the pass.
+    const uris = mockListDirectoryAsync.mock.calls.map((c) => c[0]);
+    expect(uris.some((u: string) => u.includes('fail-dir'))).toBe(true);
   });
 });
 
@@ -673,7 +821,7 @@ describe('downloadSourceImage — dest.exists before rename (line 399)', () => {
     await cacheAllSizes(id);
 
     expect(mockFetch).toHaveBeenCalled();
-    expect(mockAddFile).toHaveBeenCalled();
+    expect(mockUpsertCachedImage).toHaveBeenCalled();
   });
 });
 
@@ -693,7 +841,7 @@ describe('downloadSourceImage — catch cleans up existing tmp (line 411)', () =
 
     await cacheAllSizes(id);
 
-    expect(mockAddFile).not.toHaveBeenCalled();
+    expect(mockUpsertCachedImage).not.toHaveBeenCalled();
   });
 });
 
@@ -725,7 +873,7 @@ describe('generateResizedVariant — dest.exists before rename (line 445)', () =
     await cacheAllSizes(id);
 
     expect(mockImageManipulator.manipulate).toHaveBeenCalledTimes(3);
-    expect(mockAddFile).toHaveBeenCalled();
+    expect(mockUpsertCachedImage).toHaveBeenCalled();
   });
 });
 
@@ -752,20 +900,21 @@ describe('generateResizedVariant — catch with existing tmp (line 454)', () => 
   });
 });
 
-describe('listCachedImagesAsync — inner subdir listing failure (line 545)', () => {
-  it('skips subdirectories whose file listing fails', async () => {
-    mockListDirectoryAsync
-      .mockResolvedValueOnce(['good-dir', 'bad-dir'])
-      .mockResolvedValueOnce(['300.jpg', '600.jpg'])
-      .mockRejectedValueOnce(new Error('Read error'));
-
+describe('listCachedImagesAsync — reconstructs URIs from DB row shape', () => {
+  it('builds the file URI from (coverArtId, size, ext) on every row', async () => {
+    seedDbRow({ coverArtId: 'good-dir', size: 300, ext: 'jpg' });
+    seedDbRow({ coverArtId: 'good-dir', size: 600, ext: 'jpg' });
     mockDirExistsMap.set(subDirName('good-dir'), true);
-    mockDirExistsMap.set(subDirName('bad-dir'), true);
 
     const result = await listCachedImagesAsync();
 
     expect(result).toHaveLength(1);
     expect(result[0].coverArtId).toBe('good-dir');
+    expect(result[0].files).toHaveLength(2);
+    for (const f of result[0].files) {
+      expect(f.uri).toContain('good-dir');
+      expect(f.uri).toContain(`${f.size}.jpg`);
+    }
   });
 });
 

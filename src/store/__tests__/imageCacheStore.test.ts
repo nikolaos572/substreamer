@@ -1,68 +1,139 @@
-import { getImageCount, imageCacheStore } from '../imageCacheStore';
-
 jest.mock('../persistence/kvStorage', () => require('../persistence/__mocks__/kvStorage'));
 
+// Mock the imageCacheTable module so we can drive what hydrateImageCacheAggregates
+// returns per test without needing a real DB. Keep getDb pointing at a stub so
+// db.ts's module-load init doesn't crash.
+let mockAggregates = {
+  totalBytes: 0,
+  fileCount: 0,
+  imageCount: 0,
+  incompleteCount: 0,
+};
+jest.mock('../persistence/imageCacheTable', () => ({
+  hydrateImageCacheAggregates: jest.fn(() => mockAggregates),
+}));
+jest.mock('expo-sqlite', () => ({
+  openDatabaseSync: () => ({
+    getFirstSync: () => undefined,
+    getAllSync: () => [],
+    runSync: () => {},
+    execSync: () => {},
+    withTransactionSync: (fn: () => void) => fn(),
+  }),
+}));
+
+import { kvStorage } from '../persistence/__mocks__/kvStorage';
+import { imageCacheStore } from '../imageCacheStore';
+
 beforeEach(() => {
-  imageCacheStore.getState().reset();
+  mockAggregates = { totalBytes: 0, fileCount: 0, imageCount: 0, incompleteCount: 0 };
+  imageCacheStore.setState({
+    totalBytes: 0,
+    fileCount: 0,
+    imageCount: 0,
+    incompleteCount: 0,
+    maxConcurrentImageDownloads: 5,
+    hasHydrated: false,
+  });
+  kvStorage.removeItem('substreamer-image-cache-settings');
 });
 
-describe('getImageCount', () => {
-  it('divides fileCount by 4', () => {
-    expect(getImageCount(8)).toBe(2);
-    expect(getImageCount(12)).toBe(3);
-    expect(getImageCount(1)).toBe(0);
+describe('imageCacheStore — hydrateFromDb', () => {
+  it('pulls the four aggregates from SQL and marks hasHydrated', () => {
+    mockAggregates = { totalBytes: 12000, fileCount: 17, imageCount: 5, incompleteCount: 1 };
+    imageCacheStore.getState().hydrateFromDb();
+    const state = imageCacheStore.getState();
+    expect(state.totalBytes).toBe(12000);
+    expect(state.fileCount).toBe(17);
+    expect(state.imageCount).toBe(5);
+    expect(state.incompleteCount).toBe(1);
+    expect(state.hasHydrated).toBe(true);
   });
 
-  it('returns 0 for zero fileCount', () => {
-    expect(getImageCount(0)).toBe(0);
+  it('defaults maxConcurrentImageDownloads=5 when no settings blob is persisted', () => {
+    imageCacheStore.getState().hydrateFromDb();
+    expect(imageCacheStore.getState().maxConcurrentImageDownloads).toBe(5);
   });
 
-  it('floors non-multiple file counts', () => {
-    expect(getImageCount(7)).toBe(1);
-    expect(getImageCount(3)).toBe(0);
+  it('loads maxConcurrentImageDownloads from the persisted settings blob', () => {
+    kvStorage.setItem(
+      'substreamer-image-cache-settings',
+      JSON.stringify({ maxConcurrentImageDownloads: 10 }),
+    );
+    imageCacheStore.getState().hydrateFromDb();
+    expect(imageCacheStore.getState().maxConcurrentImageDownloads).toBe(10);
+  });
+
+  it('ignores invalid persisted settings values', () => {
+    kvStorage.setItem(
+      'substreamer-image-cache-settings',
+      JSON.stringify({ maxConcurrentImageDownloads: 99 }),
+    );
+    imageCacheStore.getState().hydrateFromDb();
+    expect(imageCacheStore.getState().maxConcurrentImageDownloads).toBe(5);
+  });
+
+  it('falls back to default on unparseable settings blob', () => {
+    kvStorage.setItem('substreamer-image-cache-settings', 'not-json{');
+    imageCacheStore.getState().hydrateFromDb();
+    expect(imageCacheStore.getState().maxConcurrentImageDownloads).toBe(5);
+  });
+
+  it('is idempotent — a second call re-reads and produces the same state', () => {
+    mockAggregates = { totalBytes: 500, fileCount: 4, imageCount: 1, incompleteCount: 0 };
+    imageCacheStore.getState().hydrateFromDb();
+    imageCacheStore.getState().hydrateFromDb();
+    expect(imageCacheStore.getState().totalBytes).toBe(500);
+    expect(imageCacheStore.getState().hasHydrated).toBe(true);
   });
 });
 
-describe('imageCacheStore', () => {
-  it('addFile increments totals', () => {
-    imageCacheStore.getState().addFile(1000);
-    imageCacheStore.getState().addFile(500);
-    expect(imageCacheStore.getState().totalBytes).toBe(1500);
-    expect(imageCacheStore.getState().fileCount).toBe(2);
+describe('imageCacheStore — recalculateFromDb', () => {
+  it('updates the four aggregates without touching hasHydrated or maxConcurrent', () => {
+    imageCacheStore.setState({
+      hasHydrated: true,
+      maxConcurrentImageDownloads: 10,
+    });
+    mockAggregates = { totalBytes: 777, fileCount: 3, imageCount: 1, incompleteCount: 1 };
+    imageCacheStore.getState().recalculateFromDb();
+    const state = imageCacheStore.getState();
+    expect(state.totalBytes).toBe(777);
+    expect(state.fileCount).toBe(3);
+    expect(state.imageCount).toBe(1);
+    expect(state.incompleteCount).toBe(1);
+    expect(state.hasHydrated).toBe(true);
+    expect(state.maxConcurrentImageDownloads).toBe(10);
   });
+});
 
-  it('removeFiles decrements totals', () => {
-    imageCacheStore.setState({ totalBytes: 2000, fileCount: 4 });
-    imageCacheStore.getState().removeFiles(2, 1000);
-    expect(imageCacheStore.getState().totalBytes).toBe(1000);
-    expect(imageCacheStore.getState().fileCount).toBe(2);
-  });
-
-  it('removeFiles does not go below zero', () => {
-    imageCacheStore.setState({ totalBytes: 100, fileCount: 1 });
-    imageCacheStore.getState().removeFiles(5, 500);
-    expect(imageCacheStore.getState().totalBytes).toBe(0);
-    expect(imageCacheStore.getState().fileCount).toBe(0);
-  });
-
-  it('recalculate sets totals from provided stats', () => {
-    imageCacheStore.setState({ totalBytes: 999, fileCount: 99 });
-    imageCacheStore.getState().recalculate({ totalBytes: 2000, imageCount: 5 });
-    expect(imageCacheStore.getState().totalBytes).toBe(2000);
-    expect(imageCacheStore.getState().fileCount).toBe(20);
-  });
-
-  it('reset restores to initial state', () => {
-    imageCacheStore.setState({ totalBytes: 5000, fileCount: 10 });
+describe('imageCacheStore — reset', () => {
+  it('zeroes the aggregates', () => {
+    imageCacheStore.setState({
+      totalBytes: 5000,
+      fileCount: 10,
+      imageCount: 3,
+      incompleteCount: 1,
+    });
     imageCacheStore.getState().reset();
-    expect(imageCacheStore.getState().totalBytes).toBe(0);
-    expect(imageCacheStore.getState().fileCount).toBe(0);
+    const state = imageCacheStore.getState();
+    expect(state.totalBytes).toBe(0);
+    expect(state.fileCount).toBe(0);
+    expect(state.imageCount).toBe(0);
+    expect(state.incompleteCount).toBe(0);
   });
+});
 
-  it('setMaxConcurrentImageDownloads updates the setting', () => {
+describe('imageCacheStore — setMaxConcurrentImageDownloads', () => {
+  it('updates the setting and persists it to the KV blob', () => {
     imageCacheStore.getState().setMaxConcurrentImageDownloads(10);
     expect(imageCacheStore.getState().maxConcurrentImageDownloads).toBe(10);
+    const persisted = kvStorage.getItem('substreamer-image-cache-settings');
+    expect(persisted).toBe(JSON.stringify({ maxConcurrentImageDownloads: 10 }));
+
     imageCacheStore.getState().setMaxConcurrentImageDownloads(1);
     expect(imageCacheStore.getState().maxConcurrentImageDownloads).toBe(1);
+    expect(kvStorage.getItem('substreamer-image-cache-settings')).toBe(
+      JSON.stringify({ maxConcurrentImageDownloads: 1 }),
+    );
   });
 });

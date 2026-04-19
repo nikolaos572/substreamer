@@ -1,5 +1,6 @@
 import { albumDetailStore } from '../albumDetailStore';
 import { completedScrobbleStore } from '../completedScrobbleStore';
+import { imageCacheStore } from '../imageCacheStore';
 import { musicCacheStore } from '../musicCacheStore';
 import { songIndexStore } from '../songIndexStore';
 
@@ -35,6 +36,7 @@ export function rehydrateAllStores(): void {
     songIndexStore.getState().hydrateFromDb();
     completedScrobbleStore.getState().hydrateFromDb();
     musicCacheStore.getState().hydrateFromDb();
+    imageCacheStore.getState().hydrateFromDb();
   } catch (e) {
     // eslint-disable-next-line no-console
     console.warn('[rehydrateAllStores] failed', e);

@@ -1,77 +1,127 @@
+/**
+ * Zustand store exposing the image-cache aggregate state held by the
+ * per-row `cached_images` SQLite table.
+ *
+ * The old version of this store persisted its own totalBytes/fileCount
+ * aggregates via `persist(createJSONStorage(kvStorage))`. Those are now
+ * derived from SQL on every launch via `hydrateFromDb()` and kept in sync
+ * by service-layer callers invoking `recalculateFromDb()` after any
+ * variant write or delete. `fileCount` used to double as both "files on
+ * disk" and "logical images" — we now expose both explicitly plus a
+ * count of covers that are missing one or more variants.
+ *
+ * `maxConcurrentImageDownloads` is a user setting, not cache state, so it
+ * lives in a separate tiny KV blob (`substreamer-image-cache-settings`),
+ * same pattern as `musicCacheStore`.
+ */
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { hydrateImageCacheAggregates } from './persistence/imageCacheTable';
 import { kvStorage } from './persistence';
-
-/** Number of size tiers cached per image (50, 150, 300, 600). */
-const IMAGE_SIZES_COUNT = 4;
 
 export type MaxConcurrentImageDownloads = 1 | 3 | 5 | 10;
 
-export interface ImageCacheState {
-  /** Total bytes used by cached images. */
-  totalBytes: number;
-  /** Total number of individual cached files (each image has 4 size variants). */
-  fileCount: number;
-  /** Max number of images to download concurrently. */
-  maxConcurrentImageDownloads: MaxConcurrentImageDownloads;
+const SETTINGS_KEY = 'substreamer-image-cache-settings';
+const DEFAULT_MAX_CONCURRENT: MaxConcurrentImageDownloads = 5;
 
-  /** Record a newly cached file. */
-  addFile: (bytes: number) => void;
-  /** Record removal of cached files. */
-  removeFiles: (count: number, bytes: number) => void;
-  /** Reset stats to zero (called after cache clear). */
+interface ImageCacheSettings {
+  maxConcurrentImageDownloads: MaxConcurrentImageDownloads;
+}
+
+function readSettingsBlob(): ImageCacheSettings {
+  const raw = kvStorage.getItem(SETTINGS_KEY) as string | null;
+  if (raw === null) {
+    return { maxConcurrentImageDownloads: DEFAULT_MAX_CONCURRENT };
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<ImageCacheSettings>;
+    const max = parsed?.maxConcurrentImageDownloads;
+    if (max === 1 || max === 3 || max === 5 || max === 10) {
+      return { maxConcurrentImageDownloads: max };
+    }
+    return { maxConcurrentImageDownloads: DEFAULT_MAX_CONCURRENT };
+  } catch {
+    return { maxConcurrentImageDownloads: DEFAULT_MAX_CONCURRENT };
+  }
+}
+
+function writeSettingsBlob(settings: ImageCacheSettings): void {
+  try {
+    kvStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    /* dropped — next launch falls back to defaults */
+  }
+}
+
+export interface ImageCacheState {
+  /** Sum of every variant file's size on disk, in bytes. */
+  totalBytes: number;
+  /** COUNT(*) — total variant files across every cover. */
+  fileCount: number;
+  /** COUNT(DISTINCT cover_art_id) — unique logical images. */
+  imageCount: number;
+  /** Covers with fewer than 4 variants on disk. */
+  incompleteCount: number;
+  /** Max number of images to download concurrently. Persisted separately. */
+  maxConcurrentImageDownloads: MaxConcurrentImageDownloads;
+  /** True after the initial SQL aggregate read has populated the store. */
+  hasHydrated: boolean;
+
+  /** Re-read every aggregate from SQL. Cheap — indexed scans only. Called
+   *  by the service layer after writes and by `rehydrateAllStores()` on
+   *  launch. Idempotent re-read; safe to call multiple times. */
+  recalculateFromDb: () => void;
+  /** Called once at app start via `rehydrateAllStores()`. Pulls aggregates
+   *  from SQL and reads the maxConcurrent setting from the KV blob. */
+  hydrateFromDb: () => void;
+  /** Zero every aggregate in memory. Used by `clearImageCache` /
+   *  `resetAllStores` after the underlying rows are dropped. */
   reset: () => void;
-  /** Reconcile stats from the actual filesystem. */
-  recalculate: (stats: { totalBytes: number; imageCount: number }) => void;
+  /** Persist and apply a new concurrency limit. */
   setMaxConcurrentImageDownloads: (max: MaxConcurrentImageDownloads) => void;
 }
 
-/** Derive the unique image count from the file count. */
-export function getImageCount(fileCount: number): number {
-  return Math.floor(fileCount / IMAGE_SIZES_COUNT);
-}
+export const imageCacheStore = create<ImageCacheState>()((set) => ({
+  totalBytes: 0,
+  fileCount: 0,
+  imageCount: 0,
+  incompleteCount: 0,
+  maxConcurrentImageDownloads: DEFAULT_MAX_CONCURRENT,
+  hasHydrated: false,
 
-const PERSIST_KEY = 'substreamer-image-cache-stats';
+  recalculateFromDb: () => {
+    const agg = hydrateImageCacheAggregates();
+    set({
+      totalBytes: agg.totalBytes,
+      fileCount: agg.fileCount,
+      imageCount: agg.imageCount,
+      incompleteCount: agg.incompleteCount,
+    });
+  },
 
-export const imageCacheStore = create<ImageCacheState>()(
-  persist(
-    (set) => ({
+  hydrateFromDb: () => {
+    const agg = hydrateImageCacheAggregates();
+    const { maxConcurrentImageDownloads } = readSettingsBlob();
+    set({
+      totalBytes: agg.totalBytes,
+      fileCount: agg.fileCount,
+      imageCount: agg.imageCount,
+      incompleteCount: agg.incompleteCount,
+      maxConcurrentImageDownloads,
+      hasHydrated: true,
+    });
+  },
+
+  reset: () =>
+    set({
       totalBytes: 0,
       fileCount: 0,
-      maxConcurrentImageDownloads: 5 as MaxConcurrentImageDownloads,
-
-      addFile: (bytes: number) =>
-        set((state) => ({
-          totalBytes: state.totalBytes + bytes,
-          fileCount: state.fileCount + 1,
-        })),
-
-      removeFiles: (count: number, bytes: number) =>
-        set((state) => ({
-          totalBytes: Math.max(0, state.totalBytes - bytes),
-          fileCount: Math.max(0, state.fileCount - count),
-        })),
-
-      reset: () => set({ totalBytes: 0, fileCount: 0 }),
-
-      recalculate: (stats: { totalBytes: number; imageCount: number }) => {
-        set({
-          totalBytes: stats.totalBytes,
-          fileCount: stats.imageCount * IMAGE_SIZES_COUNT,
-        });
-      },
-
-      setMaxConcurrentImageDownloads: (max) => set({ maxConcurrentImageDownloads: max }),
+      imageCount: 0,
+      incompleteCount: 0,
     }),
-    {
-      name: PERSIST_KEY,
-      storage: createJSONStorage(() => kvStorage),
-      partialize: (state) => ({
-        totalBytes: state.totalBytes,
-        fileCount: state.fileCount,
-        maxConcurrentImageDownloads: state.maxConcurrentImageDownloads,
-      }),
-    }
-  )
-);
+
+  setMaxConcurrentImageDownloads: (max) => {
+    writeSettingsBlob({ maxConcurrentImageDownloads: max });
+    set({ maxConcurrentImageDownloads: max });
+  },
+}));

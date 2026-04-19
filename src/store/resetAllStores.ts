@@ -7,6 +7,7 @@
 
 import { kvStorage, clearKvStorage } from './persistence';
 import { clearDetailTables } from './persistence/detailTables';
+import { clearAllCachedImages } from './persistence/imageCacheTable';
 import { clearScrobbles } from './persistence/scrobbleTable';
 import { clearMusicCacheTables } from './musicCacheStore';
 
@@ -130,6 +131,10 @@ export function resetAllStores(): void {
   // them here and drop the settings blob too.
   clearMusicCacheTables();
   kvStorage.removeItem('substreamer-music-cache-settings');
+  // imageCacheStore persists the `cached_images` table; truncate it here
+  // and drop its settings blob.
+  clearAllCachedImages();
+  kvStorage.removeItem('substreamer-image-cache-settings');
   for (const store of allStores) {
     (store.setState as (state: unknown, replace: boolean) => void)(
       store.getInitialState(),

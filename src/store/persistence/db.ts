@@ -185,6 +185,26 @@ try {
   db.execSync(
     'CREATE INDEX IF NOT EXISTS idx_download_queue_position ON download_queue(queue_position);',
   );
+
+  // cached_images — per-variant record of on-disk cover-art files. No FKs
+  // (cover_art_ids come from server and aren't owned by any local table).
+  // Composite PK on (cover_art_id, size) means at most one row per variant.
+  db.execSync(
+    `CREATE TABLE IF NOT EXISTS cached_images (
+       cover_art_id TEXT NOT NULL,
+       size INTEGER NOT NULL,
+       ext TEXT NOT NULL,
+       bytes INTEGER NOT NULL,
+       cached_at INTEGER NOT NULL,
+       PRIMARY KEY (cover_art_id, size)
+     );`,
+  );
+  db.execSync(
+    'CREATE INDEX IF NOT EXISTS idx_cached_images_cached_at ON cached_images (cached_at);',
+  );
+  db.execSync(
+    'CREATE INDEX IF NOT EXISTS idx_cached_images_cover_art_id ON cached_images (cover_art_id);',
+  );
 } catch (e) {
   db = null;
   initError = e instanceof Error ? e : new Error(String(e));

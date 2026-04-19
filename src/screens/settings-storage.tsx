@@ -21,7 +21,6 @@ import { clearQueue } from '../services/playerService';
 import { checkStorageLimit, getFreeDiskSpace } from '../services/storageService';
 import {
   imageCacheStore,
-  getImageCount,
   type MaxConcurrentImageDownloads,
 } from '../store/imageCacheStore';
 import { albumDetailStore } from '../store/albumDetailStore';
@@ -62,8 +61,9 @@ export function SettingsStorageScreen() {
   }, [chevronRotation]);
 
   const totalBytes = imageCacheStore((s) => s.totalBytes);
+  const imageCount = imageCacheStore((s) => s.imageCount);
   const fileCount = imageCacheStore((s) => s.fileCount);
-  const imageCount = getImageCount(fileCount);
+  const incompleteCount = imageCacheStore((s) => s.incompleteCount);
   const maxConcurrentImageDownloads = imageCacheStore((s) => s.maxConcurrentImageDownloads);
   const cachedAlbumCount = albumDetailStore((s) => Object.keys(s.albums).length);
   const cachedArtistCount = artistDetailStore((s) => Object.keys(s.artists).length);
@@ -355,11 +355,39 @@ export function SettingsStorageScreen() {
             </Text>
           </View>
           <View style={[settingsStyles.infoRow, { borderBottomColor: colors.border }]}>
+            <Text style={[settingsStyles.infoLabel, { color: colors.textPrimary }]}>{t('variantFiles')}</Text>
+            <Text style={[settingsStyles.infoValue, { color: colors.textSecondary }]}>
+              {t('variantFileCount', { count: fileCount })}
+            </Text>
+          </View>
+          <View style={[settingsStyles.infoRow, { borderBottomColor: colors.border }]}>
             <Text style={[settingsStyles.infoLabel, { color: colors.textPrimary }]}>{t('diskUsage')}</Text>
             <Text style={[settingsStyles.infoValue, { color: colors.textSecondary }]}>
               {formatBytes(totalBytes)}
             </Text>
           </View>
+          {incompleteCount > 0 && (
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/image-cache-browser',
+                  params: { filter: 'incomplete' },
+                })
+              }
+              style={({ pressed }) => [
+                settingsStyles.infoRow,
+                { borderBottomColor: colors.border },
+                pressed && settingsStyles.pressed,
+              ]}
+            >
+              <Text style={[settingsStyles.infoLabel, { color: colors.red }]}>
+                {t('incompleteImages')}
+              </Text>
+              <Text style={[settingsStyles.infoValue, { color: colors.red }]}>
+                {t('incompleteImagesWarning', { count: incompleteCount })}
+              </Text>
+            </Pressable>
+          )}
           <Pressable
             onPress={handleImageConcurrentPress}
             style={({ pressed }) => [

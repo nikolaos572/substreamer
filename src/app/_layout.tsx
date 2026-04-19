@@ -57,7 +57,7 @@ import {
 } from '../services/dataSyncService';
 import { useLibrarySyncBackgroundNotification } from '../hooks/useLibrarySyncBackgroundNotification';
 import { useLibrarySyncKeepAwake } from '../hooks/useLibrarySyncKeepAwake';
-import { deferredImageCacheInit, getImageCacheStats, initImageCache } from '../services/imageCacheService';
+import { deferredImageCacheInit, initImageCache } from '../services/imageCacheService';
 import { deferredMusicCacheInit, getMusicCacheStats, initMusicCache } from '../services/musicCacheService';
 import { checkStorageLimit } from '../services/storageService';
 import { initPlayer, removeNonDownloadedTracks } from '../services/playerService';
@@ -70,7 +70,6 @@ import { startAutoOffline, stopAutoOffline } from '../services/autoOfflineServic
 import { excludeFromBackup } from 'expo-backup-exclusions';
 import { moveToBack } from 'expo-move-to-back';
 import { rehydrateAllStores } from '../store/persistence/rehydrate';
-import { imageCacheStore } from '../store/imageCacheStore';
 import { musicCacheStore } from '../store/musicCacheStore';
 import { authStore } from '../store/authStore';
 import { autoOfflineStore } from '../store/autoOfflineStore';
@@ -284,7 +283,9 @@ export default function RootLayout() {
       await deferredImageCacheInit();
       await deferredMusicCacheInit();
       if (cancelled) return;
-      imageCacheStore.getState().recalculate(await getImageCacheStats());
+      // imageCacheStore aggregates come from SQL now (via `rehydrateAllStores`
+      // at splash and `reconcileImageCacheAsync` inside `deferredImageCacheInit`),
+      // so the one-time recalculate-from-stats call is gone.
       musicCacheStore.getState().recalculate(await getMusicCacheStats());
       checkStorageLimit();
       await runAutoBackupIfNeeded();

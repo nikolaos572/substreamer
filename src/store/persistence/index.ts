@@ -25,3 +25,6 @@ export * from './scrobbleTable';
 
 // Detail-cache row-table API
 export * from './detailTables';
+
+// Image-cache row-table API
+export * from './imageCacheTable';

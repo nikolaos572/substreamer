@@ -81,6 +81,7 @@ describe('persistence/db (happy path)', () => {
       'cached_items',
       'cached_item_songs',
       'download_queue',
+      'cached_images',
     ]);
   });
 
@@ -94,6 +95,8 @@ describe('persistence/db (happy path)', () => {
       });
     expect(indexNames.sort()).toEqual(
       [
+        'idx_cached_images_cached_at',
+        'idx_cached_images_cover_art_id',
         'idx_cached_item_songs_song_id',
         'idx_cached_songs_album_id',
         'idx_download_queue_position',
