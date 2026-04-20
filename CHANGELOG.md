@@ -1,5 +1,15 @@
 # Changelog
 
+## [8.0.52] - 2026-04-20
+
+- refactor(scrobbles): move pendingScrobbleStore to per-row SQLite
+- chore(settings): remove My Listening nav row from Library & Data
+- fix(lyrics): wrap long lines within viewport width
+- fix(splash): start waveform ripple when visible so forward sweep plays
+- fix(player): avoid hang when server unreachable in offline mode
+- ci: update coverage badge [skip ci]
+- feat(image-cache): Scan + Repair actions, auto-repair on reconnect
+- ci: update coverage badge [skip ci]
 ## [8.0.51] - 2026-04-19
 
 - fix(sync): skip cover prefetch during library sync; surface offline pause
