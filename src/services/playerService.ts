@@ -515,6 +515,16 @@ export async function initPlayer(): Promise<void> {
       (e.reason === 'playedUntilEnd' || e.reason === 'PLAYED_UNTIL_END') &&
       trackThatEnded
     ) {
+      // Force the store to reflect the true end-of-track position. RNTP's
+      // last `PlaybackProgressUpdated` typically fires before the track
+      // finishes (polling cadence), so without this write the store can be
+      // left at e.g. 150/200 when the track ends — a visible ~75% progress
+      // bar instead of a full one. Using the Subsonic metadata duration
+      // (authoritative) keeps MiniPlayer and PlayerProgressBar in lockstep.
+      const endDuration = trackThatEnded.duration ?? 0;
+      if (endDuration > 0) {
+        playerStore.getState().setProgress(endDuration, endDuration, endDuration);
+      }
       addCompletedScrobble(trackThatEnded, trackPlaylistMap.get(trackThatEnded.id));
     }
 
@@ -524,6 +534,18 @@ export async function initPlayer(): Promise<void> {
       scrobbleHandledByEnded = true;
     }
     savedTrackForScrobble = null;
+  });
+
+  // Belt-and-braces: iOS RNTP also emits PlaybackQueueEnded after the last
+  // track in the queue finishes. Pin progress to the end in case the
+  // PlaybackEndedWithReason path was skipped (queue-setup guards, platform
+  // quirks). Same "store is the only source of truth" contract.
+  TrackPlayer.addEventListener(Event.PlaybackQueueEnded, () => {
+    const currentTrack = playerStore.getState().currentTrack;
+    const endDuration = currentTrack?.duration ?? 0;
+    if (endDuration > 0) {
+      playerStore.getState().setProgress(endDuration, endDuration, endDuration);
+    }
   });
 
   TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, ({ track, index: activeIndex }) => {

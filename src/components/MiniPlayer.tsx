@@ -14,8 +14,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import Animated, {
-  Extrapolation,
-  interpolate,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -47,12 +45,9 @@ export function MiniPlayer() {
   const queue = playerStore((s) => s.queue);
   const repeatMode = playbackSettingsStore((s) => s.repeatMode);
 
-  const progress = duration > 0 ? position / duration : 0;
-  const progressAnim = useSharedValue(0);
-
-  useEffect(() => {
-    progressAnim.value = withTiming(progress, { duration: 300 });
-  }, [progress, progressAnim]);
+  // Rendered synchronously from the store each re-render — same contract as
+  // PlayerProgressBar so the two surfaces can never visually diverge.
+  const progress = duration > 0 ? Math.max(0, Math.min(position / duration, 1)) : 0;
 
   const error = playerStore((s) => s.error);
   const isPlaying = playbackState === 'playing' || playbackState === 'buffering';
@@ -118,10 +113,6 @@ export function MiniPlayer() {
     }
   }, [bgColor, gradientOpacity]);
 
-  const progressStyle = useAnimatedStyle(() => ({
-    width: `${interpolate(progressAnim.value, [0, 1], [0, 100], Extrapolation.CLAMP)}%`,
-  }));
-
   const gradientAnimatedStyle = useAnimatedStyle(() => ({
     opacity: gradientOpacity.value,
   }));
@@ -145,11 +136,14 @@ export function MiniPlayer() {
     <View style={[styles.container, { backgroundColor: withAlpha(colors.card, 0.65) }]}>
       {/* Progress bar */}
       <View style={styles.progressTrack}>
-        <Animated.View
+        <View
           style={[
             styles.progressFill,
-            { backgroundColor: colors.primary, opacity: 0.65 },
-            progressStyle,
+            {
+              backgroundColor: colors.primary,
+              opacity: 0.65,
+              width: `${progress * 100}%`,
+            },
           ]}
         />
       </View>

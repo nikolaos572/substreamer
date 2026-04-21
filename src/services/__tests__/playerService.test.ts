@@ -41,6 +41,7 @@ jest.mock('react-native-track-player', () => ({
     PlaybackError: 'playback-error',
     PlaybackActiveTrackChanged: 'playback-active-track-changed',
     PlaybackEndedWithReason: 'playback-ended-with-reason',
+    PlaybackQueueEnded: 'playback-queue-ended',
     PlaybackStalled: 'playback-stalled',
     PlaybackErrorLog: 'playback-error-log',
     PlaybackBufferEmpty: 'playback-buffer-empty',
@@ -1085,6 +1086,74 @@ describe('PlaybackEndedWithReason event handler', () => {
     await playTrack(queue[0], queue);
 
     expect(addCompletedScrobble).not.toHaveBeenCalled();
+  });
+
+  it('writes final track position to store when reason is playedUntilEnd', async () => {
+    await initPlayer();
+    const queue = [makeChild('t1', { duration: 200 })];
+    await playTrack(queue[0], queue);
+
+    const activeTrackHandler = eventHandlers[Event.PlaybackActiveTrackChanged];
+    const endedHandler = eventHandlers[Event.PlaybackEndedWithReason];
+    activeTrackHandler({ track: { id: 't1' }, index: 0 });
+    jest.clearAllMocks();
+
+    endedHandler({ reason: 'playedUntilEnd', track: 't1', position: 150 });
+
+    // MiniPlayer and PlayerProgressBar read the same store — this write
+    // ensures both show 100% when a track finishes naturally.
+    expect(mockSetProgress).toHaveBeenCalledWith(200, 200, 200);
+  });
+
+  it('does not overwrite position when reason is skipped', async () => {
+    await initPlayer();
+    const queue = [makeChild('t1', { duration: 200 })];
+    await playTrack(queue[0], queue);
+
+    const activeTrackHandler = eventHandlers[Event.PlaybackActiveTrackChanged];
+    const endedHandler = eventHandlers[Event.PlaybackEndedWithReason];
+    activeTrackHandler({ track: { id: 't1' }, index: 0 });
+    jest.clearAllMocks();
+
+    endedHandler({ reason: 'skipped', track: 't1', position: 50 });
+
+    // Skipping to the next track must NOT jam the bar to 100% — the new
+    // track's position updates will drive the display from 0.
+    expect(mockSetProgress).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlaybackQueueEnded event handler', () => {
+  it('pins progress to the end of the current track', async () => {
+    await initPlayer();
+    const { playerStore } = require('../../store/playerStore');
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(),
+      currentTrack: makeChild('t1', { duration: 240 }),
+    });
+
+    const queueEndedHandler = eventHandlers[Event.PlaybackQueueEnded];
+    expect(queueEndedHandler).toBeDefined();
+
+    jest.clearAllMocks();
+    (playerStore.getState as jest.Mock).mockReturnValue({
+      ...defaultPlayerState(),
+      currentTrack: makeChild('t1', { duration: 240 }),
+    });
+
+    queueEndedHandler({ track: 0, position: 210 });
+
+    expect(mockSetProgress).toHaveBeenCalledWith(240, 240, 240);
+  });
+
+  it('no-ops when there is no current track', async () => {
+    await initPlayer();
+    const queueEndedHandler = eventHandlers[Event.PlaybackQueueEnded];
+    jest.clearAllMocks();
+
+    queueEndedHandler({ track: 0, position: 0 });
+
+    expect(mockSetProgress).not.toHaveBeenCalled();
   });
 });
 
