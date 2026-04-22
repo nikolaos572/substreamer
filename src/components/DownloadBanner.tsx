@@ -22,6 +22,7 @@ import Animated, {
 
 import { useTheme } from '../hooks/useTheme';
 import { musicCacheStore } from '../store/musicCacheStore';
+import { computeQueueItemProgress } from '../store/persistence/cachedItemHelpers';
 
 const BANNER_HEIGHT = 44;
 const EXPAND_MS = 300;
@@ -38,6 +39,7 @@ export function DownloadBanner() {
   const activeItem = musicCacheStore((s) =>
     s.downloadQueue.find((q) => q.status === 'downloading'),
   );
+  const cachedItems = musicCacheStore((s) => s.cachedItems);
   const queueCount = musicCacheStore((s) => s.downloadQueue.length);
   const visible = queueCount > 0;
 
@@ -74,18 +76,19 @@ export function DownloadBanner() {
     router.push('/download-queue');
   }, [router]);
 
-  const progress = useMemo(() => {
-    if (!activeItem || activeItem.totalSongs === 0) return 0;
-    return activeItem.completedSongs / activeItem.totalSongs;
-  }, [activeItem]);
+  const { displayCompleted, displayTotal } = useMemo(() => {
+    if (!activeItem) return { displayCompleted: 0, displayTotal: 0 };
+    const p = computeQueueItemProgress(activeItem, cachedItems);
+    return { displayCompleted: p.completed, displayTotal: p.total };
+  }, [activeItem, cachedItems]);
+
+  const progress = displayTotal === 0 ? 0 : displayCompleted / displayTotal;
 
   const label = activeItem
     ? activeItem.name
     : t('itemQueued', { count: queueCount });
 
-  const trackText = activeItem
-    ? `${activeItem.completedSongs}/${activeItem.totalSongs}`
-    : '';
+  const trackText = activeItem ? `${displayCompleted}/${displayTotal}` : '';
 
   return (
     <Animated.View style={[styles.container, { backgroundColor: colors.card }, containerStyle]}>

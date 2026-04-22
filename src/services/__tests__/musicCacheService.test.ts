@@ -267,6 +267,8 @@ import {
   registerMusicCacheOnAlbumReferencedHook,
   reconcileMusicCacheAsync,
   waitForTrackMapsReady,
+  computeAlbumRemovalOutcome,
+  demoteAlbumToPartial,
 } from '../musicCacheService';
 
 import type { Child } from '../subsonicService';
@@ -309,6 +311,7 @@ function seedItem(itemId: string, opts: {
   artist?: string;
   coverArtId?: string;
   expectedSongCount?: number;
+  downloadedAt?: number;
 }) {
   const type = opts.type ?? 'album';
   const songIds = opts.songIds ?? [];
@@ -328,7 +331,7 @@ function seedItem(itemId: string, opts: {
         expectedSongCount: opts.expectedSongCount ?? songIds.length,
         parentAlbumId: undefined,
         lastSyncAt: Date.now(),
-        downloadedAt: Date.now(),
+        downloadedAt: opts.downloadedAt ?? Date.now(),
         songIds,
       },
     },
@@ -786,10 +789,74 @@ describe('forceRecoverDownloadsAsync', () => {
 /* ------------------------------------------------------------------ */
 
 describe('enqueueAlbumDownload', () => {
-  it('skips if already cached', async () => {
-    seedItem('album-1', { type: 'album' });
+  it('skips if already fully downloaded (no missing songs)', async () => {
+    // A cached_items row that matches the server album exactly → top-up
+    // fetches fresh album data, sees no missing songs, and returns without
+    // enqueueing.
+    seedItem('album-1', {
+      type: 'album',
+      songIds: ['t1', 't2'],
+      expectedSongCount: 2,
+    });
+    mockFetchAlbum.mockResolvedValue({
+      id: 'album-1',
+      name: 'Already here',
+      song: [makeChild('t1'), makeChild('t2')],
+    });
     await enqueueAlbumDownload('album-1');
-    expect(mockFetchAlbum).not.toHaveBeenCalled();
+    expect(mockFetchAlbum).toHaveBeenCalled();
+    expect(musicCacheStore.getState().downloadQueue).toHaveLength(0);
+  });
+
+  it('tops up a partial album by enqueuing only missing songs', async () => {
+    seedItem('album-1', {
+      type: 'album',
+      songIds: ['t1', 't2'],
+      expectedSongCount: 5,
+      downloadedAt: 111,
+    });
+    mockFetchAlbum.mockResolvedValue({
+      id: 'album-1',
+      name: 'Partial',
+      artist: 'A',
+      coverArt: 'ac',
+      song: [
+        makeChild('t1'),
+        makeChild('t2'),
+        makeChild('t3'),
+        makeChild('t4'),
+        makeChild('t5'),
+      ],
+    });
+    mockCheckStorageLimit.mockReturnValue(true);
+    await enqueueAlbumDownload('album-1');
+    const queue = musicCacheStore.getState().downloadQueue;
+    expect(queue).toHaveLength(1);
+    expect(queue[0].itemId).toBe('album-1');
+    expect(queue[0].totalSongs).toBe(3);
+    const songs = JSON.parse(queue[0].songsJson) as Array<{ id: string }>;
+    expect(songs.map((s) => s.id).sort()).toEqual(['t3', 't4', 't5']);
+    // downloadedAt on the existing cached_items row is untouched.
+    expect(musicCacheStore.getState().cachedItems['album-1'].downloadedAt).toBe(111);
+  });
+
+  it('does not notify onAlbumReferenced hook on top-up', async () => {
+    const hook = jest.fn();
+    registerMusicCacheOnAlbumReferencedHook(hook);
+    seedItem('album-1', {
+      type: 'album',
+      songIds: ['t1'],
+      expectedSongCount: 2,
+    });
+    mockFetchAlbum.mockResolvedValue({
+      id: 'album-1',
+      name: 'X',
+      song: [makeChild('t1'), makeChild('t2')],
+    });
+    mockCheckStorageLimit.mockReturnValue(true);
+    await enqueueAlbumDownload('album-1');
+    expect(hook).not.toHaveBeenCalled();
+    registerMusicCacheOnAlbumReferencedHook(null);
   });
 
   it('skips if already queued', async () => {
@@ -1187,6 +1254,106 @@ describe('deleteCachedItem', () => {
     deleteCachedItem('album-1');
     expect(getLocalTrackUri('s1')).toBeNull();
     expect(getLocalTrackUri('s2')).not.toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  computeAlbumRemovalOutcome                                         */
+/* ------------------------------------------------------------------ */
+
+describe('computeAlbumRemovalOutcome', () => {
+  it('returns empty outcome for non-album types', () => {
+    seedSong(makeCachedSong('s1'));
+    seedItem('pl-1', { type: 'playlist', songIds: ['s1'] });
+    const outcome = computeAlbumRemovalOutcome('pl-1');
+    expect(outcome).toEqual({ orphanSongIds: [], survivorCount: 0 });
+  });
+
+  it('returns empty outcome for unknown itemId', () => {
+    expect(computeAlbumRemovalOutcome('nonexistent')).toEqual({
+      orphanSongIds: [],
+      survivorCount: 0,
+    });
+  });
+
+  it('all songs are orphans when no other item references them', () => {
+    seedSong(makeCachedSong('s1'));
+    seedSong(makeCachedSong('s2'));
+    seedItem('album-1', { type: 'album', songIds: ['s1', 's2'] });
+    const outcome = computeAlbumRemovalOutcome('album-1');
+    expect(outcome.orphanSongIds.sort()).toEqual(['s1', 's2']);
+    expect(outcome.survivorCount).toBe(0);
+  });
+
+  it('reports survivors when songs are edged to another item', () => {
+    seedSong(makeCachedSong('s1'));
+    seedSong(makeCachedSong('s2'));
+    seedItem('album-1', { type: 'album', songIds: ['s1', 's2'] });
+    // Add a second item (playlist) referencing s1 → s1 is a survivor.
+    seedItem('pl-1', { type: 'playlist', songIds: ['s1'] });
+    const outcome = computeAlbumRemovalOutcome('album-1');
+    expect(outcome.orphanSongIds).toEqual(['s2']);
+    expect(outcome.survivorCount).toBe(1);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  demoteAlbumToPartial                                               */
+/* ------------------------------------------------------------------ */
+
+describe('demoteAlbumToPartial', () => {
+  it('returns { demoted:false, removed:false } for non-album', () => {
+    seedItem('pl-1', { type: 'playlist', songIds: [] });
+    expect(demoteAlbumToPartial('pl-1')).toEqual({ demoted: false, removed: false });
+  });
+
+  it('falls through to full delete when no songs survive', () => {
+    mockFileExists = true;
+    seedSong(makeCachedSong('s1'));
+    seedSong(makeCachedSong('s2'));
+    seedItem('album-1', { type: 'album', songIds: ['s1', 's2'] });
+    const result = demoteAlbumToPartial('album-1');
+    expect(result).toEqual({ demoted: false, removed: true });
+    expect(musicCacheStore.getState().cachedItems['album-1']).toBeUndefined();
+  });
+
+  it('removes only orphan edges when survivors exist; preserves the album row + downloadedAt', () => {
+    mockFileExists = true;
+    seedSong(makeCachedSong('s1'));
+    seedSong(makeCachedSong('s2'));
+    seedSong(makeCachedSong('s3'));
+    seedItem('album-1', {
+      type: 'album',
+      songIds: ['s1', 's2', 's3'],
+      expectedSongCount: 3,
+      downloadedAt: 123456,
+    });
+    // s1 and s2 are also in a playlist → survivors.
+    seedItem('pl-1', { type: 'playlist', songIds: ['s1', 's2'] });
+
+    const result = demoteAlbumToPartial('album-1');
+    expect(result).toEqual({ demoted: true, removed: false });
+
+    const album = musicCacheStore.getState().cachedItems['album-1'];
+    expect(album).toBeDefined();
+    expect(album.downloadedAt).toBe(123456);
+    // Only the orphan (s3) should have been removed; s1 and s2 survive in
+    // the album's edge set.
+    expect(album.songIds.sort()).toEqual(['s1', 's2']);
+    // s3's file should have been deleted.
+    expect(fileDeletes.some((u) => u.includes('s3'))).toBe(true);
+    expect(fileDeletes.some((u) => u.includes('s1'))).toBe(false);
+    expect(fileDeletes.some((u) => u.includes('s2'))).toBe(false);
+  });
+
+  it('no-op guard when album item has no orphans (defensive: survivors fully cover it)', () => {
+    seedSong(makeCachedSong('s1'));
+    seedItem('album-1', { type: 'album', songIds: ['s1'], expectedSongCount: 1 });
+    seedItem('pl-1', { type: 'playlist', songIds: ['s1'] });
+    // Every song has >1 ref → no orphans. demoteAlbumToPartial should no-op.
+    const result = demoteAlbumToPartial('album-1');
+    expect(result).toEqual({ demoted: false, removed: false });
+    expect(musicCacheStore.getState().cachedItems['album-1']).toBeDefined();
   });
 });
 

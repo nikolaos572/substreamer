@@ -327,6 +327,38 @@ describe('updateQueueItem', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  enqueueTopUp                                                       */
+/* ------------------------------------------------------------------ */
+
+describe('enqueueTopUp', () => {
+  it('bypasses the cachedItems guard (allows re-queuing a partial album)', () => {
+    musicCacheStore.setState({
+      cachedItems: { 'album-1': makeItem('album-1', ['s1', 's2']) },
+    });
+    musicCacheStore.getState().enqueueTopUp(makeQueueDraft('album-1', 3));
+    const queue = musicCacheStore.getState().downloadQueue;
+    expect(queue).toHaveLength(1);
+    expect(queue[0].itemId).toBe('album-1');
+    expect(queue[0].status).toBe('queued');
+    expect(queue[0].completedSongs).toBe(0);
+  });
+
+  it('still dedupes against an existing queue entry for the same itemId', () => {
+    musicCacheStore.getState().enqueueTopUp(makeQueueDraft('album-1'));
+    musicCacheStore.getState().enqueueTopUp(makeQueueDraft('album-1'));
+    expect(musicCacheStore.getState().downloadQueue).toHaveLength(1);
+  });
+
+  it('contrast: plain enqueue refuses when item is already cached', () => {
+    musicCacheStore.setState({
+      cachedItems: { 'album-1': makeItem('album-1', ['s1']) },
+    });
+    musicCacheStore.getState().enqueue(makeQueueDraft('album-1'));
+    expect(musicCacheStore.getState().downloadQueue).toHaveLength(0);
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /*  markItemComplete                                                   */
 /* ------------------------------------------------------------------ */
 
@@ -367,6 +399,81 @@ describe('markItemComplete', () => {
     const state = musicCacheStore.getState();
     expect(state.cachedSongs['existing']).toBeDefined();
     expect(state.cachedSongs['new']).toBeDefined();
+  });
+
+  it('merges edges into existing row on top-up: preserves downloadedAt, appends new songIds', () => {
+    // Seed an existing partial album with 3 of 10 songs and a known
+    // downloadedAt timestamp that must survive the merge.
+    musicCacheStore.setState({
+      cachedItems: {
+        a: {
+          itemId: 'a',
+          type: 'album',
+          name: 'Album A',
+          expectedSongCount: 10,
+          lastSyncAt: 100,
+          downloadedAt: 111,
+          songIds: ['s1', 's2', 's3'],
+        },
+      },
+    });
+    musicCacheStore.getState().enqueue(makeQueueDraft('top-up-q'));
+    const qid = musicCacheStore.getState().downloadQueue[0].queueId;
+
+    const item: Omit<CachedItemMeta, 'songIds'> = {
+      itemId: 'a',
+      type: 'album',
+      name: 'Album A',
+      expectedSongCount: 10,
+      lastSyncAt: 999, // new lastSyncAt
+      downloadedAt: 999, // CALLER sends "now" — should be ignored in favour of existing
+    };
+    const songs = [makeSong('s4'), makeSong('s5'), makeSong('s6')];
+    const edges = [
+      { songId: 's4', position: 1 },
+      { songId: 's5', position: 2 },
+      { songId: 's6', position: 3 },
+    ];
+    musicCacheStore.getState().markItemComplete(qid, item, songs, edges);
+
+    const merged = musicCacheStore.getState().cachedItems['a'];
+    expect(merged.songIds).toEqual(['s1', 's2', 's3', 's4', 's5', 's6']);
+    expect(merged.downloadedAt).toBe(111); // preserved
+    expect(merged.lastSyncAt).toBe(999); // refreshed
+    expect(merged.expectedSongCount).toBe(10);
+  });
+
+  it('dedupes songIds on merge (song already edged to the item is not re-added)', () => {
+    musicCacheStore.setState({
+      cachedItems: {
+        a: {
+          itemId: 'a',
+          type: 'album',
+          name: 'Album A',
+          expectedSongCount: 5,
+          lastSyncAt: 100,
+          downloadedAt: 100,
+          songIds: ['s1', 's2'],
+        },
+      },
+    });
+    musicCacheStore.getState().markItemComplete(
+      'q',
+      {
+        itemId: 'a',
+        type: 'album',
+        name: 'Album A',
+        expectedSongCount: 5,
+        lastSyncAt: 200,
+        downloadedAt: 200,
+      },
+      [makeSong('s2'), makeSong('s3')],
+      [
+        { songId: 's2', position: 1 },
+        { songId: 's3', position: 2 },
+      ],
+    );
+    expect(musicCacheStore.getState().cachedItems['a'].songIds).toEqual(['s1', 's2', 's3']);
   });
 });
 

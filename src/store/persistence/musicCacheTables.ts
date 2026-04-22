@@ -778,12 +778,23 @@ export function markDownloadComplete(
         if (!song.id || !song.albumId) continue;
         upsertCachedSongInternal(db, song);
       }
-      for (const edge of edges) {
+      // Reassign edge positions starting from MAX(position)+1 for this item
+      // so a top-up merging into an existing row doesn't collide with the
+      // existing 1..K edges (the caller's positions are 1-based within the
+      // queue item's `songsJson`, not the cached row).
+      const maxRow = db.getFirstSync<{ max_pos: number | null }>(
+        'SELECT MAX(position) AS max_pos FROM cached_item_songs WHERE item_id = ?;',
+        [item.itemId],
+      );
+      let nextPosition = (maxRow?.max_pos ?? 0) + 1;
+      const sortedEdges = [...edges].sort((a, b) => a.position - b.position);
+      for (const edge of sortedEdges) {
         if (!edge.songId) continue;
         db.runSync(
           'INSERT OR IGNORE INTO cached_item_songs (item_id, position, song_id) VALUES (?, ?, ?);',
-          [item.itemId, edge.position, edge.songId],
+          [item.itemId, nextPosition, edge.songId],
         );
+        nextPosition++;
       }
     });
   } catch {

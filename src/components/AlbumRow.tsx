@@ -26,7 +26,9 @@ export const AlbumRow = memo(function AlbumRow({ album }: { album: AlbumID3 }) {
   const { t } = useTranslation();
   const router = useRouter();
   const starred = useIsStarred('album', album.id);
-  const downloaded = useDownloadStatus('album', album.id) === 'complete';
+  const downloadStatus = useDownloadStatus('album', album.id);
+  const downloaded = downloadStatus === 'complete';
+  const partial = downloadStatus === 'partial';
   const rating = useRating(album.id, album.userRating);
   const offlineMode = offlineModeStore((s) => s.offlineMode);
 
@@ -123,6 +125,7 @@ export const AlbumRow = memo(function AlbumRow({ album }: { album: AlbumID3 }) {
             )}
             {starred && <Ionicons name="heart" size={14} color={colors.red} style={styles.indicator} />}
             {downloaded && <View style={styles.indicator}><DownloadedIcon size={14} circleColor={colors.primary} arrowColor="#fff" /></View>}
+            {partial && <View style={styles.indicator}><DownloadedIcon size={14} circleColor={colors.orange} arrowColor="#fff" /></View>}
             <View style={styles.metaRight}>
               <Ionicons name="time-outline" size={14} color={colors.primary} />
               <Text style={[styles.metaText, { color: colors.textSecondary }]}>

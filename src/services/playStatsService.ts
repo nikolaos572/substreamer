@@ -20,8 +20,29 @@ import { albumLibraryStore } from '../store/albumLibraryStore';
 import { artistDetailStore } from '../store/artistDetailStore';
 import { favoritesStore } from '../store/favoritesStore';
 import { playlistDetailStore } from '../store/playlistDetailStore';
-import { applyLocalPlayToPlayer } from './playerService';
 import { type Child } from './subsonicService';
+
+/**
+ * Listener signature for player-local play-stat updates. `playerService`
+ * registers one of these at module load so `applyLocalPlay` can push the
+ * ephemeral currentTrack / currentChildQueue bumps without importing back
+ * into playerService (which would create a cycle with scrobbleService).
+ */
+export type PlayerPlayStatListener = (songId: string, now: string) => void;
+
+let playerPlayStatListener: PlayerPlayStatListener | null = null;
+
+/**
+ * Subscribe the player's ephemeral-state updater to play-stat events.
+ * `playerService` calls this once at module load to wire `applyLocalPlay`
+ * → `applyLocalPlayToPlayer` without the reverse import that would close
+ * the playerService ↔ scrobbleService ↔ playStatsService cycle.
+ */
+export function registerPlayerPlayStatListener(
+  listener: PlayerPlayStatListener | null,
+): void {
+  playerPlayStatListener = listener;
+}
 
 /**
  * Eagerly bump local play-count and last-played for a just-scrobbled song.
@@ -42,5 +63,5 @@ export function applyLocalPlay(song: Child): void {
   artistDetailStore.getState().applyLocalPlay(songId, albumId, now);
 
   // Ephemeral player state — the currently-displayed track copy.
-  applyLocalPlayToPlayer(songId, now);
+  playerPlayStatListener?.(songId, now);
 }

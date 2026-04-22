@@ -176,6 +176,22 @@ try {
   db.execSync(
     'CREATE INDEX IF NOT EXISTS idx_cached_item_songs_song_id ON cached_item_songs(song_id);',
   );
+  // Dedup any rows with the same (item_id, song_id) before adding a UNIQUE
+  // index. The PK `(item_id, position)` prevents duplicate inserts at the
+  // same position but does not prevent the same song being edged twice at
+  // different positions — which could theoretically happen under a
+  // concurrent `ensurePartialAlbumEdge` + queue-completion race. Heal
+  // in-flight by keeping the lowest-position edge per `(item_id, song_id)`.
+  db.execSync(
+    `DELETE FROM cached_item_songs
+       WHERE rowid NOT IN (
+         SELECT MIN(rowid) FROM cached_item_songs
+         GROUP BY item_id, song_id
+       );`,
+  );
+  db.execSync(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_cached_item_songs_item_song ON cached_item_songs(item_id, song_id);',
+  );
   db.execSync(
     `CREATE TABLE IF NOT EXISTS download_queue (
        queue_id TEXT PRIMARY KEY NOT NULL,

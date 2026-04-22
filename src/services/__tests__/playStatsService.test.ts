@@ -37,15 +37,14 @@ jest.mock('../../store/artistDetailStore', () => ({
   },
 }));
 
-jest.mock('../playerService', () => ({
-  applyLocalPlayToPlayer: (...args: unknown[]) => mockApplyLocalPlayToPlayer(...args),
-}));
-
 // subsonicService only contributes the type import for Child; no runtime needed.
 jest.mock('../subsonicService');
 
 import type { Child } from '../subsonicService';
-import { applyLocalPlay } from '../playStatsService';
+import {
+  applyLocalPlay,
+  registerPlayerPlayStatListener,
+} from '../playStatsService';
 
 beforeEach(() => {
   mockAlbumDetailApply.mockClear();
@@ -54,6 +53,10 @@ beforeEach(() => {
   mockAlbumLibraryApply.mockClear();
   mockArtistDetailApply.mockClear();
   mockApplyLocalPlayToPlayer.mockClear();
+  // Register a fresh listener for each test. playerService would normally
+  // register `applyLocalPlayToPlayer` at module load; the test mirrors that
+  // with a spy so we can assert the fan-out still hits the player tier.
+  registerPlayerPlayStatListener(mockApplyLocalPlayToPlayer);
 });
 
 describe('playStatsService.applyLocalPlay', () => {

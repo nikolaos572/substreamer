@@ -130,6 +130,18 @@ export interface MusicCacheState {
       'queueId' | 'status' | 'completedSongs' | 'addedAt' | 'queuePosition'
     >,
   ) => void;
+  /**
+   * Variant of `enqueue` that skips the "already in cachedItems" short-circuit.
+   * Used by `enqueueAlbumDownload` for top-up flows where the album already
+   * has a partial `cached_items` row and we want to download the missing
+   * songs. Still dedupes against an existing queue entry for the same itemId.
+   */
+  enqueueTopUp: (
+    draft: Omit<
+      DownloadQueueItem,
+      'queueId' | 'status' | 'completedSongs' | 'addedAt' | 'queuePosition'
+    >,
+  ) => void;
   removeFromQueue: (queueId: string) => void;
   reorderQueue: (fromIndex: number, toIndex: number) => void;
   updateQueueItem: (
@@ -231,6 +243,27 @@ export const musicCacheStore = create<MusicCacheState>()((set, get) => ({
     set({ downloadQueue: [...state.downloadQueue, full] });
   },
 
+  enqueueTopUp: (draft) => {
+    const state = get();
+    // Only dedupe against an existing queue entry. Partial `cachedItems` rows
+    // are expected for top-ups and must not block the enqueue.
+    if (state.downloadQueue.some((q) => q.itemId === draft.itemId)) return;
+    const maxPosition = state.downloadQueue.reduce(
+      (max, q) => (q.queuePosition > max ? q.queuePosition : max),
+      0,
+    );
+    const full: DownloadQueueItem = {
+      ...draft,
+      queueId: generateQueueId(),
+      status: 'queued',
+      completedSongs: 0,
+      addedAt: Date.now(),
+      queuePosition: maxPosition + 1,
+    };
+    insertDownloadQueueItem(full);
+    set({ downloadQueue: [...state.downloadQueue, full] });
+  },
+
   removeFromQueue: (queueId) => {
     removeDownloadQueueItem(queueId);
     set((state) => ({
@@ -269,11 +302,41 @@ export const musicCacheStore = create<MusicCacheState>()((set, get) => ({
   },
 
   markItemComplete: (queueId, item, songs, edges) => {
-    markDownloadComplete(queueId, item, songs, edges);
-    // Derive songIds in position order from edges.
-    const songIds = [...edges]
+    const existing = get().cachedItems[item.itemId];
+    // For top-ups (existing row):
+    //   - preserve `downloadedAt` (user "downloaded" this earlier).
+    //   - preserve `expectedSongCount`. The worker derives it from
+    //     `songs.length`, which for a top-up is only the *delta* (missing
+    //     songs). The existing row's `expectedSongCount` was already set by
+    //     `enqueueAlbumDownload` from the fresh server fetch, so it's the
+    //     authoritative album total. Clobbering it would misclassify a
+    //     later remove-with-survivors as "complete" when it's actually
+    //     partial.
+    const itemToPersist: Omit<CachedItemMeta, 'songIds'> = existing
+      ? {
+          ...item,
+          downloadedAt: existing.downloadedAt,
+          expectedSongCount: existing.expectedSongCount,
+        }
+      : item;
+
+    markDownloadComplete(queueId, itemToPersist, songs, edges);
+
+    // New songIds from this run, in caller-supplied position order.
+    const newSongIdsInOrder = [...edges]
       .sort((a, b) => a.position - b.position)
       .map((e) => e.songId);
+
+    // Merge: keep existing order, append new songs that aren't already edged.
+    let songIds: string[];
+    if (existing) {
+      const existingSet = new Set(existing.songIds);
+      const additions = newSongIdsInOrder.filter((id) => !existingSet.has(id));
+      songIds = [...existing.songIds, ...additions];
+    } else {
+      songIds = newSongIdsInOrder;
+    }
+
     set((state) => {
       const nextSongs = { ...state.cachedSongs };
       for (const s of songs) {
@@ -283,7 +346,7 @@ export const musicCacheStore = create<MusicCacheState>()((set, get) => ({
         downloadQueue: state.downloadQueue.filter((q) => q.queueId !== queueId),
         cachedItems: {
           ...state.cachedItems,
-          [item.itemId]: { ...item, songIds },
+          [item.itemId]: { ...itemToPersist, songIds },
         },
         cachedSongs: nextSongs,
       };

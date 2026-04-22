@@ -41,7 +41,11 @@ import {
   type CachedSongMeta,
   type DownloadQueueItem,
 } from '../store/musicCacheStore';
-import { insertCachedItemSong } from '../store/persistence/musicCacheTables';
+import {
+  countSongRefs,
+  insertCachedItemSong,
+} from '../store/persistence/musicCacheTables';
+import { processingOverlayStore } from '../store/processingOverlayStore';
 import { playbackSettingsStore } from '../store/playbackSettingsStore';
 import { resolveEffectiveFormat } from '../utils/effectiveFormat';
 import { playlistDetailStore } from '../store/playlistDetailStore';
@@ -636,14 +640,71 @@ function cacheTrackCoverArt(tracks: Child[]): void {
 /** Enqueue an album download. */
 export async function enqueueAlbumDownload(albumId: string): Promise<void> {
   const state = musicCacheStore.getState();
-  if (albumId in state.cachedItems) return;
+  const existing = state.cachedItems[albumId];
   if (state.downloadQueue.some((q) => q.itemId === albumId)) return;
 
-  onAlbumReferencedHook?.(albumId);
+  const isTopUp = existing !== undefined;
+  if (!isTopUp) {
+    onAlbumReferencedHook?.(albumId);
+  }
 
   await ensureCoverArtAuth();
   const album = await albumDetailStore.getState().fetchAlbum(albumId);
-  if (!album?.song?.length) return;
+  if (!album?.song?.length) {
+    if (isTopUp) {
+      processingOverlayStore.getState().showError(i18n.t('failedToLoadAlbum'));
+    }
+    return;
+  }
+
+  if (isTopUp) {
+    // Top-up: download only the songs that aren't already edged to this
+    // album. If the server-side album grew, the new `expectedSongCount`
+    // captures that; if it shrank, we still download whatever the server
+    // currently reports and the stale `expectedSongCount` self-corrects
+    // on merge via `markItemComplete`.
+    const haveIds = new Set(existing.songIds);
+    const missingSongs = album.song.filter((s) => s.id && !haveIds.has(s.id));
+
+    if (missingSongs.length === 0) {
+      // No missing songs — refresh `expectedSongCount` so the defensive
+      // partial classification self-corrects and return.
+      musicCacheStore.getState().upsertCachedItem({
+        ...existing,
+        expectedSongCount: album.song.length,
+      });
+      return;
+    }
+
+    // Refresh `expectedSongCount` on the existing row with the fresh server
+    // total BEFORE enqueueing. The top-up queue row's `songsJson` only
+    // contains the missing delta, so the worker's derived count would be
+    // wrong — `markItemComplete` preserves this existing value on merge.
+    if (existing.expectedSongCount !== album.song.length) {
+      musicCacheStore.getState().upsertCachedItem({
+        ...existing,
+        expectedSongCount: album.song.length,
+      });
+    }
+
+    if (album.coverArt) {
+      cacheAllSizes(album.coverArt).catch(() => { /* non-critical */ });
+    }
+    cacheTrackCoverArt(missingSongs);
+
+    musicCacheStore.getState().enqueueTopUp({
+      itemId: albumId,
+      type: 'album',
+      name: album.name,
+      artist: album.artist ?? album.displayArtist,
+      coverArtId: album.coverArt,
+      totalSongs: missingSongs.length,
+      songsJson: JSON.stringify(missingSongs),
+    });
+
+    processQueue();
+    return;
+  }
 
   if (album.coverArt) {
     cacheAllSizes(album.coverArt).catch(() => { /* non-critical */ });
@@ -798,6 +859,19 @@ function ensurePartialAlbumEdge(
   const existing = state.cachedItems[song.albumId];
 
   if (existing) {
+    // Opportunistically refresh expectedSongCount if the album detail store
+    // has a fresher, larger count than the existing row — corrects the
+    // `expectedSongCount = 1` fallback taken at partial-row creation when
+    // albumDetailStore was empty.
+    const cachedAlbumForRefresh = albumDetailStore.getState().albums[song.albumId];
+    const freshCount = cachedAlbumForRefresh?.album?.song?.length;
+    if (freshCount !== undefined && freshCount > existing.expectedSongCount) {
+      musicCacheStore.getState().upsertCachedItem({
+        ...existing,
+        expectedSongCount: freshCount,
+      });
+    }
+
     // Append this song as a new edge if not already present.
     if (existing.songIds.includes(song.id)) return;
     const nextPosition = existing.songIds.length + 1;
@@ -1298,6 +1372,93 @@ export function deleteCachedItem(itemId: string): void {
   }
 
   resumeIfSpaceAvailable();
+}
+
+/**
+ * Inspect what would happen if the user removed this album: which songs
+ * would be orphaned (deleted from disk) and how many would survive because
+ * they're referenced by other items (playlists, favorites, single-song
+ * downloads). Survivors > 0 means the caller should confirm with the user
+ * before proceeding.
+ */
+export function computeAlbumRemovalOutcome(
+  itemId: string,
+): { orphanSongIds: string[]; survivorCount: number } {
+  const cached = musicCacheStore.getState().cachedItems[itemId];
+  if (!cached || cached.type !== 'album') {
+    return { orphanSongIds: [], survivorCount: 0 };
+  }
+  const orphanSongIds: string[] = [];
+  let survivorCount = 0;
+  for (const sid of cached.songIds) {
+    if (countSongRefs(sid) <= 1) {
+      orphanSongIds.push(sid);
+    } else {
+      survivorCount++;
+    }
+  }
+  return { orphanSongIds, survivorCount };
+}
+
+/**
+ * Remove orphaned songs from an album while preserving the `cached_items`
+ * row itself when any song survives (because it's referenced by another
+ * item). The surviving songs keep their album edge, so the album naturally
+ * shows as partially downloaded afterward — with its original `downloadedAt`
+ * intact. If no songs survive, falls through to `deleteCachedItem`.
+ */
+export function demoteAlbumToPartial(
+  itemId: string,
+): { demoted: boolean; removed: boolean } {
+  const initial = musicCacheStore.getState().cachedItems[itemId];
+  if (!initial || initial.type !== 'album') {
+    return { demoted: false, removed: false };
+  }
+
+  const { orphanSongIds } = computeAlbumRemovalOutcome(itemId);
+
+  if (orphanSongIds.length === initial.songIds.length) {
+    // No survivors — full delete is the right outcome.
+    deleteCachedItem(itemId);
+    return { demoted: false, removed: true };
+  }
+  if (orphanSongIds.length === 0) {
+    // Nothing to remove (shouldn't happen for a "remove album" flow — the
+    // caller should have confirmed survivors > 0 first — but be defensive).
+    return { demoted: false, removed: false };
+  }
+
+  // Snapshot song metadata for file deletion BEFORE the store removes rows.
+  const orphanSnapshot: CachedSongMeta[] = [];
+  for (const sid of orphanSongIds) {
+    const s = musicCacheStore.getState().cachedSongs[sid];
+    if (s) orphanSnapshot.push(s);
+  }
+
+  // Remove each orphan edge. Positions shift after each removal, so we
+  // re-read the current index every iteration.
+  for (const songId of orphanSongIds) {
+    const current = musicCacheStore.getState().cachedItems[itemId];
+    if (!current) break;
+    const idx = current.songIds.indexOf(songId);
+    if (idx < 0) continue;
+    musicCacheStore.getState().removeCachedItemSong(itemId, idx + 1);
+    // `removeCachedItemSong` has already deleted the cached_songs row and
+    // decremented refcount-via-COUNT. Update the in-memory mirrors.
+    trackToItems.delete(songId);
+    trackUriMap.delete(songId);
+  }
+
+  // Delete orphan files (best-effort).
+  for (const song of orphanSnapshot) {
+    const file = resolveSongFile(song);
+    if (file.exists) {
+      try { file.delete(); } catch { /* best-effort */ }
+    }
+  }
+
+  resumeIfSpaceAvailable();
+  return { demoted: true, removed: false };
 }
 
 /**

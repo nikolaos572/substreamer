@@ -30,6 +30,7 @@ import { sleepTimerStore } from '../store/sleepTimerStore';
 import { serverInfoStore } from '../store/serverInfoStore';
 import { shuffleArray } from '../utils/arrayHelpers';
 import { addCompletedScrobble, sendNowPlaying } from './scrobbleService';
+import { registerPlayerPlayStatListener } from './playStatsService';
 import { getCachedImageUri } from './imageCacheService';
 import { getLocalTrackUri, waitForTrackMapsReady } from './musicCacheService';
 import {
@@ -1327,6 +1328,11 @@ export function applyLocalPlayToPlayer(songId: string, now: string): void {
     });
   }
 }
+
+// Wire the ephemeral player-state updater into playStatsService. Inverts
+// the dependency so `playStatsService` no longer imports `playerService`,
+// breaking the playerService ↔ scrobbleService ↔ playStatsService cycle.
+registerPlayerPlayStatListener(applyLocalPlayToPlayer);
 
 export async function shuffleQueue(): Promise<void> {
   if (currentChildQueue.length < 2) return;
