@@ -42,6 +42,10 @@ export interface FavoritesState {
   fetchStarred: (opts?: { prefetchCovers?: boolean }) => Promise<void>;
   /** Set an optimistic override for a single item. */
   setOverride: (id: string, starred: boolean) => void;
+  /** Eagerly bump local play stats for a just-scrobbled song and its album
+   *  when they appear in the starred lists. No-op for either half that
+   *  isn't present. */
+  applyLocalPlay: (songId: string, albumId: string | undefined, now: string) => void;
   /** Clear all favorites data */
   clearFavorites: () => void;
 }
@@ -106,6 +110,41 @@ export const favoritesStore = create<FavoritesState>()(
 
       setOverride: (id: string, starred: boolean) =>
         set((s) => ({ overrides: { ...s.overrides, [id]: starred } })),
+
+      applyLocalPlay: (songId, albumId, now) => {
+        const current = get();
+        let songs: Child[] = current.songs;
+        let albums: AlbumID3[] = current.albums;
+        let changed = false;
+
+        const songIdx = current.songs.findIndex((s) => s.id === songId);
+        if (songIdx !== -1) {
+          const oldSong = current.songs[songIdx];
+          const nextSong: Child = {
+            ...oldSong,
+            playCount: (oldSong.playCount ?? 0) + 1,
+            played: now,
+          };
+          songs = current.songs.map((s, i) => (i === songIdx ? nextSong : s));
+          changed = true;
+        }
+
+        if (albumId) {
+          const albumIdx = current.albums.findIndex((a) => a.id === albumId);
+          if (albumIdx !== -1) {
+            const oldAlbum = current.albums[albumIdx];
+            const nextAlbum: AlbumID3 = {
+              ...oldAlbum,
+              playCount: (oldAlbum.playCount ?? 0) + 1,
+              played: now,
+            };
+            albums = current.albums.map((a, i) => (i === albumIdx ? nextAlbum : a));
+            changed = true;
+          }
+        }
+
+        if (changed) set({ songs, albums });
+      },
 
       clearFavorites: () =>
         set({

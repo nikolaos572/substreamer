@@ -30,6 +30,10 @@ export interface PlaylistDetailState {
   reorderTracks: (id: string, fromIndex: number, toIndex: number) => void;
   /** Remove a track from the cached playlist entry by index. */
   removeTrack: (id: string, trackIndex: number) => void;
+  /** Eagerly bump local play stats for a just-scrobbled song across every
+   *  cached playlist that contains it (a song can appear in multiple
+   *  playlists). No-op for playlists that don't reference the song. */
+  applyLocalPlay: (songId: string, now: string) => void;
   /** Remove a playlist entry from the cache entirely. */
   removePlaylist: (id: string) => void;
   /** Clear all cached playlist details. */
@@ -114,6 +118,35 @@ export const playlistDetailStore = create<PlaylistDetailState>()(
             },
           },
         });
+      },
+
+      applyLocalPlay: (songId, now) => {
+        const current = get().playlists;
+        let touched = false;
+        const next: Record<string, PlaylistDetailEntry> = {};
+        for (const [id, entry] of Object.entries(current)) {
+          const entries = entry.playlist.entry ?? [];
+          let matched = false;
+          const updatedEntries = entries.map((track) => {
+            if (track.id !== songId) return track;
+            matched = true;
+            return {
+              ...track,
+              playCount: (track.playCount ?? 0) + 1,
+              played: now,
+            };
+          });
+          if (matched) {
+            touched = true;
+            next[id] = {
+              ...entry,
+              playlist: { ...entry.playlist, entry: updatedEntries },
+            };
+          } else {
+            next[id] = entry;
+          }
+        }
+        if (touched) set({ playlists: next });
       },
 
       removePlaylist: (id) => {

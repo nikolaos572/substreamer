@@ -53,6 +53,9 @@ export interface AlbumLibraryState {
    * refetch.
    */
   upsertAlbums: (albums: AlbumID3[]) => void;
+  /** Eagerly bump local play stats on the matching album in the library list.
+   *  No-op when the album isn't present or `albumId` is undefined. */
+  applyLocalPlay: (albumId: string | undefined, now: string) => void;
   /** Clear all album data */
   clearAlbums: () => void;
 }
@@ -167,6 +170,21 @@ export const albumLibraryStore = create<AlbumLibraryState>()(
           albums.map((a) => ({ id: a.id, serverRating: a.userRating ?? 0 })),
         );
         set({ albums: next });
+      },
+
+      applyLocalPlay: (albumId, now) => {
+        if (!albumId) return;
+        const current = get().albums;
+        const idx = current.findIndex((a) => a.id === albumId);
+        if (idx === -1) return;
+        const oldAlbum = current[idx];
+        const nextAlbum: AlbumID3 = {
+          ...oldAlbum,
+          playCount: (oldAlbum.playCount ?? 0) + 1,
+          played: now,
+        };
+        const nextAlbums = current.map((a, i) => (i === idx ? nextAlbum : a));
+        set({ albums: nextAlbums });
       },
 
       clearAlbums: () =>

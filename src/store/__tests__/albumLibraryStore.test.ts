@@ -198,4 +198,56 @@ describe('albumLibraryStore', () => {
       expect(state.lastFetchedAt).toBeNull();
     });
   });
+
+  describe('applyLocalPlay', () => {
+    const now = '2026-04-22T10:00:00.000Z';
+
+    it('bumps playCount + played on the matching album', () => {
+      albumLibraryStore.setState({
+        albums: [
+          { ...makeAlbum('a1', 'X', 'Y'), playCount: 3 } as any,
+          makeAlbum('a2', 'Z', 'W'),
+        ],
+      });
+
+      albumLibraryStore.getState().applyLocalPlay('a1', now);
+
+      const updated = albumLibraryStore.getState().albums[0] as any;
+      expect(updated.playCount).toBe(4);
+      expect(updated.played).toBe(now);
+      expect((albumLibraryStore.getState().albums[1] as any).playCount).toBeUndefined();
+    });
+
+    it('treats undefined playCount as 0 before incrementing', () => {
+      albumLibraryStore.setState({
+        albums: [makeAlbum('a1', 'X', 'Y')],
+      });
+
+      albumLibraryStore.getState().applyLocalPlay('a1', now);
+
+      const updated = albumLibraryStore.getState().albums[0] as any;
+      expect(updated.playCount).toBe(1);
+      expect(updated.played).toBe(now);
+    });
+
+    it('is a no-op when albumId is undefined', () => {
+      const albums = [makeAlbum('a1', 'X', 'Y')];
+      albumLibraryStore.setState({ albums });
+      const before = albumLibraryStore.getState().albums;
+
+      albumLibraryStore.getState().applyLocalPlay(undefined, now);
+
+      expect(albumLibraryStore.getState().albums).toBe(before);
+    });
+
+    it('is a no-op when the album is not in the library', () => {
+      const albums = [makeAlbum('a1', 'X', 'Y')];
+      albumLibraryStore.setState({ albums });
+      const before = albumLibraryStore.getState().albums;
+
+      albumLibraryStore.getState().applyLocalPlay('unknown', now);
+
+      expect(albumLibraryStore.getState().albums).toBe(before);
+    });
+  });
 });

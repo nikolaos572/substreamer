@@ -1283,6 +1283,51 @@ export async function cyclePlaybackRate(): Promise<void> {
  * Shuffle the current queue using Fisher-Yates, then reload RNTP and
  * start playback from the first track of the new order.
  */
+/**
+ * Eagerly bump local play stats for a just-scrobbled song on the ephemeral
+ * player copies. Updates every matching entry in the module-scope
+ * `currentChildQueue` (repeat-one and queues that include the song
+ * multiple times get all entries bumped) and the `playerStore.currentTrack`
+ * copy if it's the scrobbled song.
+ *
+ * Called from `playStatsService.applyLocalPlay` as part of the scrobble-time
+ * fan-out so the player-view info panel reflects the new count immediately,
+ * before any server round-trip.
+ */
+export function applyLocalPlayToPlayer(songId: string, now: string): void {
+  // Walk currentChildQueue and replace any matching entries. Repeat-one
+  // means the same song may appear once but a user could have added the
+  // same song multiple times manually; cover both.
+  for (let i = 0; i < currentChildQueue.length; i++) {
+    const t = currentChildQueue[i];
+    if (t.id === songId) {
+      currentChildQueue[i] = {
+        ...t,
+        playCount: (t.playCount ?? 0) + 1,
+        played: now,
+      };
+    }
+  }
+
+  // Update the store's currentTrack if it's the scrobbled song — this is
+  // what AlbumInfoContent in the player view reads from, so the info
+  // panel must see the bump immediately on repeat-one and on the brief
+  // window between PlaybackEndedWithReason and PlaybackActiveTrackChanged.
+  // Use setState directly (not setCurrentTrack) to avoid clobbering the
+  // existing currentTrackIndex — setCurrentTrack resets it to null when
+  // the caller omits the second argument.
+  const cur = playerStore.getState().currentTrack;
+  if (cur && cur.id === songId) {
+    playerStore.setState({
+      currentTrack: {
+        ...cur,
+        playCount: (cur.playCount ?? 0) + 1,
+        played: now,
+      },
+    });
+  }
+}
+
 export async function shuffleQueue(): Promise<void> {
   if (currentChildQueue.length < 2) return;
 
