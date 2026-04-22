@@ -1366,6 +1366,61 @@ describe('syncCachedItemTracks', () => {
     expect(musicCacheStore.getState().downloadQueue).toHaveLength(1);
     expect(musicCacheStore.getState().downloadQueue[0].totalSongs).toBe(2);
   });
+
+  describe('cover-art reconciliation (offline items only)', () => {
+    beforeEach(() => {
+      (cacheAllSizes as jest.Mock).mockClear();
+      (cacheEntityCoverArt as jest.Mock).mockClear();
+    });
+
+    it('triggers cacheAllSizes for the offline item and cacheEntityCoverArt for tracks when item exists', () => {
+      seedSong(makeCachedSong('s1'));
+      seedItem('pl-1', { type: 'playlist', songIds: ['s1'], coverArtId: 'pl-cover' });
+
+      const newSongs = [makeChild('s1'), makeChild('s2')];
+      syncCachedItemTracks('pl-1', newSongs);
+
+      // Item's own cover art reconciled.
+      expect(cacheAllSizes).toHaveBeenCalledWith('pl-cover');
+      // Per-track covers reconciled (idempotent no-op when complete).
+      expect(cacheEntityCoverArt).toHaveBeenCalledWith(newSongs);
+    });
+
+    it('runs even when no track changes are detected (heals missing/zero-byte covers)', () => {
+      seedSong(makeCachedSong('s1'));
+      seedItem('pl-1', { type: 'playlist', songIds: ['s1'], coverArtId: 'pl-cover' });
+
+      // Track list is identical — no re-enqueue should occur, but covers
+      // should still be reconciled.
+      syncCachedItemTracks('pl-1', [makeChild('s1')]);
+
+      expect(musicCacheStore.getState().downloadQueue).toHaveLength(0);
+      expect(cacheAllSizes).toHaveBeenCalledWith('pl-cover');
+      expect(cacheEntityCoverArt).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT trigger any cover reconciliation for a non-offline item', () => {
+      // No seedItem for 'missing' — this item is not in cachedItems.
+      syncCachedItemTracks('missing', [makeChild('t1', { coverArt: 'c1' })]);
+
+      // The scope guard (line 1425 in musicCacheService) short-circuits
+      // before reaching the cover reconciliation. Prevents library-wide
+      // fan-out that users explicitly don't want.
+      expect(cacheAllSizes).not.toHaveBeenCalled();
+      expect(cacheEntityCoverArt).not.toHaveBeenCalled();
+    });
+
+    it('skips cacheAllSizes when the item has no coverArtId but still reconciles per-song covers', () => {
+      seedSong(makeCachedSong('s1'));
+      seedItem('pl-2', { type: 'playlist', songIds: ['s1'] /* no coverArtId */ });
+
+      const newSongs = [makeChild('s1')];
+      syncCachedItemTracks('pl-2', newSongs);
+
+      expect(cacheAllSizes).not.toHaveBeenCalled();
+      expect(cacheEntityCoverArt).toHaveBeenCalledWith(newSongs);
+    });
+  });
 });
 
 /* ------------------------------------------------------------------ */

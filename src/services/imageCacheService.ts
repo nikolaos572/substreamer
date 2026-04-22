@@ -250,10 +250,18 @@ export async function reconcileImageCacheAsync(): Promise<void> {
       if (!match) continue;
       const size = Number(match[1]);
       const ext = match[2];
-      seenOnDisk.add(diskKey(coverArtId, size));
-      if (dbHasCachedImage(coverArtId, size)) continue;
       const file = new File(subDir, name);
       if (!file.exists) continue;
+      // A zero-byte finalised file is the signature of a crashed write
+      // (e.g. ENOSPC between rename and content write, or a kill after
+      // the move but before the bytes landed). RNImage renders nothing
+      // for it, so delete it here — Pass 2 then drops any stale DB row.
+      if ((file.size ?? 0) === 0) {
+        try { file.delete(); } catch { /* best-effort */ }
+        continue;
+      }
+      seenOnDisk.add(diskKey(coverArtId, size));
+      if (dbHasCachedImage(coverArtId, size)) continue;
       newRows.push({
         coverArtId,
         size,
@@ -278,10 +286,11 @@ export async function reconcileImageCacheAsync(): Promise<void> {
     );
   }
 
-  // --- Pass 2: SQL -> FS (drop rows whose files are gone) ---
-  // Walk the DB's view; delete any row whose file wasn't observed on disk.
-  // Guarded by the same mass-missing heuristic — a temporarily-missing
-  // cache directory shouldn't wipe the table.
+  // --- Pass 2: SQL -> FS (drop rows whose files are gone or empty) ---
+  // Walk the DB's view; delete any row whose file wasn't observed on disk
+  // or whose file exists but is zero bytes (crashed write). Guarded by
+  // the same mass-missing heuristic — a temporarily-missing cache
+  // directory shouldn't wipe the table.
   if (!isMassInsert) {
     const post = listCachedImagesForBrowser('all');
     let droppedCount = 0;
@@ -290,7 +299,16 @@ export async function reconcileImageCacheAsync(): Promise<void> {
         if (seenOnDisk.has(diskKey(entry.coverArtId, file.size))) continue;
         const subDir = new Directory(dir, entry.coverArtId);
         const onDisk = new File(subDir, `${file.size}.${file.ext}`);
-        if (onDisk.exists) continue;
+        if (onDisk.exists) {
+          // Belt-and-braces: if Pass 1 missed a zero-byte file (e.g.
+          // listDirectoryAsync failed for that subdir), catch it here.
+          if ((onDisk.size ?? 0) === 0) {
+            try { onDisk.delete(); } catch { /* best-effort */ }
+            deleteCachedImageVariant(entry.coverArtId, file.size);
+            droppedCount++;
+          }
+          continue;
+        }
         deleteCachedImageVariant(entry.coverArtId, file.size);
         droppedCount++;
       }
@@ -412,6 +430,29 @@ export function getCachedImageUri(
 export function evictUriCacheEntry(coverArtId: string, size: number): void {
   coverArtId = stripCoverArtSuffix(coverArtId);
   uriCache.delete(uriCacheKey(coverArtId, size));
+}
+
+/**
+ * Delete a single cached variant: file on disk, DB row, and in-memory
+ * Map entry. Used by CachedImage when an `onError` indicates the local
+ * file is broken and a re-download is needed. Scoped to one size —
+ * sibling variants for the same coverArt may still be healthy.
+ */
+export function deleteCachedVariant(coverArtId: string, size: number): void {
+  if (!coverArtId) return;
+  coverArtId = stripCoverArtSuffix(coverArtId);
+  uriCache.delete(uriCacheKey(coverArtId, size));
+  const subDir = new Directory(ensureCacheDir(), coverArtId);
+  if (subDir.exists) {
+    for (const ext of EXTENSIONS) {
+      const file = new File(subDir, `${size}${ext}`);
+      if (file.exists) {
+        try { file.delete(); } catch { /* best-effort */ }
+      }
+    }
+  }
+  deleteCachedImageVariant(coverArtId, size);
+  imageCacheStore.getState().recalculateFromDb();
 }
 
 /* ------------------------------------------------------------------ */

@@ -15,6 +15,12 @@ const mockGetDirectorySizeAsync = jest.fn();
 
 const mockFileExistsMap = new Map<string, boolean>();
 const mockDirExistsMap = new Map<string, boolean>();
+// Per-file sizes for zero-byte / full-size scenarios. Absent entries
+// default to 100 (non-empty) to preserve existing test expectations.
+const mockFileSizeMap = new Map<string, number>();
+// Tracks every File.delete() invocation (by internal `_name`) so tests
+// can assert specific files were removed during reconciliation.
+const mockFileDeleteCalls = new Set<string>();
 // When non-null, MockDirectory.create() throws this Error. Used to exercise
 // the catch handler in initImageCache (Fix 3 — module-scope crash hardening).
 let mockDirCreateError: Error | null = null;
@@ -34,9 +40,13 @@ jest.mock('expo-file-system', () => {
       }
     }
     get exists() { return mockFileExistsMap.get(this._name) ?? false; }
-    get size() { return 100; }
+    get size() { return mockFileSizeMap.get(this._name) ?? 100; }
     write = jest.fn();
-    delete = jest.fn();
+    delete = jest.fn(() => {
+      mockFileDeleteCalls.add(this._name);
+      mockFileExistsMap.delete(this._name);
+      mockFileSizeMap.delete(this._name);
+    });
     move = jest.fn((dest: MockFile) => {
       mockFileExistsMap.set(dest._name, true);
       mockFileExistsMap.delete(this._name);
@@ -198,12 +208,14 @@ import {
   deferredImageCacheInit,
   getCachedImageUri,
   evictUriCacheEntry,
+  deleteCachedVariant,
   cacheAllSizes,
   getImageCacheStats,
   clearImageCache,
   listCachedImagesAsync,
   deleteCachedImage,
   refreshCachedImage,
+  reconcileImageCacheAsync,
 } from '../imageCacheService';
 
 const { fetch: mockFetch } = jest.requireMock('expo/fetch') as { fetch: jest.Mock };
@@ -234,6 +246,8 @@ function fileMockName(coverArtId: string, fileName: string): string {
 beforeEach(() => {
   mockFileExistsMap.clear();
   mockDirExistsMap.clear();
+  mockFileSizeMap.clear();
+  mockFileDeleteCalls.clear();
   mockDbRows.clear();
   mockListDirectoryAsync.mockReset();
   mockGetDirectorySizeAsync.mockReset();
@@ -936,5 +950,126 @@ describe('resolveAllWaiters with pending resolvers (line 259)', () => {
 
     // Unblock the fetch so it doesn't leak
     fetchResolve!();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  reconcileImageCacheAsync — zero-byte detection                    */
+/* ------------------------------------------------------------------ */
+
+describe('reconcileImageCacheAsync — zero-byte detection', () => {
+  /** Internal key helper matching the mock File constructor chain. */
+  function fileName(coverArtId: string, size: number, ext = 'jpg'): string {
+    return fileMockName(coverArtId, `${size}.${ext}`);
+  }
+
+  it('Pass 1: deletes zero-byte files on disk and skips inserting them into the DB', async () => {
+    mockListDirectoryAsync.mockImplementation(async (uri: string) => {
+      if (uri.endsWith('image-cache')) return ['album1'];
+      if (uri.endsWith('album1')) return ['600.jpg'];
+      return [];
+    });
+    mockFileExistsMap.set(fileName('album1', 600), true);
+    mockFileSizeMap.set(fileName('album1', 600), 0);
+
+    await reconcileImageCacheAsync();
+
+    // Zero-byte file was deleted…
+    expect(mockFileDeleteCalls.has(fileName('album1', 600))).toBe(true);
+    // …and never inserted into the DB.
+    expect(mockBulkInsertCachedImages).not.toHaveBeenCalled();
+    expect(mockDbRows.size).toBe(0);
+  });
+
+  it('Pass 1: preserves healthy files and inserts them as before', async () => {
+    mockListDirectoryAsync.mockImplementation(async (uri: string) => {
+      if (uri.endsWith('image-cache')) return ['album1'];
+      if (uri.endsWith('album1')) return ['600.jpg'];
+      return [];
+    });
+    mockFileExistsMap.set(fileName('album1', 600), true);
+    mockFileSizeMap.set(fileName('album1', 600), 12345);
+
+    await reconcileImageCacheAsync();
+
+    expect(mockFileDeleteCalls.has(fileName('album1', 600))).toBe(false);
+    expect(mockBulkInsertCachedImages).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ coverArtId: 'album1', size: 600, bytes: 12345 })]),
+    );
+  });
+
+  it('Pass 2: drops a DB row whose file exists but is zero bytes', async () => {
+    // Pass 1 sees nothing on disk for the coverArtId this test targets.
+    mockListDirectoryAsync.mockImplementation(async () => []);
+    // DB row is present; file on disk exists but is zero bytes.
+    seedDbRow({ coverArtId: 'album2', size: 600, ext: 'jpg' });
+    mockFileExistsMap.set(fileName('album2', 600), true);
+    mockFileSizeMap.set(fileName('album2', 600), 0);
+
+    await reconcileImageCacheAsync();
+
+    // The zero-byte file was deleted…
+    expect(mockFileDeleteCalls.has(fileName('album2', 600))).toBe(true);
+    // …and the DB row was removed via the persistence helper.
+    expect(mockDeleteCachedImageVariant).toHaveBeenCalledWith('album2', 600);
+    expect(mockDbRows.has('album2::600')).toBe(false);
+  });
+
+  it('Pass 2: existing behaviour still drops rows whose files are missing', async () => {
+    mockListDirectoryAsync.mockImplementation(async () => []);
+    seedDbRow({ coverArtId: 'album3', size: 600, ext: 'jpg' });
+    // File doesn't exist on disk.
+    mockFileExistsMap.set(fileName('album3', 600), false);
+
+    await reconcileImageCacheAsync();
+
+    expect(mockDeleteCachedImageVariant).toHaveBeenCalledWith('album3', 600);
+    expect(mockDbRows.has('album3::600')).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  deleteCachedVariant — targeted file + DB removal                   */
+/* ------------------------------------------------------------------ */
+
+describe('deleteCachedVariant', () => {
+  /** Internal key helper matching the mock File constructor chain. */
+  function fileName(coverArtId: string, size: number, ext = 'jpg'): string {
+    return fileMockName(coverArtId, `${size}.${ext}`);
+  }
+
+  it('deletes the on-disk file for the requested size and evicts the DB row', () => {
+    seedDbRow({ coverArtId: 'album1', size: 600, ext: 'jpg' });
+    mockFileExistsMap.set(fileName('album1', 600), true);
+    mockFileSizeMap.set(fileName('album1', 600), 1000);
+
+    deleteCachedVariant('album1', 600);
+
+    expect(mockFileDeleteCalls.has(fileName('album1', 600))).toBe(true);
+    expect(mockDeleteCachedImageVariant).toHaveBeenCalledWith('album1', 600);
+    expect(mockRecalculateFromDb).toHaveBeenCalled();
+  });
+
+  it('leaves sibling variants untouched', () => {
+    seedDbRow({ coverArtId: 'album1', size: 300, ext: 'jpg' });
+    seedDbRow({ coverArtId: 'album1', size: 600, ext: 'jpg' });
+    mockFileExistsMap.set(fileName('album1', 300), true);
+    mockFileExistsMap.set(fileName('album1', 600), true);
+
+    deleteCachedVariant('album1', 600);
+
+    // Only the 600 file was deleted.
+    expect(mockFileDeleteCalls.has(fileName('album1', 600))).toBe(true);
+    expect(mockFileDeleteCalls.has(fileName('album1', 300))).toBe(false);
+    // Only the 600 DB row was removed.
+    expect(mockDeleteCachedImageVariant).toHaveBeenCalledTimes(1);
+    expect(mockDeleteCachedImageVariant).toHaveBeenCalledWith('album1', 600);
+    expect(mockDbRows.has('album1::300')).toBe(true);
+  });
+
+  it('is a no-op for empty coverArtId', () => {
+    deleteCachedVariant('', 600);
+    expect(mockDeleteCachedImageVariant).not.toHaveBeenCalled();
+    expect(mockFileDeleteCalls.size).toBe(0);
   });
 });

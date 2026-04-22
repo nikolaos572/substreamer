@@ -1431,6 +1431,18 @@ export function syncCachedItemTracks(
   // Removes + reorders via the playlist sync.
   syncCachedPlaylistTracks(itemId, newTrackIds);
 
+  // Belt-and-braces cover-art reconciliation for this offline item only.
+  // `cacheAllSizes` and `cacheEntityCoverArt` are idempotent — instant
+  // no-op when every variant is already on disk (imageCacheService.ts:447),
+  // refills only what's missing (e.g. a variant dropped by the
+  // reconcileImageCacheAsync zero-byte pass, or an OS cache eviction).
+  // This check never walks the full library — only this single cached
+  // item and its tracks.
+  if (cached.coverArtId) {
+    cacheAllSizes(cached.coverArtId).catch(() => { /* non-critical */ });
+  }
+  cacheEntityCoverArt(newSongs);
+
   const hasNewTracks = newSongs.some((t) => !cachedIdSet.has(t.id));
   if (!hasNewTracks) return;
 
@@ -1673,8 +1685,29 @@ function syncStarredSongsDownload(): void {
   }
 }
 
-// Auto-sync starred songs whenever the favorites song list changes.
-// Guard: skip if track maps haven't been populated yet.
+/* ------------------------------------------------------------------ */
+/*  Implicit cross-store coupling: favoritesStore -> musicCacheService */
+/* ------------------------------------------------------------------ */
+/*
+ * When the favorites song list changes (user stars/unstars a track, or
+ * a library sync arrives with new starred data), automatically reconcile
+ * the local `__starred__` virtual playlist if the user has it marked
+ * offline. Nothing happens for users who haven't opted in — the work
+ * is gated inside syncStarredSongsDownload() by a cachedItems membership
+ * check before any download / deletion is triggered.
+ *
+ * One-way coupling: music-cache subscribes to favorites; favorites
+ * never observes the music-cache. No cycle.
+ *
+ * Guards:
+ *   - Identity compare on `state.songs`: skip if the array reference
+ *     didn't change (re-renders, unrelated field changes).
+ *   - `trackMapsReady`: skip during the startup window when
+ *     trackUriMap / trackToItems are still being populated from SQL.
+ *     Otherwise we'd run syncCachedItemTracks against empty maps and
+ *     treat every song as "missing locally", causing a re-download
+ *     storm of already-cached songs on boot.
+ */
 favoritesStore.subscribe((state, prev) => {
   if (state.songs === prev.songs) return;
   if (!trackMapsReady) return;
