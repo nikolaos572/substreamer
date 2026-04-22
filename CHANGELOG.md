@@ -1,5 +1,17 @@
 # Changelog
 
+## [8.0.55] - 2026-04-22
+
+- ci: update coverage badge [skip ci]
+- chore: gitignore .claude/scheduled_tasks.lock runtime lockfile
+- ci: update coverage badge [skip ci]
+- fix(expanded-player): reorder right-panel toggles to queue/info/lyrics to match PlayerTabBar
+- fix(album-info): theme-aware skeleton fill so bars are visible in light mode
+- feat(downloads): partial-album state, top-up, filter, cache-browser UI
+- feat(scrobble): update play count + last-played locally on scrobble
+- ci: update coverage badge [skip ci]
+- fix(media): recover blank album art from broken cached images
+- ci: update coverage badge [skip ci]
 ## [8.0.54] - 2026-04-21
 
 - fix(palette): 2-stop gradient on phone layouts — secondary → theme bg
