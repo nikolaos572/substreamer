@@ -20,6 +20,8 @@
 
 import { create } from 'zustand';
 
+import { type AlbumID3, type Child, type Playlist } from 'subsonic-api';
+
 import {
   clearAllMusicCacheRows,
   countSongRefs,
@@ -535,4 +537,85 @@ export const musicCacheStore = create<MusicCacheState>()((set, get) => ({
  */
 export function clearMusicCacheTables(): void {
   clearAllMusicCacheRows();
+}
+
+/* ------------------------------------------------------------------ */
+/*  Envelope accessors                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Memoisation cache keyed by `raw_json` string identity. Storing by the
+ * serialised source means we don't have to invalidate when a row is
+ * upserted: the new `rawJson` string is a different key, so the next
+ * read reparses. Old entries age out naturally when their key string
+ * becomes unreachable from the store (GC).
+ */
+const songEnvelopeCache = new WeakMap<object, Child>();
+const itemEnvelopeCache = new WeakMap<object, AlbumID3 | Playlist>();
+// Strings aren't valid WeakMap keys — wrap them in a shared object per
+// `rawJson` value so the memoisation has something to hang onto.
+const songWrappers = new Map<string, { raw: string }>();
+const itemWrappers = new Map<string, { raw: string }>();
+
+function wrapSongRaw(raw: string): { raw: string } {
+  let w = songWrappers.get(raw);
+  if (!w) {
+    w = { raw };
+    songWrappers.set(raw, w);
+  }
+  return w;
+}
+
+function wrapItemRaw(raw: string): { raw: string } {
+  let w = itemWrappers.get(raw);
+  if (!w) {
+    w = { raw };
+    itemWrappers.set(raw, w);
+  }
+  return w;
+}
+
+/**
+ * Return the full Subsonic `Child` envelope for a cached song, or `null`
+ * when the row has no envelope yet (pre-Migration-18 rows that haven't
+ * been backfilled, or a malformed `raw_json` value).
+ *
+ * Lazy parse — the first call for a given `raw_json` string parses it
+ * once; subsequent calls return the same object via WeakMap memoisation.
+ */
+export function getSongEnvelope(songId: string): Child | null {
+  const row = musicCacheStore.getState().cachedSongs[songId];
+  if (!row?.rawJson) return null;
+  const wrapper = wrapSongRaw(row.rawJson);
+  const cached = songEnvelopeCache.get(wrapper);
+  if (cached) return cached;
+  try {
+    const parsed = JSON.parse(row.rawJson) as Child;
+    songEnvelopeCache.set(wrapper, parsed);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Return the full Subsonic `AlbumID3` / `Playlist` envelope for a cached
+ * item, or `null` when the row has no envelope (favorites/song intents,
+ * or pre-Migration-19 rows that haven't been backfilled).
+ */
+export function getCachedItemEnvelope(
+  itemId: string,
+): AlbumID3 | Playlist | null {
+  const row = musicCacheStore.getState().cachedItems[itemId];
+  if (!row?.rawJson) return null;
+  const wrapper = wrapItemRaw(row.rawJson);
+  const cached = itemEnvelopeCache.get(wrapper);
+  if (cached) return cached;
+  try {
+    const parsed = JSON.parse(row.rawJson) as AlbumID3 | Playlist;
+    itemEnvelopeCache.set(wrapper, parsed);
+    return parsed;
+  } catch {
+    return null;
+  }
 }

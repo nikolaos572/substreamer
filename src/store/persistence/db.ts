@@ -129,6 +129,13 @@ try {
 
   // Music-cache tables — FK graph: cached_item_songs.item_id → cached_items
   // (ON DELETE CASCADE), cached_item_songs.song_id → cached_songs.
+  // `raw_json` preserves the full Subsonic `Child` envelope alongside the
+  // indexed/hot columns. Columns above are for sort/filter/display fast paths;
+  // `raw_json` is the source of truth for any field a future feature might
+  // need (discNumber, track, genre, MusicBrainz id, ReplayGain, contributors,
+  // …). Never drop fields from the envelope on write — see CLAUDE.md /
+  // plan `new-issue-to-look-distributed-quiche.md`. Nullable initially to
+  // keep Migration 17 a pure schema change; Migration 18 backfills.
   db.execSync(
     `CREATE TABLE IF NOT EXISTS cached_songs (
        song_id TEXT PRIMARY KEY NOT NULL,
@@ -144,12 +151,18 @@ try {
        bit_depth INTEGER,
        sampling_rate INTEGER,
        format_captured_at INTEGER NOT NULL,
-       downloaded_at INTEGER NOT NULL
+       downloaded_at INTEGER NOT NULL,
+       raw_json TEXT
      );`,
   );
   db.execSync(
     'CREATE INDEX IF NOT EXISTS idx_cached_songs_album_id ON cached_songs(album_id);',
   );
+  // `raw_json` preserves the full Subsonic `AlbumID3` / `Playlist` envelope
+  // for album and playlist items. Nullable: `favorites` and `song`-intent
+  // rows have no natural envelope (favorites is an app-local virtual
+  // playlist; `song` intent refers to a Child already stored in
+  // `cached_songs.raw_json`).
   db.execSync(
     `CREATE TABLE IF NOT EXISTS cached_items (
        item_id TEXT PRIMARY KEY NOT NULL,
@@ -160,7 +173,8 @@ try {
        expected_song_count INTEGER NOT NULL,
        parent_album_id TEXT,
        last_sync_at INTEGER NOT NULL,
-       downloaded_at INTEGER NOT NULL
+       downloaded_at INTEGER NOT NULL,
+       raw_json TEXT
      );`,
   );
   db.execSync(

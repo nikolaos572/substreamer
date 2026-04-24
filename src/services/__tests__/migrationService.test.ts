@@ -58,6 +58,8 @@ jest.mock('../../store/persistence/musicCacheTables', () => ({
   readPragma: jest.fn(() => '1'),
   insertCachedItemSong: jest.fn(),
   upsertCachedItem: jest.fn(),
+  // Task 17 schema helper.
+  addColumnIfMissing: jest.fn(() => false),
 }));
 
 // Task #14 consults albumDetailStore for albumId resolution when a playlist

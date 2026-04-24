@@ -901,3 +901,89 @@ describe('clearMusicCacheTables', () => {
     expect(mockClearAllMusicCacheRows).toHaveBeenCalledTimes(1);
   });
 });
+
+/* ------------------------------------------------------------------ */
+/*  Envelope accessors                                                 */
+/* ------------------------------------------------------------------ */
+
+describe('getSongEnvelope / getCachedItemEnvelope', () => {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const storeModule = require('../musicCacheStore');
+  const { getSongEnvelope, getCachedItemEnvelope } = storeModule;
+  /* eslint-enable @typescript-eslint/no-require-imports */
+
+  beforeEach(() => {
+    musicCacheStore.setState({ cachedSongs: {}, cachedItems: {} } as any);
+  });
+
+  it('returns null when the song row is missing', () => {
+    expect(getSongEnvelope('nope')).toBeNull();
+  });
+
+  it('returns null when raw_json is absent', () => {
+    musicCacheStore.setState({
+      cachedSongs: {
+        s1: makeSong('s1'), // no rawJson
+      } as any,
+    });
+    expect(getSongEnvelope('s1')).toBeNull();
+  });
+
+  it('parses and caches the Child envelope; repeated calls return the same object', () => {
+    musicCacheStore.setState({
+      cachedSongs: {
+        s1: { ...makeSong('s1'), rawJson: '{"id":"s1","isDir":false,"title":"T","track":7,"genre":"Rock"}' },
+      } as any,
+    });
+    const a = getSongEnvelope('s1');
+    const b = getSongEnvelope('s1');
+    expect(a).toBeTruthy();
+    expect(a).toBe(b); // memoised identity
+    expect(a.track).toBe(7);
+    expect(a.genre).toBe('Rock');
+  });
+
+  it('returns null on malformed JSON', () => {
+    musicCacheStore.setState({
+      cachedSongs: {
+        s1: { ...makeSong('s1'), rawJson: '{not-json' },
+      } as any,
+    });
+    expect(getSongEnvelope('s1')).toBeNull();
+  });
+
+  it('returns null for an item with no envelope', () => {
+    musicCacheStore.setState({
+      cachedItems: {
+        '__starred__': { itemId: '__starred__', type: 'favorites' } as any,
+      },
+    });
+    expect(getCachedItemEnvelope('__starred__')).toBeNull();
+  });
+
+  it('parses and caches the AlbumID3 / Playlist envelope', () => {
+    musicCacheStore.setState({
+      cachedItems: {
+        a1: {
+          itemId: 'a1',
+          type: 'album',
+          rawJson: '{"id":"a1","name":"Album1","songCount":10,"genre":"Jazz"}',
+        } as any,
+      },
+    });
+    const env = getCachedItemEnvelope('a1');
+    expect(env).toBeTruthy();
+    expect((env as any).genre).toBe('Jazz');
+    // Cached — same object identity on second call.
+    expect(getCachedItemEnvelope('a1')).toBe(env);
+  });
+
+  it('returns null on malformed item JSON', () => {
+    musicCacheStore.setState({
+      cachedItems: {
+        a1: { itemId: 'a1', type: 'album', rawJson: 'not-json' } as any,
+      },
+    });
+    expect(getCachedItemEnvelope('a1')).toBeNull();
+  });
+});

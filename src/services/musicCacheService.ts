@@ -686,12 +686,18 @@ export async function enqueueAlbumDownload(albumId: string): Promise<void> {
     const haveIds = new Set(existing.songIds);
     const missingSongs = album.song.filter((s) => s.id && !haveIds.has(s.id));
 
+    // We just fetched a fresh album — carry its envelope into the row so
+    // any previously stored thin/null `rawJson` gets upgraded.
+    const { song: _albumSongsIgnored, ...albumMeta } = album;
+    const refreshedEnvelope = JSON.stringify(albumMeta);
+
     if (missingSongs.length === 0) {
       // No missing songs — refresh `expectedSongCount` so the defensive
       // partial classification self-corrects and return.
       musicCacheStore.getState().upsertCachedItem({
         ...existing,
         expectedSongCount: album.song.length,
+        rawJson: refreshedEnvelope,
       });
       return;
     }
@@ -700,10 +706,14 @@ export async function enqueueAlbumDownload(albumId: string): Promise<void> {
     // total BEFORE enqueueing. The top-up queue row's `songsJson` only
     // contains the missing delta, so the worker's derived count would be
     // wrong — `markItemComplete` preserves this existing value on merge.
-    if (existing.expectedSongCount !== album.song.length) {
+    if (
+      existing.expectedSongCount !== album.song.length ||
+      existing.rawJson !== refreshedEnvelope
+    ) {
       musicCacheStore.getState().upsertCachedItem({
         ...existing,
         expectedSongCount: album.song.length,
+        rawJson: refreshedEnvelope,
       });
     }
 
@@ -787,9 +797,19 @@ export async function enqueueSongDownload(song: Child): Promise<void> {
   if (state.downloadQueue.some((q) => q.itemId === itemId)) return;
 
   // If the underlying song is already fully cached, don't transfer bytes —
-  // just create the `song:` item + edge so it shows up in the browser.
+  // just create the `song:` item + edge so it shows up in the browser. We
+  // also take this opportunity to refresh the underlying `cached_songs`
+  // row's envelope with whatever the caller supplied: if the song came
+  // from a screen that just round-tripped getSong/getAlbum, the Child
+  // here can be richer than what we stored at original download time.
   if (song.id in state.cachedSongs) {
     const existing = state.cachedSongs[song.id];
+    if (song) {
+      musicCacheStore.getState().upsertCachedSong({
+        ...existing,
+        rawJson: JSON.stringify(song),
+      });
+    }
     musicCacheStore.getState().upsertCachedItem(
       {
         itemId,
@@ -863,6 +883,41 @@ function registerTrackToItem(songId: string, itemId: string): void {
 }
 
 /**
+ * Serialise the "envelope" for a `cached_items` row — the full Subsonic
+ * entity metadata minus any per-song list. Songs live authoritatively in
+ * `cached_songs.raw_json`; carrying `AlbumWithSongsID3.song[]` or
+ * `PlaylistWithSongs.entry[]` on the parent row would be a stale
+ * duplicate that could drift, so we strip them.
+ *
+ * Returns `undefined` when the corresponding detail store is empty (e.g.
+ * first download where the user hasn't opened the album). Callers pass
+ * `undefined` straight through to the row; Migration 18/19 will backfill
+ * later from local caches, and future writes will populate it when the
+ * store warms up.
+ */
+function buildCachedItemEnvelope(
+  itemId: string,
+  type: CachedItemMeta['type'],
+): string | undefined {
+  if (type === 'album') {
+    const albums = albumDetailStore.getState().albums;
+    const album = albums?.[itemId]?.album;
+    if (!album) return undefined;
+    const { song: _songs, ...meta } = album;
+    return JSON.stringify(meta);
+  }
+  if (type === 'playlist') {
+    const playlists = playlistDetailStore.getState().playlists;
+    const playlist = playlists?.[itemId]?.playlist;
+    if (!playlist) return undefined;
+    const { entry: _entries, ...meta } = playlist;
+    return JSON.stringify(meta);
+  }
+  // `favorites` (__starred__) and `song` intents have no natural envelope.
+  return undefined;
+}
+
+/**
  * Ensure a partial-album `cached_items` row + edge exist for songs
  * downloaded from a non-album item. No-op when the triggering item IS the
  * album itself.
@@ -882,13 +937,24 @@ function ensurePartialAlbumEdge(
     // Opportunistically refresh expectedSongCount if the album detail store
     // has a fresher, larger count than the existing row — corrects the
     // `expectedSongCount = 1` fallback taken at partial-row creation when
-    // albumDetailStore was empty.
+    // albumDetailStore was empty. Also refresh `rawJson` if the existing
+    // row is still missing its envelope and we can produce one now.
     const cachedAlbumForRefresh = albumDetailStore.getState().albums[song.albumId];
     const freshCount = cachedAlbumForRefresh?.album?.song?.length;
-    if (freshCount !== undefined && freshCount > existing.expectedSongCount) {
+    const envelope = existing.rawJson
+      ? undefined
+      : buildCachedItemEnvelope(song.albumId, 'album');
+    if (
+      (freshCount !== undefined && freshCount > existing.expectedSongCount) ||
+      envelope !== undefined
+    ) {
       musicCacheStore.getState().upsertCachedItem({
         ...existing,
-        expectedSongCount: freshCount,
+        expectedSongCount:
+          freshCount !== undefined && freshCount > existing.expectedSongCount
+            ? freshCount
+            : existing.expectedSongCount,
+        rawJson: envelope ?? existing.rawJson,
       });
     }
 
@@ -930,6 +996,7 @@ function ensurePartialAlbumEdge(
       parentAlbumId: undefined,
       lastSyncAt: now,
       downloadedAt: now,
+      rawJson: buildCachedItemEnvelope(song.albumId, 'album'),
     },
     [song.id],
   );
@@ -1086,6 +1153,7 @@ async function downloadItem(queueItem: DownloadQueueItem, myId: number): Promise
       parentAlbumId: queueItem.type === 'song' ? songs[0]?.albumId : undefined,
       lastSyncAt: Date.now(),
       downloadedAt: Date.now(),
+      rawJson: buildCachedItemEnvelope(queueItem.itemId, queueItem.type),
     };
     const songsToCommit = Array.from(itemSongsForCommit.values());
     const edgesForCommit = itemEdges.map((e) => ({
@@ -1186,6 +1254,11 @@ async function downloadSong(track: Child): Promise<CachedSongMeta | null> {
       samplingRate: effectiveFmt.samplingRate,
       formatCapturedAt: effectiveFmt.capturedAt,
       downloadedAt: now,
+      // Preserve the full Subsonic envelope next to the indexed columns.
+      // Any future feature reading from `getSongEnvelope()` sees discNumber,
+      // track, genre, MusicBrainz id, ReplayGain, contributors, moods,
+      // explicitStatus, etc. — every optional field the server returned.
+      rawJson: JSON.stringify(track),
     };
 
     // Upsert to the pool immediately so subsequent dedup checks within this

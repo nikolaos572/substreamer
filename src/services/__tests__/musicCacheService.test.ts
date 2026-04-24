@@ -122,9 +122,13 @@ jest.mock('../../store/albumDetailStore', () => ({
 }));
 
 const mockFetchPlaylist = jest.fn();
+let mockPlaylistDetailPlaylists: Record<string, any> = {};
 jest.mock('../../store/playlistDetailStore', () => ({
   playlistDetailStore: {
-    getState: jest.fn(() => ({ fetchPlaylist: mockFetchPlaylist })),
+    getState: jest.fn(() => ({
+      fetchPlaylist: mockFetchPlaylist,
+      playlists: mockPlaylistDetailPlaylists,
+    })),
   },
 }));
 
@@ -351,6 +355,7 @@ beforeEach(() => {
   mockFetchAlbum.mockReset();
   mockFetchPlaylist.mockReset();
   mockAlbumDetailAlbums.value = {};
+  mockPlaylistDetailPlaylists = {};
   mockCheckStorageLimit.mockReturnValue(false);
   mockFileExists = false;
   mockFileSize = 100;
@@ -2014,6 +2019,115 @@ describe('download pipeline', () => {
 
     const partial = musicCacheStore.getState().cachedItems['album-Z'];
     expect(partial.songIds.sort()).toEqual(['p1', 'p2']);
+  });
+
+  it('partial-album: cached_songs row captures full Child envelope via raw_json', async () => {
+    mockFileExists = true;
+    mockFileSize = 5000;
+    mockDownloadFileAsyncWithProgress.mockResolvedValue(undefined);
+
+    const richChild = makeChild('rich-1', {
+      albumId: 'album-rich',
+      track: 4,
+      discNumber: 2,
+      genre: 'Jazz',
+      bpm: 120,
+      musicBrainzId: 'mbid-abc',
+      contributors: [{ role: 'producer', artist: { id: 'a1', name: 'X' } }] as any,
+    });
+    mockFetchPlaylist.mockResolvedValue({
+      id: 'pl-rich',
+      name: 'R',
+      entry: [richChild],
+    });
+
+    await enqueuePlaylistDownload('pl-rich');
+    await waitForQueueIdle();
+
+    const cached = musicCacheStore.getState().cachedSongs['rich-1'];
+    expect(cached).toBeDefined();
+    expect(cached.rawJson).toBeDefined();
+    const env = JSON.parse(cached.rawJson!);
+    expect(env.track).toBe(4);
+    expect(env.discNumber).toBe(2);
+    expect(env.genre).toBe('Jazz');
+    expect(env.bpm).toBe(120);
+    expect(env.musicBrainzId).toBe('mbid-abc');
+    expect(env.contributors).toBeDefined();
+  });
+
+  it('partial-album: row carries AlbumID3 envelope when album detail is cached', async () => {
+    mockFileExists = true;
+    mockFileSize = 5000;
+    mockDownloadFileAsyncWithProgress.mockResolvedValue(undefined);
+    mockAlbumDetailAlbums.value = {
+      'album-env': {
+        album: {
+          id: 'album-env',
+          name: 'Env Album',
+          genre: 'Classical',
+          moods: ['calm'],
+          recordLabels: [{ name: 'DG' }],
+          song: [{ id: 'env-t1' }],
+        },
+      },
+    };
+    mockFetchPlaylist.mockResolvedValue({
+      id: 'pl-env',
+      name: 'E',
+      entry: [makeChild('env-t1', { albumId: 'album-env' })],
+    });
+
+    await enqueuePlaylistDownload('pl-env');
+    await waitForQueueIdle();
+
+    const partial = musicCacheStore.getState().cachedItems['album-env'];
+    expect(partial.rawJson).toBeDefined();
+    const env = JSON.parse(partial.rawJson!);
+    expect(env.genre).toBe('Classical');
+    expect(env.moods).toEqual(['calm']);
+    expect(env.recordLabels).toEqual([{ name: 'DG' }]);
+    // `.song` stripped — songs live on cached_songs.raw_json.
+    expect('song' in env).toBe(false);
+  });
+
+  it('partial-album: row upgraded with envelope when an earlier partial existed without one', async () => {
+    mockFileExists = true;
+    mockFileSize = 5000;
+    mockDownloadFileAsyncWithProgress.mockResolvedValue(undefined);
+
+    // Seed an envelope-less partial row — simulates pre-Migration-19 state.
+    seedSong(makeCachedSong('up-a', { albumId: 'album-up' }));
+    seedItem('album-up', {
+      type: 'album',
+      songIds: ['up-a'],
+      expectedSongCount: 5,
+    });
+
+    // New song lands via playlist; albumDetailStore now has data.
+    mockAlbumDetailAlbums.value = {
+      'album-up': {
+        album: {
+          id: 'album-up',
+          name: 'Upgraded',
+          genre: 'Folk',
+          song: new Array(5).fill(null).map((_, i) => ({ id: `up-${i}` })),
+        },
+      },
+    };
+    mockFetchPlaylist.mockResolvedValue({
+      id: 'pl-up',
+      name: 'U',
+      entry: [makeChild('up-b', { albumId: 'album-up' })],
+    });
+
+    await enqueuePlaylistDownload('pl-up');
+    await waitForQueueIdle();
+
+    const partial = musicCacheStore.getState().cachedItems['album-up'];
+    expect(partial.rawJson).toBeDefined();
+    const env = JSON.parse(partial.rawJson!);
+    expect(env.genre).toBe('Folk');
   });
 
   it('partial-album: no-op when triggering item IS the album', async () => {
