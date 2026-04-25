@@ -11,6 +11,7 @@ jest.mock('expo-sqlite', () => ({
   }),
 }));
 
+import { defaultCollator } from '../../../utils/intl';
 import { __setDbForTests } from '../db';
 import {
   bulkInsertCachedImages,
@@ -154,7 +155,7 @@ function makeFakeDb() {
     ) {
       return [...rows.values()].sort(
         (a, b) =>
-          a.cover_art_id.localeCompare(b.cover_art_id) || a.size - b.size,
+          defaultCollator.compare(a.cover_art_id, b.cover_art_id) || a.size - b.size,
       ) as T[];
     }
     if (

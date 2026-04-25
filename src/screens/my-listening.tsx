@@ -22,6 +22,7 @@ import { useTransitionComplete } from '../hooks/useTransitionComplete';
 import { completedScrobbleStore } from '../store/completedScrobbleStore';
 import { layoutPreferencesStore } from '../store/layoutPreferencesStore';
 import { pendingScrobbleStore } from '../store/pendingScrobbleStore';
+import { getDateTimeFormat } from '../utils/intl';
 import { getArtistInitials, minDelay, timeAgo } from '../utils/stringHelpers';
 
 const PERIODS: { key: TimePeriod; labelKey: string }[] = [
@@ -32,7 +33,7 @@ const PERIODS: { key: TimePeriod; labelKey: string }[] = [
 ];
 
 function buildHourLabels(locale: string): string[] {
-  const fmt = new Intl.DateTimeFormat(locale, { hour: 'numeric' });
+  const fmt = getDateTimeFormat(locale, { hour: 'numeric' });
   return Array.from({ length: 24 }, (_, h) => {
     if (h % 3 !== 0) return '';
     const d = new Date(2000, 0, 1, h);
@@ -49,7 +50,7 @@ function formatDuration(seconds: number): string {
 
 function formatHour(hour: number): string {
   const d = new Date(2000, 0, 1, hour);
-  return new Intl.DateTimeFormat(i18next.language, {
+  return getDateTimeFormat(i18next.language, {
     hour: 'numeric',
     minute: '2-digit',
   }).format(d);

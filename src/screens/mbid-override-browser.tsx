@@ -11,6 +11,7 @@ import { BottomChrome } from '../components/BottomChrome';
 import { SegmentControl, type Segment } from '../components/SegmentControl';
 import { SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
 import { useTheme } from '../hooks/useTheme';
+import { defaultCollator } from '../utils/intl';
 import { albumInfoStore } from '../store/albumInfoStore';
 import { artistDetailStore } from '../store/artistDetailStore';
 import { mbidOverrideStore, type MbidOverride, type MbidOverrideType } from '../store/mbidOverrideStore';
@@ -134,7 +135,7 @@ export function MbidOverrideBrowserScreen() {
     () =>
       allEntries
         .filter((o) => o.type === selectedType)
-        .sort((a, b) => a.entityName.localeCompare(b.entityName)),
+        .sort((a, b) => defaultCollator.compare(a.entityName, b.entityName)),
     [allEntries, selectedType],
   );
 

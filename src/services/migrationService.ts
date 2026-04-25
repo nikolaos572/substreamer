@@ -13,6 +13,8 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { listDirectoryAsync } from 'expo-async-fs';
 import { Platform } from 'react-native';
 
+import { defaultCollator } from '../utils/intl';
+
 import { migrateV3BackupMetas } from './backupService';
 import { getAllSongAlbumIds } from '../store/persistence/detailTables';
 import {
@@ -1010,7 +1012,7 @@ async function backfillMissingPartialAlbums(
         withOrder.sort((a, b) => {
           if (a.disc !== b.disc) return a.disc - b.disc;
           if (a.track !== b.track) return a.track - b.track;
-          return a.songId.localeCompare(b.songId);
+          return defaultCollator.compare(a.songId, b.songId);
         });
 
         // Insert album row.

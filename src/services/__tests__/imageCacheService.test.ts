@@ -200,7 +200,7 @@ const mockListCachedImagesForBrowser = jest.fn((filter: 'all' | 'complete' | 'in
     files: files.sort((a, b) => a.size - b.size).map((f) => ({ size: f.size, ext: f.ext, bytes: f.bytes, cachedAt: f.cachedAt })),
     complete: files.length === 4,
   }));
-  entries.sort((a, b) => a.coverArtId.localeCompare(b.coverArtId));
+  entries.sort((a, b) => defaultCollator.compare(a.coverArtId, b.coverArtId));
   if (filter === 'complete') return entries.filter((e) => e.complete);
   if (filter === 'incomplete') return entries.filter((e) => !e.complete);
   return entries;
@@ -226,6 +226,7 @@ jest.mock('../../store/persistence/imageCacheTable', () => ({
 
 jest.mock('../subsonicService');
 
+import { defaultCollator } from '../../utils/intl';
 import { getCoverArtUrl, stripCoverArtSuffix } from '../subsonicService';
 import {
   IMAGE_SIZES,

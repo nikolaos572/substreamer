@@ -20,6 +20,7 @@ import { EmptyState } from '../components/EmptyState';
 import { GradientBackground } from '../components/GradientBackground';
 import { BottomChrome } from '../components/BottomChrome';
 import { useTheme } from '../hooks/useTheme';
+import { defaultCollator } from '../utils/intl';
 import { isViewableFile } from './file-viewer';
 
 interface RootEntry {
@@ -72,7 +73,7 @@ async function listDirectoryEntries(dir: Directory): Promise<Entry[]> {
       })
       .sort((a, b) => {
         if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-        return a.name.localeCompare(b.name);
+        return defaultCollator.compare(a.name, b.name);
       });
   } catch {
     return [];

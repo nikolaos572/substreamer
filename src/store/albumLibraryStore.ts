@@ -11,6 +11,7 @@ import {
   searchAllAlbums,
   type AlbumID3,
 } from '../services/subsonicService';
+import { baseCollator } from '../utils/intl';
 import { getSortKey } from '../utils/sortHelpers';
 import { layoutPreferencesStore } from './layoutPreferencesStore';
 import { ratingStore } from './ratingStore';
@@ -46,9 +47,7 @@ function sortAlbumsByPreference(albums: AlbumID3[]): AlbumID3[] {
         : getSortKey(a.artist ?? '', undefined, articles);
     return [key, a];
   });
-  decorated.sort(([ka], [kb]) =>
-    ka.localeCompare(kb, undefined, { sensitivity: 'base' }),
-  );
+  decorated.sort(([ka], [kb]) => baseCollator.compare(ka, kb));
   return decorated.map(([, a]) => a);
 }
 
