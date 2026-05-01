@@ -1,5 +1,15 @@
 # Changelog
 
+## [8.0.57] - 2026-05-01
+
+- fix(image-cache): recover from offline-mode errorSuppress on reconnect
+- ci: update coverage badge [skip ci]
+- refactor(image-cache): centralise logout wipe + diagnostics filenames
+- ci: update coverage badge [skip ci]
+- refactor(image-cache): consolidate scan/repair/refresh in service
+- ci: update coverage badge [skip ci]
+- fix(image-cache): unstick missing covers and add diagnostic logging
+- ci: update coverage badge [skip ci]
 ## [8.0.56] - 2026-04-25
 
 - docs(rules): consolidate project rules into AGENTS.md
