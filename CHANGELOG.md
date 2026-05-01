@@ -1,5 +1,18 @@
 # Changelog
 
+## [8.0.58] - 2026-05-01
+
+- i18n(splash): translate migration validating/complete subtitles
+- release: v8.0.57
+- ci: update coverage badge [skip ci]
+- fix(image-cache): recover from offline-mode errorSuppress on reconnect
+- ci: update coverage badge [skip ci]
+- refactor(image-cache): centralise logout wipe + diagnostics filenames
+- ci: update coverage badge [skip ci]
+- refactor(image-cache): consolidate scan/repair/refresh in service
+- ci: update coverage badge [skip ci]
+- fix(image-cache): unstick missing covers and add diagnostic logging
+- ci: update coverage badge [skip ci]
 ## [8.0.57] - 2026-05-01
 
 - fix(image-cache): recover from offline-mode errorSuppress on reconnect
